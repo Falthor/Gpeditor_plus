@@ -1,4 +1,4 @@
-<#
+﻿<#
     Dictionary of fixed UI labels (tree, headers, buttons, edit windows...).
     English only (en-US) - SecurityCatalog.ps1 follows the same rule since
     the language selector was removed.
@@ -207,6 +207,7 @@ $script:UiStrings = @{
     WindowTitleWithProjectFormat = '{0} — Project: {1}'
     UnsavedProjectStatusText  = 'New Group Policy (unsaved)'
     MenuFileSave              = 'Save'
+    MenuFileClose             = 'Close'
     SaveGpoDialogTitle        = 'Save Group Policy Project As'
     SearchFieldAny            = 'Any'
     SearchFieldName           = 'Name'
@@ -250,6 +251,7 @@ $script:UiStrings = @{
     PathTabImportExportLabel   = 'Import / Export'
     PathTabAuditLabel          = 'Audit files'
     PathTabIndexLabel          = 'Generated indexes'
+    PathTabProjectsLabel       = 'Projects'
     PathGroupAppPreferenceHeader  = 'Application preference'
     PathGroupUserPreferenceHeader = 'User preference'
     BrowseEllipsisButton       = '...'

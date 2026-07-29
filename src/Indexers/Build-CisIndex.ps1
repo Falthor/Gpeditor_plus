@@ -1,4 +1,4 @@
-<#
+﻿<#
     Indexes CIS (Center for Internet Security) recommendations for Windows
     Server from .audit files (Tenable Nessus format) in the "Audit file"
     folder. Produces a single JSON index (cis-index.json) grouping, per

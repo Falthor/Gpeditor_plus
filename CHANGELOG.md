@@ -5,6 +5,28 @@ section per release date, most recent first. This file is the single
 source for the "Release Notes" panel in the right-hand pane and for
 ? > Patch note
 
+## 2026-07-29 — Readable logs, project Close, Options fixes, Import bug fix
+
+- The app log (`gpedit.log`) is now one field per line (Name/Registry/Old
+  value/New value) instead of one long pipe-separated line, and setting
+  changes are labeled ADDED/CHANGED/REMOVED. Project save/export/import
+  now also log their on-disk location, and "Save now" is logged too.
+- Added File > Close: leaves the active GPO project (prompting to save
+  first if there are unsaved changes) and switches editing back to the
+  real machine, re-enabling New/Open so another project can be started
+  without relaunching the app.
+- Fix: the "Projects" path row in File > Options had no effect - the
+  field stayed empty and "..." did nothing, since the row was missing
+  from the code wiring the Path tab. File > Save/Open now also default
+  to that configured Projects folder.
+- Fix: exporting a saved GPO project whose folder was missing a file for
+  a never-configured category (e.g. no User-scope policy ever set) made
+  the export unreadable by File > Import ("This is not a valid GPedit
+  project."), even though the export itself was legitimate. Import now
+  treats a missing registry.pol/secedit.inf/audit.csv the same way the
+  rest of the app already does elsewhere: as "nothing configured", not
+  an error.
+
 ## 2026-07-23 — Security options completed, tree structure fixed
 
 - Added 66 missing settings under Local Policies > Security Options

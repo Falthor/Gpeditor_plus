@@ -42,24 +42,27 @@ function Select-GpoImportManifestPath {
 function Resolve-GpoImportFiles {
     # Combines the EXISTING Get-GpoProjectManifest (GpEdit.ps1) with the
     # chosen manifest's parent folder to resolve the 4 real file paths.
-    # $null on anything malformed/incomplete/missing.
+    # $null only on a malformed/incomplete manifest - the 4 files themselves
+    # are NOT required to exist. A category that was never configured
+    # legitimately has no file on disk (same convention as everywhere else:
+    # Get-PolFileEntriesSafe/Read-GptTmplInf/Read-AuditCsv all treat a
+    # missing file as "nothing configured", not an error) - requiring
+    # existence here used to reject perfectly valid exported projects (e.g.
+    # a never-touched User-scope registry.pol) as "not a valid GPedit
+    # project".
     param([Parameter(Mandatory)][string]$ManifestPath)
     $manifest = Get-GpoProjectManifest -Path $ManifestPath
     if (-not $manifest) { return $null }
     $folderPath = Split-Path -Parent $ManifestPath
 
     $f = $manifest.Files
-    $paths = [pscustomobject]@{
+    return [pscustomobject]@{
         Name           = $manifest.Name
         MachinePolPath = Join-Path $folderPath $f.machinePol
         UserPolPath    = Join-Path $folderPath $f.userPol
         SecEditInfPath = Join-Path $folderPath $f.secEditInf
         AuditCsvPath   = Join-Path $folderPath $f.auditCsv
     }
-    foreach ($p in @($paths.MachinePolPath, $paths.UserPolPath, $paths.SecEditInfPath, $paths.AuditCsvPath)) {
-        if (-not (Test-Path -LiteralPath $p)) { return $null }
-    }
-    return $paths
 }
 
 # --- Live snapshot readers (always the real machine) -----------------------
@@ -735,8 +738,8 @@ function Import-GpoProjectFiles {
         # successful apply, below).
         $liveMachineLookup = New-PolLookup -Entries (Get-LiveMachinePolEntries)
         $liveUserLookup = New-PolLookup -Entries (Get-LiveUserPolEntries)
-        $importMachineEntries = Read-PolFile -Path $importFiles.MachinePolPath
-        $importUserEntries = Read-PolFile -Path $importFiles.UserPolPath
+        $importMachineEntries = Get-PolFileEntriesSafe -Path $importFiles.MachinePolPath
+        $importUserEntries = Get-PolFileEntriesSafe -Path $importFiles.UserPolPath
         $importMachineLookup = New-PolLookup -Entries $importMachineEntries
         $importUserLookup = New-PolLookup -Entries $importUserEntries
 
@@ -803,8 +806,8 @@ function Import-GpoProjectFiles {
                 $mergedUser = Restore-UncheckedAdmxRowsToImportEntries -ImportEntries $importUserEntries -UncheckedRows @(@($uncheckedChange) | Where-Object { $_.Kind -eq 'Admx' }) -Scope 'User' -PoliciesById $policiesById -LiveLookup $liveUserLookup
             }
             else {
-                $mergedMachine = Read-PolFile -Path $importFiles.MachinePolPath
-                $mergedUser = Read-PolFile -Path $importFiles.UserPolPath
+                $mergedMachine = Get-PolFileEntriesSafe -Path $importFiles.MachinePolPath
+                $mergedUser = Get-PolFileEntriesSafe -Path $importFiles.UserPolPath
             }
             $admxResult = Invoke-ImportAdmxApply -MachineEntries $mergedMachine -UserEntries $mergedUser
             if ($admxResult.ExitCode -ne 0) { throw $admxResult.Output }
@@ -878,7 +881,7 @@ function Import-GpoProjectFiles {
                 Write-GpEditSettingChangeLog -ParameterName $row.Name -Key $row.Id -OldValue $row.CurrentState -NewValue $row.ImportState
             }
 
-            Write-GpEditProjectLog -Action 'Imported' -ProjectName $importedProjectName
+            Write-GpEditProjectLog -Action 'Imported' -ProjectName $importedProjectName -Location (Split-Path -Parent $manifestPath)
             [System.Windows.MessageBox]::Show($ui.ImportSuccessMessage, $ui.InfoTitle, 'OK', 'Information') | Out-Null
         }
     }

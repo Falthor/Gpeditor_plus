@@ -30,6 +30,7 @@ function Show-OptionsDialog {
     $window.FindName('PathTabImportExportLabel').Text = $Ui.PathTabImportExportLabel
     $window.FindName('PathTabAuditLabel').Text = $Ui.PathTabAuditLabel
     $window.FindName('PathTabIndexLabel').Text = $Ui.PathTabIndexLabel
+    $window.FindName('PathTabProjectsLabel').Text = $Ui.PathTabProjectsLabel
     $window.FindName('AppPreferenceGroupBox').Header = $Ui.PathGroupAppPreferenceHeader
     $window.FindName('UserPreferenceGroupBox').Header = $Ui.PathGroupUserPreferenceHeader
     $window.FindName('FileTabAuditListHeader').Text = $Ui.FileTabAuditListHeader
@@ -40,15 +41,18 @@ function Show-OptionsDialog {
     $window.FindName('BusyOverlayLabel').Text = $Ui.OptionsBusyOverlayLabel
 
     foreach ($name in @('LogPathResetButton', 'TempPathResetButton', 'BackupPathResetButton',
-                         'ImportExportPathResetButton', 'AuditPathResetButton', 'IndexPathResetButton')) {
+                         'ImportExportPathResetButton', 'AuditPathResetButton', 'IndexPathResetButton',
+                         'ProjectsPathResetButton')) {
         $window.FindName($name).Content = $Ui.ResetToDefaultButton
     }
     foreach ($name in @('LogPathBrowseButton', 'TempPathBrowseButton', 'BackupPathBrowseButton',
-                         'ImportExportPathBrowseButton', 'AuditPathBrowseButton', 'IndexPathBrowseButton')) {
+                         'ImportExportPathBrowseButton', 'AuditPathBrowseButton', 'IndexPathBrowseButton',
+                         'ProjectsPathBrowseButton')) {
         $window.FindName($name).Content = $Ui.BrowseEllipsisButton
     }
     foreach ($name in @('LogPathOpenButton', 'TempPathOpenButton', 'BackupPathOpenButton',
-                         'ImportExportPathOpenButton', 'AuditPathOpenButton', 'IndexPathOpenButton')) {
+                         'ImportExportPathOpenButton', 'AuditPathOpenButton', 'IndexPathOpenButton',
+                         'ProjectsPathOpenButton')) {
         $window.FindName($name).ToolTip = $Ui.OpenFolderButtonTooltip
     }
     $window.FindName('SavePathsButton').Content = $Ui.SaveButton
@@ -76,6 +80,7 @@ function Show-OptionsDialog {
         @{ Key = 'importExportDir'; TextBox = $window.FindName('ImportExportPathTextBox'); Browse = $window.FindName('ImportExportPathBrowseButton'); Open = $window.FindName('ImportExportPathOpenButton'); Reset = $window.FindName('ImportExportPathResetButton') }
         @{ Key = 'auditFilesDir';   TextBox = $window.FindName('AuditPathTextBox');        Browse = $window.FindName('AuditPathBrowseButton');        Open = $window.FindName('AuditPathOpenButton');        Reset = $window.FindName('AuditPathResetButton') }
         @{ Key = 'indexDir';        TextBox = $window.FindName('IndexPathTextBox');        Browse = $window.FindName('IndexPathBrowseButton');        Open = $window.FindName('IndexPathOpenButton');        Reset = $window.FindName('IndexPathResetButton') }
+        @{ Key = 'projectsDir';     TextBox = $window.FindName('ProjectsPathTextBox');     Browse = $window.FindName('ProjectsPathBrowseButton');     Open = $window.FindName('ProjectsPathOpenButton');     Reset = $window.FindName('ProjectsPathResetButton') }
     )
     $defaultPaths = Get-DefaultAppPaths
     $pendingPaths = @{}

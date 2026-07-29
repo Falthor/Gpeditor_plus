@@ -55,6 +55,7 @@
                 <MenuItem x:Name="FileNewMenuItem" Header="New" />
                 <MenuItem x:Name="FileOpenMenuItem" Header="Open" />
                 <MenuItem x:Name="FileSaveMenuItem" Header="Save" IsEnabled="False" />
+                <MenuItem x:Name="FileCloseMenuItem" Header="Close" IsEnabled="False" />
                 <Separator />
                 <MenuItem Header="Action" IsEnabled="False" FontWeight="Bold" />
                 <MenuItem x:Name="FileExportMenuItem" Header="Export" />
@@ -1167,7 +1168,7 @@
                             <Button x:Name="TempPathResetButton" Grid.Column="4" Content="Default" Padding="8,2" />
                         </Grid>
 
-                        <Grid>
+                        <Grid Margin="0,0,0,10">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="140" />
                                 <ColumnDefinition Width="260" />
@@ -1180,6 +1181,21 @@
                             <Button x:Name="IndexPathBrowseButton" Grid.Column="2" Content="..." Width="30" Padding="0" Margin="0,0,4,0" />
                             <Button x:Name="IndexPathOpenButton" Grid.Column="3" Content="&#128194;" Width="30" Padding="0" Margin="0,0,4,0" ToolTip="Open in Explorer" />
                             <Button x:Name="IndexPathResetButton" Grid.Column="4" Content="Default" Padding="8,2" />
+                        </Grid>
+
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="140" />
+                                <ColumnDefinition Width="260" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock x:Name="PathTabProjectsLabel" Grid.Column="0" Text="Projects" VerticalAlignment="Center" />
+                            <TextBox x:Name="ProjectsPathTextBox" Grid.Column="1" IsReadOnly="True" Padding="4,2" Margin="0,0,8,0" VerticalContentAlignment="Center" />
+                            <Button x:Name="ProjectsPathBrowseButton" Grid.Column="2" Content="..." Width="30" Padding="0" Margin="0,0,4,0" />
+                            <Button x:Name="ProjectsPathOpenButton" Grid.Column="3" Content="&#128194;" Width="30" Padding="0" Margin="0,0,4,0" ToolTip="Open in Explorer" />
+                            <Button x:Name="ProjectsPathResetButton" Grid.Column="4" Content="Default" Padding="8,2" />
                         </Grid>
                     </StackPanel>
                 </GroupBox>

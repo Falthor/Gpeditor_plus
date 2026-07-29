@@ -1,6 +1,6 @@
 <#
     Configurable default locations (File > Options) and "Editor Mode" toggle,
-    persisted in %LocalAppData%\Gpeditor_plus\settings.json. Only the 6 paths
+    persisted in %LocalAppData%\Gpeditor_plus\settings.json. Only the 7 paths
     from Get-DefaultAppPaths and the editorMode bool are user-editable.
 
     Each "paths" key replaces a historically repo-relative default (see
@@ -23,6 +23,7 @@ function Get-DefaultAppPaths {
         importExportDir = 'C:\ProgramData\Gpeditor_plus\export\'
         auditFilesDir   = 'C:\ProgramData\Gpeditor_plus\audit\'
         indexDir        = (Join-Path $env:LOCALAPPDATA 'Gpeditor_plus\Index\')
+        projectsDir     = (Join-Path $env:LOCALAPPDATA 'Gpeditor_plus\')
     }
 }
 

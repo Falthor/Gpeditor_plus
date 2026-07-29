@@ -1,4 +1,4 @@
-<#
+﻿<#
     Maps settings managed by the app (Administrative Templates via
     registryKey/valueName, Security Settings via SecurityCatalog.ps1,
     Advanced Audit via AdvancedAuditCatalog.ps1) to CIS recommendations

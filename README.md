@@ -127,7 +127,7 @@ src/
 │   ├── UiStrings.ps1           # FR/EN strings
 │   └── Styles/ModernStyle.xaml
 ├── DefaultData/               # Bundled templates and CIS audit files
-└── Tests/                     # Non-regression scripts (Test-*.ps1)
+└── Tests/                     # Pester regression suite (Gpeditor_plus.Tests.ps1)
 
 data/                          # Generated JSON indexes (cache, rebuilt as needed)
 ```
@@ -143,17 +143,22 @@ waiting for a `gpupdate`) depending on the domain touched.
 
 ## Tests
 
-Each `src/Tests/Test-*.ps1` script is self-contained (no Pester framework),
-with a pass counter and a non-zero exit code on failure:
+`src/Tests/Gpeditor_plus.Tests.ps1` is a [Pester](https://pester.dev) suite
+covering the parsers, the policy merge/write engine, app settings
+persistence and the CIS catalog. All file I/O runs under Pester's
+`$TestDrive`, so nothing touches real system paths.
 
 ```powershell
+Install-Module Pester -MinimumVersion 6.0 -Scope CurrentUser  # if not already installed
 cd gpedit_custom\src\Tests
-.\Test-PolFile.ps1
-.\Test-GptTmplFile.ps1
-.\Test-PolicyWriter.ps1
-.\Test-CisCatalog.ps1
-.\Test-AuditCsvFile.ps1
-.\Test-AppSettings.ps1
+Invoke-Pester .\Gpeditor_plus.Tests.ps1
+```
+
+Tests are tagged by kind (`Unit`, `RoundTrip`, `Regression`, `Catalog`,
+`Integration` - see the legend at the top of the file); filter with:
+
+```powershell
+Invoke-Pester .\Gpeditor_plus.Tests.ps1 -TagFilter Regression
 ```
 
 ## Design documents

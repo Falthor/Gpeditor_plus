@@ -111,7 +111,7 @@ $script:RealGptIniPath     = $GptIniPath
 
 # Working "New Group Policy > Default" session, not yet saved: $GpoTempFiles
 # tracks per-category temp files in tempfile\ ($null = category untouched,
-# read from Default_gp template instead). $GpoTempSuffix is the 25-char
+# read from the default template instead). $GpoTempSuffix is the 25-char
 # random string shared by all temp files of one session. No GptIni entry:
 # a project never needs GPT.ini.
 $script:TempFileDir = $script:AppSettings.paths.tempDir
@@ -260,6 +260,9 @@ $script:categoriesById   = @{}
 $script:childrenByParent = @{}
 $script:policiesByCategory = @{}
 
+# Builds fast id-based lookups (category by id, children by parent,
+# policies by category) from the raw $admxIndex arrays, used everywhere
+# the tree/list needs to navigate the category hierarchy.
 function Build-CategoryLookups {
     param($AdmxIndex)
 
@@ -297,6 +300,9 @@ $script:IconGlyphSecuritySetting = [char]0xE72E  # Lock
 $script:IconGlyphAuditSetting   = [char]0xEA18   # Shield
 $script:IconGlyphDictionary     = [char]0xE82D   # Dictionary (Overview root)
 
+# Builds the icon+text Header content for a tree node (TreeViewItem.Header
+# is a StackPanel, not a plain string, so this is the one place that shape
+# gets constructed).
 function Set-TreeNodeHeader {
     # Also sets AutomationProperties.Name explicitly: once Header is not a
     # plain string, screen readers can't derive an accessible name from it.
@@ -318,6 +324,8 @@ function Set-TreeNodeHeader {
     [System.Windows.Automation.AutomationProperties]::SetName($Tvi, $Text)
 }
 
+# An Admx policy's declared class ('Machine'/'User'/'Both') decides
+# whether it shows up under a given tree scope.
 function Test-PolicyMatchesScope {
     param([string]$PolicyClass, [string]$Scope)
     if ($Scope -eq 'Machine') { return ($PolicyClass -eq 'Machine' -or $PolicyClass -eq 'Both') }
@@ -348,6 +356,8 @@ function Test-ScopeFilterMatch {
 }
 
 function Test-KindFilterMatch {
+    # $true if $Kind ('Admx'/'Security'/'AdvancedAudit') is one of the
+    # Filter menu's currently checked Kinds.
     param([string]$Kind)
     return ($script:FilterKinds -contains $Kind)
 }
@@ -403,6 +413,8 @@ function Test-SecurityCategoryHasPolicies {
     return $false
 }
 
+# Same reasoning as Test-SecurityCategoryHasPolicies, for Advanced Audit
+# Policy Configuration leaves.
 function Test-AdvAuditCategoryHasPolicies {
     param([string]$Category)
     if (-not (Test-KindFilterMatch -Kind 'AdvancedAudit') -or -not (Test-ScopeFilterMatch -Scope $null)) { return $false }
@@ -443,6 +455,9 @@ function New-CategoryTreeViewItem {
     return $tvi
 }
 
+# Builds a leaf tree node for one of the static Security Settings
+# categories (Password Policy, Audit Policy, etc.), registering it in the
+# lookups search/navigation use to jump straight to it.
 function New-SecurityLeafItem {
     param([string]$Header, [string]$Category, [System.Collections.Generic.List[object]]$Ancestors)
     $tvi = New-Object System.Windows.Controls.TreeViewItem
@@ -457,6 +472,8 @@ function New-SecurityLeafItem {
     return $tvi
 }
 
+# Same as New-SecurityLeafItem, for an Advanced Audit Policy Configuration
+# category.
 function New-AdvancedAuditLeafItem {
     param([string]$Header, [string]$Category, [System.Collections.Generic.List[object]]$Ancestors)
     $tvi = New-Object System.Windows.Controls.TreeViewItem
@@ -614,6 +631,7 @@ $detailTextBox     = $window.FindName('DetailTextBox')
 $fileMenu          = $window.FindName('FileMenu')
 $fileNewMenuItem   = $window.FindName('FileNewMenuItem')
 $fileSaveMenuItem  = $window.FindName('FileSaveMenuItem')
+$fileCloseMenuItem = $window.FindName('FileCloseMenuItem')
 $fileOpenMenuItem  = $window.FindName('FileOpenMenuItem')
 $fileImportMenuItem = $window.FindName('FileImportMenuItem')
 $fileExportMenuItem = $window.FindName('FileExportMenuItem')
@@ -631,8 +649,13 @@ $patchNotesTitleLabel = $window.FindName('PatchNotesTitleLabel')
 $patchNotesTextBlock = $window.FindName('PatchNotesTextBlock')
 $mainContentGrid   = $window.FindName('MainContentGrid')
 
+# Single access point for the current UI string table, so every caller
+# fetches it the same way (English-only for now, but keeps the door open).
 function Get-CurrentUi { return Get-UiStrings }
 
+# Sets every static (non-list, non-tree) piece of window text - menus,
+# column headers, labels - from the UI string table. Called once at
+# startup; the tree/list content itself is refreshed separately.
 function Update-StaticUiText {
     param([hashtable]$Ui)
     $window.Title = $Ui.WindowTitle
@@ -661,6 +684,7 @@ function Update-StaticUiText {
     $fileMenu.Header = $Ui.MenuFile
     $fileNewMenuItem.Header = $Ui.MenuFileNew
     $fileSaveMenuItem.Header = $Ui.MenuFileSave
+    $fileCloseMenuItem.Header = $Ui.MenuFileClose
     $fileOpenMenuItem.Header = $Ui.MenuFileOpen
     $fileImportMenuItem.Header = $Ui.MenuFileImport
     $fileExportMenuItem.Header = $Ui.MenuFileExport
@@ -675,6 +699,9 @@ function Update-StaticUiText {
     if (-not $script:HasLeftInitialPatchNotesView) { Update-PatchNotesPanelContent }
 }
 
+# Clears and repopulates CategoryTree from scratch (Build-MainTreeRoots) -
+# needed whenever the State/Scope/Kind filter dimensions change, since those
+# affect which category folders qualify as "having policies".
 function Rebuild-Tree {
     param([hashtable]$Ui)
     $categoryTree.Items.Clear()
@@ -876,8 +903,8 @@ function Update-GpoDerivedState {
 }
 
 function Disable-GpoAdvancedMenusForActiveSession {
-    # Only one project/session per launch: New/Open disable themselves once
-    # a GPO session is active.
+    # Only one project/session at a time: New/Open disable themselves once
+    # a GPO session is active. Re-enabled by Close-GpoProject.
     $fileNewMenuItem.IsEnabled = $false
     $fileOpenMenuItem.IsEnabled = $false
 }
@@ -887,6 +914,69 @@ function Update-SaveNowButtonVisibility {
     # unpushed changes - outside a project the app writes straight to the
     # real system.
     $saveNowButton.Visibility = if ($script:ActiveProject -and $script:ProjectDirty) { 'Visible' } else { 'Collapsed' }
+}
+
+function Close-GpoProject {
+    <#
+        "File > Close": leaves the active GPO project/session (saved
+        project or still-unsaved "New Group Policy") and switches editing
+        back to the real machine files - the reverse of
+        Set-ActiveGpoProject/Start-UnsavedGpoSession. Same 3-choice prompt
+        as the on-window-close handler when there are unpushed changes.
+        Re-enables File > New/Open so another project can be started
+        without relaunching the app.
+    #>
+    if (-not $script:ActiveProject) { return }
+    $ui = Get-CurrentUi
+
+    if (-not $script:ActiveProject.Saved -or $script:ProjectDirty) {
+        $alreadySaved = $script:ActiveProject.Saved
+        $choice = Show-UnsavedProjectCloseDialog -Owner $window -ScriptRoot $PSScriptRoot -Ui $ui -AlreadySaved:$alreadySaved
+        if ($choice -eq 'Cancel') { return }
+        if ($choice -eq 'Save') {
+            if ($alreadySaved) {
+                try {
+                    Save-GpoProjectChanges
+                }
+                catch {
+                    Show-WriteErrorMessage -Ui $ui -ErrorText $_.Exception.Message
+                    return
+                }
+            }
+            else {
+                Save-GpoProjectAs
+                if (-not $script:ActiveProject.Saved) {
+                    # Save As was cancelled - stay in the session rather than
+                    # closing with changes stuck in temp files about to be
+                    # purged.
+                    return
+                }
+            }
+        }
+        # 'Continue': discard pending changes, carry on closing.
+    }
+
+    # Restore whatever SecEditInfDirty was before this project/session
+    # started - edits made while it was active only ever touched a temp or
+    # project-local secedit.inf, never the real machine, so they must not
+    # trigger a real secedit /configure at the next window close.
+    $script:SecEditInfDirty = $script:ActiveProject.PreProjectSecEditInfDirty
+    Remove-GpoTempFiles
+
+    $script:ActiveProject = $null
+    $script:ProjectDirty = $false
+    $script:MachinePolPath = $script:RealMachinePolPath
+    $script:UserPolPath = $script:RealUserPolPath
+    $script:SecEditInfPath = $script:RealSecEditInfPath
+    $script:AuditCsvPath = $script:RealAuditCsvPath
+
+    Update-GpoDerivedState
+    $fileNewMenuItem.IsEnabled = $true
+    $fileOpenMenuItem.IsEnabled = $true
+    $fileSaveMenuItem.IsEnabled = $false
+    $fileCloseMenuItem.IsEnabled = $false
+    Update-SaveNowButtonVisibility
+    Update-ActiveProjectLabel
 }
 
 function New-GpoTempSuffix {
@@ -955,7 +1045,12 @@ function Set-ActiveGpoProject {
         $script:AuditCsvPath = Join-Path $Dir $Files.auditCsv
         $script:SecEditInfPath = Join-Path $Dir $Files.secEditInf
     }
-    $script:ActiveProject = @{ Dir = $Dir; Name = $Name; Saved = $true; Files = $Files }
+    # -PreserveWorkingPaths means this is Save-GpoProjectAs promoting an
+    # already-running unsaved session to a saved project - carry forward the
+    # baseline captured when that session started rather than recapturing
+    # (which could already reflect that session's own project-only edits).
+    $preProjectDirty = if ($PreserveWorkingPaths -and $script:ActiveProject) { $script:ActiveProject.PreProjectSecEditInfDirty } else { $script:SecEditInfDirty }
+    $script:ActiveProject = @{ Dir = $Dir; Name = $Name; Saved = $true; Files = $Files; PreProjectSecEditInfDirty = $preProjectDirty }
     $script:ProjectDirty = $false
 
     if (-not $PreserveWorkingPaths) { Update-GpoDerivedState }
@@ -963,6 +1058,7 @@ function Set-ActiveGpoProject {
     # File > Save stays enabled once a project is saved/opened - it now
     # doubles as "Save now" from the menu.
     $fileSaveMenuItem.IsEnabled = $true
+    $fileCloseMenuItem.IsEnabled = $true
     Update-SaveNowButtonVisibility
 
     Update-ActiveProjectLabel
@@ -975,7 +1071,7 @@ function Start-UnsavedGpoSession {
         temp files (Get-OrCreateGpoTempFile); File > Save first writes to a
         real project folder.
     #>
-    $script:ActiveProject = @{ Dir = $null; Name = $null; Saved = $false }
+    $script:ActiveProject = @{ Dir = $null; Name = $null; Saved = $false; PreProjectSecEditInfDirty = $script:SecEditInfDirty }
     $script:ProjectDirty = $false
     $script:GpoTempFiles = @{ MachinePol = $null; UserPol = $null; SecEditInf = $null; AuditCsv = $null }
     $script:GpoTempSuffix = $null
@@ -991,6 +1087,7 @@ function Start-UnsavedGpoSession {
     Update-GpoDerivedState
     Disable-GpoAdvancedMenusForActiveSession
     $fileSaveMenuItem.IsEnabled = $true
+    $fileCloseMenuItem.IsEnabled = $true
     Update-SaveNowButtonVisibility
 
     Update-ActiveProjectLabel
@@ -998,11 +1095,17 @@ function Start-UnsavedGpoSession {
 
 function Copy-GpoWorkingFile {
     # Best-effort copy (missing source tolerated), works for both a temp
-    # file and an unchanged Default_gp template.
+    # file and an unchanged default template. Also tolerates source and
+    # destination being the same file: after Open-GpoProject, an untouched
+    # category's working path IS already the real project file (no temp
+    # file was ever materialized for it, since only edited categories get
+    # one) - Copy-Item onto itself would otherwise throw.
     param([string]$CurrentPath, [Parameter(Mandatory)][string]$Destination)
-    if ($CurrentPath -and (Test-Path -LiteralPath $CurrentPath)) {
-        Copy-Item -LiteralPath $CurrentPath -Destination $Destination -Force
-    }
+    if (-not ($CurrentPath -and (Test-Path -LiteralPath $CurrentPath))) { return }
+    $resolvedSource = (Resolve-Path -LiteralPath $CurrentPath).Path
+    $resolvedDestination = if (Test-Path -LiteralPath $Destination) { (Resolve-Path -LiteralPath $Destination).Path } else { $null }
+    if ($resolvedDestination -and $resolvedSource -eq $resolvedDestination) { return }
+    Copy-Item -LiteralPath $CurrentPath -Destination $Destination -Force
 }
 
 function Save-GpoProjectManifest {
@@ -1086,6 +1189,7 @@ function Save-GpoProjectAs {
     $dialog = New-Object System.Windows.Forms.SaveFileDialog
     $dialog.Title = $ui.SaveGpoDialogTitle
     $dialog.Filter = 'GPedit Project (*.gpoproj)|*.gpoproj'
+    $dialog.InitialDirectory = $script:AppSettings.paths.projectsDir
     $dialog.FileName = ''
     if ($dialog.ShowDialog() -ne [System.Windows.Forms.DialogResult]::OK) { return }
 
@@ -1118,7 +1222,7 @@ function Save-GpoProjectAs {
     Save-GpoProjectManifest -Path (Join-Path $projectDir "$($name)_Info.xml") -Name $name -Files $files
 
     Set-ActiveGpoProject -Dir $projectDir -Name $name -Files $files -PreserveWorkingPaths
-    Write-GpEditProjectLog -Action 'Created' -ProjectName $name
+    Write-GpEditProjectLog -Action 'Created' -ProjectName $name -Location $projectDir
 }
 
 function Save-GpoProjectChanges {
@@ -1136,6 +1240,8 @@ function Save-GpoProjectChanges {
     Copy-GpoWorkingFile -CurrentPath $script:UserPolPath -Destination (Join-Path $dir $files.userPol)
     Copy-GpoWorkingFile -CurrentPath $script:SecEditInfPath -Destination (Join-Path $dir $files.secEditInf)
     Copy-GpoWorkingFile -CurrentPath $script:AuditCsvPath -Destination (Join-Path $dir $files.auditCsv)
+
+    Write-GpEditProjectLog -Action 'Saved' -ProjectName $script:ActiveProject.Name -Location $dir
 
     $script:ProjectDirty = $false
     Update-SaveNowButtonVisibility
@@ -1180,6 +1286,7 @@ function Open-GpoProject {
     $dialog = New-Object System.Windows.Forms.OpenFileDialog
     $dialog.Title = $ui.OpenGpoFolderDialogTitle
     $dialog.Filter = 'GPedit Project Manifest (*_Info.xml)|*_Info.xml'
+    $dialog.InitialDirectory = $script:AppSettings.paths.projectsDir
 
     if ($dialog.ShowDialog() -ne [System.Windows.Forms.DialogResult]::OK) { return }
 
@@ -1213,7 +1320,7 @@ function Export-GpoProjectFiles {
           Policy" session in progress): copies straight from the current
           working paths. For "no project" these already ARE the real
           system files (secedit.inf, audit.csv, registry.pol); for an
-          unsaved session they are the session's temp/Default_gp files -
+          unsaved session they are the session's temp/default-template files -
           either way there is no separate "saved" copy to prefer over
           them, so both cases are handled identically.
     #>
@@ -1276,7 +1383,7 @@ function Export-GpoProjectFiles {
     }
 
     Save-GpoProjectManifest -Path (Join-Path $exportDir "$($name)_Info.xml") -Name $name -Files $files
-    Write-GpEditProjectLog -Action 'Exported' -ProjectName $name
+    Write-GpEditProjectLog -Action 'Exported' -ProjectName $name -Location $exportDir
 
     # Security Options changes outside any project are normally only
     # applied on window close - finalizing an Export also applies them
@@ -1302,6 +1409,8 @@ function Export-GpoProjectFiles {
     [System.Windows.MessageBox]::Show($ui.ExportSuccessMessage, $ui.InfoTitle, 'OK', 'Information') | Out-Null
 }
 
+# View > Profile: switches the CIS profile used for the "Recommended
+# state" column. $null restores the machine's own default profile.
 function Set-CisProfileFilter {
     param($NewProfile)
     $script:CisProfileFilter = $NewProfile
@@ -1321,6 +1430,8 @@ function Get-ActiveFilterCount {
     return $count
 }
 
+# Refreshes the "Filter" menu header text with its active-filter-count
+# badge (or the plain label if no filter dimension is active).
 function Update-FilterMenuLabel {
     param([hashtable]$Ui)
     $activeCount = Get-ActiveFilterCount
@@ -1374,6 +1485,8 @@ $filterMenu.Add_Click({
 })
 
 # --- Right-hand "Patch notes" pane ---------------------------------------
+# Renders the changelog entries (capped at PatchNotesEntryCount) into the
+# patch-notes text block.
 function Update-PatchNotesPanelContent {
     Set-ChangelogTextBlockContent -TextBlock $patchNotesTextBlock -Entries $script:ChangelogEntries -MaxEntries $script:PatchNotesEntryCount
 }
@@ -1397,6 +1510,11 @@ $fileSaveMenuItem.Add_Click({
         # Not-yet-saved session: first save, via folder-browse flow.
         Save-GpoProjectAs
     }
+})
+
+$fileCloseMenuItem.Add_Click({
+    param($EventSender, $e)
+    Close-GpoProject
 })
 
 $fileImportMenuItem.Add_Click({
@@ -1432,6 +1550,9 @@ $script:CurrentColumnOrder = @('Name', 'State', 'Cis')
 $script:ColumnWidthByKey = @{ Name = 546; State = 165; Cis = 50; Scope = 90; RecommendedState = 160; Category = 260 }
 $script:ColumnEverDisplayed = @{ Name = $true; State = $true; Cis = $true; Scope = $false; RecommendedState = $false; Category = $false }
 
+# Maps the stable column keys used by CurrentColumnOrder/ColumnWidthByKey
+# to the actual GridViewColumn controls, so ordering/visibility logic can
+# stay key-based rather than juggling control references directly.
 function Get-ColumnByKeyMap {
     return @{
         Name              = $columnName
@@ -1460,6 +1581,9 @@ function Sync-CurrentColumnOrderFromGridView {
     $script:CurrentColumnOrder = $newOrder
 }
 
+# Applies the column picker's result: removes all managed columns then
+# reinserts only the chosen ones in the chosen order (Category always
+# stays a member, hidden, so search mode can still show it).
 function Set-ColumnsDisplay {
     param([string[]]$OrderedKeys)
     $script:CurrentColumnOrder = $OrderedKeys
@@ -1491,6 +1615,8 @@ function Set-ColumnsDisplay {
 # restored on exit instead of being hidden.
 $script:CategoryColumnWidthBeforeSearch = $null
 
+# Shows the Category column at search width, remembering its prior width
+# only if the user had already added it manually via Add/remove columns.
 function Enter-SearchCategoryColumnMode {
     if ('Category' -in $script:CurrentColumnOrder) {
         $script:CategoryColumnWidthBeforeSearch = $columnCategory.Width
@@ -1498,6 +1624,8 @@ function Enter-SearchCategoryColumnMode {
     $columnCategory.Width = 260
 }
 
+# Reverses Enter-SearchCategoryColumnMode: restores the pre-search width if
+# the user had it displayed, else hides it again (width 0).
 function Exit-SearchCategoryColumnMode {
     if ('Category' -in $script:CurrentColumnOrder) {
         $columnCategory.Width = if ($null -ne $script:CategoryColumnWidthBeforeSearch) { $script:CategoryColumnWidthBeforeSearch } else { $script:ColumnWidthByKey['Category'] }
@@ -1513,6 +1641,8 @@ function Exit-SearchCategoryColumnMode {
 # --- Set-ColumnsDisplay ignores it (absent from Get-ColumnByKeyMap).
 $script:CisStatesColumnWidth = 260
 
+# Shows/hides the "CIS States" column and re-appends it at the end of the
+# grid every time, since Set-ColumnsDisplay's reorder logic ignores it.
 function Set-CisStatesColumnVisible {
     param([bool]$Visible)
 
@@ -1569,6 +1699,9 @@ $stateWidthPropertyDescriptor.AddValueChanged($columnState, {
     if (-not $script:StateColumnAutoApplying) { $script:StateColumnManuallyResized = $true }
 })
 
+# Auto-widens the State column the first time a wide-value menu
+# (User Rights Assignment/Security Options) is visited this session, unless
+# the user has since manually resized it.
 function Update-StateColumnWidthForMenu {
     param([string]$MenuId, [bool]$IsWide)
     if ($script:StateColumnManuallyResized) { return }
@@ -1945,6 +2078,8 @@ function Test-AdmxKeyMatch {
     return $false
 }
 
+# Tests whether an Admx policy matches the search query for the selected
+# search field (Any/Name/Description/Key/CisNumber).
 function Test-SearchMatchAdmx {
     param([string]$Field, [string]$Query, $Policy, $CisEntry)
     switch ($Field) {
@@ -1961,6 +2096,7 @@ function Test-SearchMatchAdmx {
     }
 }
 
+# Same as Test-SearchMatchAdmx, for a Security Settings entry.
 function Test-SearchMatchSecurity {
     param([string]$Field, [string]$Query, $Setting, $CisEntry)
     switch ($Field) {
@@ -1976,6 +2112,7 @@ function Test-SearchMatchSecurity {
     }
 }
 
+# Same as Test-SearchMatchAdmx, for an Advanced Audit Policy entry.
 function Test-SearchMatchAdvancedAudit {
     param([string]$Field, [string]$Query, $Setting, $CisEntry)
     switch ($Field) {
@@ -1992,6 +2129,9 @@ function Test-SearchMatchAdvancedAudit {
     }
 }
 
+# Runs a global search across ADMX policies, Security Settings and
+# Advanced Audit Policy, applying the active Filter menu dimensions, and
+# populates PolicyList with the combined, sorted result set.
 function Invoke-Search {
     param(
         [string]$Query,
@@ -2298,6 +2438,8 @@ function Get-TreeSelectionRestoreInfo {
     }
 }
 
+# Reselects the node captured by Get-TreeSelectionRestoreInfo, by key,
+# after a Rebuild-Tree has destroyed the old TreeViewItem instances.
 function Restore-TreeSelection {
     param($Info)
     if ($null -eq $Info -or -not $Info.Key) { return }
@@ -2337,11 +2479,15 @@ function Open-SearchResult {
     }
 }
 
+# Shared popup shown whenever a write requires elevation the app doesn't
+# currently have (outside project mode, which writes to ordinary files).
 function Show-AdminRequiredMessage {
     param([hashtable]$Ui)
     [System.Windows.MessageBox]::Show($Ui.AdminRequiredMessage, $Ui.AdminRequiredTitle, 'OK', 'Warning') | Out-Null
 }
 
+# Shared popup for a failed write (file locked, disk error, etc.), shown
+# from every catch block around a Save-*ChangeToFile/Invoke-SecEditInfApply call.
 function Show-WriteErrorMessage {
     param([hashtable]$Ui, [string]$ErrorText)
     [System.Windows.MessageBox]::Show(($Ui.WriteErrorMessage -f $ErrorText), $Ui.WriteErrorTitle, 'OK', 'Error') | Out-Null
