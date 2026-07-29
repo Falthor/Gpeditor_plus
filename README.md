@@ -11,6 +11,8 @@ projects, built-in release notes.
 > `GptTmpl.inf`, `secedit`). The app refuses to start if the process is not
 > elevated.
 
+> Built with the help of [Claude Code](https://claude.com/claude-code).
+
 ## Features
 
 - **Administrative Templates (ADMX/ADML)**: Computer/User tree built from
@@ -44,7 +46,6 @@ projects, built-in release notes.
   Benchmark).
 - **Built-in release notes**: the right pane shows the latest
   `CHANGELOG.md` entries while no category or search is active.
-- **Multilingual UI** (FR/EN), selector in the View menu.
 - **Persistent logging** under `%LocalAppData%\Gpeditor_plus` /
   `C:\Windows\Logs\Gpeditor_plus`.
 

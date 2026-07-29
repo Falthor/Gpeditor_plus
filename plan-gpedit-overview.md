@@ -1,11 +1,7 @@
 # Overview — Gpeditor_plus
 
 > Single reference document on how the project actually works, up to date
-> as of 2026-07-29. Replaces reading the old `plan-gpedit-*.md` files to
-> understand the architecture: those are historical decision logs (often
-> stale or already implemented/rolled back), not state documentation.
-> They remain archived in `Claude_Plan\Old\` but should no longer be used
-> as a source of truth on the current behavior.
+> as of 2026-07-29. 
 
 ## 1. What is Gpeditor_plus?
 
@@ -190,16 +186,3 @@ Security Settings tree split) and in code comments, not in the git log.
 No TODO/FIXME/stub markers found anywhere in the code (repo-wide grep
 across all `.ps1`/`.xaml` files) — the codebase appears to be in a
 deliberately "finished" state, with no known pending feature.
-
-## 5. About the old `plan-gpedit-*.md` files
-
-These files, moved to `Claude_Plan\Old\`, are decision logs written
-during the development of specific features (search, CIS, security
-options, catalog editor, secedit cycle, advanced GPO projects, script
-consolidation, UI enhancements). Several are explicitly marked as
-implemented (sometimes then rolled back, e.g.
-`plan-gpedit-script-consolidation.md`). They no longer necessarily
-reflect the current state of the code and should not be read as
-architecture documentation — this file replaces them for that purpose.
-They remain useful as a record of the reasoning behind past decisions,
-if context on *why* something was done is ever needed.
