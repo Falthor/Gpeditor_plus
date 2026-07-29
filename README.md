@@ -157,7 +157,7 @@ cd gpedit_custom\src\Tests
 ## Design documents
 
 Every notable feature has its own plan/decision log at the repo root
-(`plan-gpedit-*.md`), kept up to date as it's implemented: cross-category
+(`plan-gpedit-overview.md`), kept up to date as it's implemented: cross-category
 search, CIS recommendations, GPO projects, security options, Explain tab,
 catalog editor, secedit cycle, UI enhancements, script consolidation.
 
