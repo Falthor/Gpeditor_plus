@@ -1,6 +1,6 @@
 ﻿<#
     Top-menu windows: optional-column picker (View > Add/remove columns),
-    and the three "?" menu info windows (About / Patch note / Benchmark).
+    the Filter dialog, and the "?" menu info windows (About / Patch note).
     Reuses Import-XamlWindow (EditDialogs.ps1).
 #>
 
@@ -189,7 +189,7 @@ function Get-CisProfileGroups {
     # ", $groups" (not just "$groups"): an unprotected "return" enumerates
     # the collection - an EMPTY list (no CIS profiles in the index) would
     # become $null for the caller instead of an empty list. Same real bug
-    # as Select-OnlyConfiguredItems (GpEdit.ps1), fixed here as a precaution.
+    # as Select-FilteredItems (GpEdit.ps1), fixed here as a precaution.
     return , $groups
 }
 
@@ -326,6 +326,166 @@ function Show-ProfileSelectionDialog {
     return $script:__profileSelectionResult
 }
 
+function Show-FilterDialog {
+    <#
+        "Filter" top menu dialog. Combines, in AND logic: configuration
+        state (Any/Configured only/Enabled/Disabled/Not Configured),
+        Computer/User scope, setting type (Admx/Security/AdvancedAudit),
+        CIS profile (delegates to Show-ProfileSelectionDialog) and "has a
+        CIS recommendation" only.
+
+        $CurrentState: pscustomobject with StateMode (string), Scopes
+        (string[], subset of 'Machine'/'User'), Kinds (string[], subset of
+        'Admx'/'Security'/'AdvancedAudit'), Profile (CIS profile spec or
+        $null), HasCisRecOnly (bool) - same shape as the return value.
+        Returns the new state on Apply, $null on Cancel.
+    #>
+    param(
+        $Owner,
+        [string]$ScriptRoot,
+        [Parameter(Mandatory)][hashtable]$Ui,
+        $CisIndex,
+        [Parameter(Mandatory)]$CurrentState
+    )
+
+    $window = Import-XamlWindow -ScriptRoot $ScriptRoot -Name 'FilterWindow' -Owner $Owner
+    $window.Title = $Ui.FilterWindowTitle
+    $window.FindName('FilterStateGroupBox').Header = $Ui.FilterStateGroupHeader
+    $stateAnyRadio = $window.FindName('FilterStateAnyRadio')
+    $stateConfiguredRadio = $window.FindName('FilterStateConfiguredRadio')
+    $stateEnabledRadio = $window.FindName('FilterStateEnabledRadio')
+    $stateDisabledRadio = $window.FindName('FilterStateDisabledRadio')
+    $stateNotConfiguredRadio = $window.FindName('FilterStateNotConfiguredRadio')
+    $stateAnyRadio.Content = $Ui.FilterStateAny
+    $stateConfiguredRadio.Content = $Ui.FilterStateConfiguredOnly
+    $stateEnabledRadio.Content = $Ui.FilterStateEnabled
+    $stateDisabledRadio.Content = $Ui.FilterStateDisabled
+    $stateNotConfiguredRadio.Content = $Ui.FilterStateNotConfigured
+
+    $window.FindName('FilterScopeGroupBox').Header = $Ui.FilterScopeGroupHeader
+    $scopeComputerCheck = $window.FindName('FilterScopeComputerCheck')
+    $scopeUserCheck = $window.FindName('FilterScopeUserCheck')
+    $scopeComputerCheck.Content = $Ui.ScopeComputer
+    $scopeUserCheck.Content = $Ui.ScopeUser
+
+    $window.FindName('FilterKindGroupBox').Header = $Ui.FilterKindGroupHeader
+    $kindAdmxCheck = $window.FindName('FilterKindAdmxCheck')
+    $kindSecurityCheck = $window.FindName('FilterKindSecurityCheck')
+    $kindAdvancedAuditCheck = $window.FindName('FilterKindAdvancedAuditCheck')
+    $kindAdmxCheck.Content = $Ui.FilterKindAdmx
+    $kindSecurityCheck.Content = $Ui.FilterKindSecurity
+    $kindAdvancedAuditCheck.Content = $Ui.FilterKindAdvancedAudit
+
+    $window.FindName('FilterCisGroupBox').Header = $Ui.FilterCisGroupHeader
+    $cisProfileLabel = $window.FindName('FilterCisProfileLabel')
+    $chooseProfileButton = $window.FindName('FilterChooseProfileButton')
+    $clearProfileButton = $window.FindName('FilterClearProfileButton')
+    $hasCisRecCheck = $window.FindName('FilterHasCisRecCheck')
+    $chooseProfileButton.Content = $Ui.FilterChooseProfileButton
+    $clearProfileButton.Content = $Ui.FilterClearProfileButton
+    $hasCisRecCheck.Content = $Ui.FilterHasCisRecOnly
+
+    $resetButton = $window.FindName('FilterResetButton')
+    $okButton = $window.FindName('OkButton')
+    $cancelButton = $window.FindName('CancelButton')
+    $resetButton.Content = $Ui.FilterResetButton
+    $okButton.Content = $Ui.OkButton
+    $cancelButton.Content = $Ui.CancelButton
+
+    # CIS group is only meaningful when a CIS index is actually loaded -
+    # same guard as the old Update-ProfileMenuVisibility.
+    $hasCisIndex = ($null -ne $CisIndex)
+    $window.FindName('FilterCisGroupBox').Visibility = if ($hasCisIndex) { 'Visible' } else { 'Collapsed' }
+
+    $script:__filterSelectedProfile = $CurrentState.Profile
+
+    function Update-FilterCisProfileLabel {
+        if ($null -eq $script:__filterSelectedProfile) {
+            $cisProfileLabel.Text = $Ui.FilterNoProfileSelected
+        } else {
+            $cisProfileLabel.Text = ($Ui.FilterCurrentProfileFormat -f (Get-CisProfileDisplayText -ProfileSpec $script:__filterSelectedProfile))
+        }
+    }
+    Update-FilterCisProfileLabel
+
+    function Set-FilterFormFromState {
+        param($State)
+        switch ($State.StateMode) {
+            'ConfiguredOnly' { $stateConfiguredRadio.IsChecked = $true }
+            'Enabled'        { $stateEnabledRadio.IsChecked = $true }
+            'Disabled'       { $stateDisabledRadio.IsChecked = $true }
+            'NotConfigured'  { $stateNotConfiguredRadio.IsChecked = $true }
+            default          { $stateAnyRadio.IsChecked = $true }
+        }
+        $scopeComputerCheck.IsChecked = ($State.Scopes -contains 'Machine')
+        $scopeUserCheck.IsChecked = ($State.Scopes -contains 'User')
+        $kindAdmxCheck.IsChecked = ($State.Kinds -contains 'Admx')
+        $kindSecurityCheck.IsChecked = ($State.Kinds -contains 'Security')
+        $kindAdvancedAuditCheck.IsChecked = ($State.Kinds -contains 'AdvancedAudit')
+        $hasCisRecCheck.IsChecked = [bool]$State.HasCisRecOnly
+    }
+    Set-FilterFormFromState -State $CurrentState
+
+    $chooseProfileButton.Add_Click({
+        param($EventSender, $e)
+        $selected = Show-ProfileSelectionDialog -Owner $window -ScriptRoot $ScriptRoot -Ui $Ui -CisIndex $CisIndex -CurrentProfile $script:__filterSelectedProfile
+        if ($selected) {
+            $script:__filterSelectedProfile = $selected
+            Update-FilterCisProfileLabel
+        }
+    }.GetNewClosure())
+
+    $clearProfileButton.Add_Click({
+        param($EventSender, $e)
+        $script:__filterSelectedProfile = $null
+        Update-FilterCisProfileLabel
+    }.GetNewClosure())
+
+    $resetButton.Add_Click({
+        param($EventSender, $e)
+        $script:__filterSelectedProfile = $null
+        Update-FilterCisProfileLabel
+        Set-FilterFormFromState -State ([pscustomobject]@{
+            StateMode = 'Any'
+            Scopes = @('Machine', 'User')
+            Kinds = @('Admx', 'Security', 'AdvancedAudit')
+            HasCisRecOnly = $false
+        })
+    }.GetNewClosure())
+
+    $script:__filterDialogResult = $null
+    $okButton.Add_Click({
+        param($EventSender, $e)
+        $stateMode = if ($stateConfiguredRadio.IsChecked) { 'ConfiguredOnly' }
+            elseif ($stateEnabledRadio.IsChecked) { 'Enabled' }
+            elseif ($stateDisabledRadio.IsChecked) { 'Disabled' }
+            elseif ($stateNotConfiguredRadio.IsChecked) { 'NotConfigured' }
+            else { 'Any' }
+        $scopes = New-Object System.Collections.Generic.List[string]
+        if ($scopeComputerCheck.IsChecked) { $scopes.Add('Machine') }
+        if ($scopeUserCheck.IsChecked) { $scopes.Add('User') }
+        $kinds = New-Object System.Collections.Generic.List[string]
+        if ($kindAdmxCheck.IsChecked) { $kinds.Add('Admx') }
+        if ($kindSecurityCheck.IsChecked) { $kinds.Add('Security') }
+        if ($kindAdvancedAuditCheck.IsChecked) { $kinds.Add('AdvancedAudit') }
+        $script:__filterDialogResult = [pscustomobject]@{
+            StateMode = $stateMode
+            Scopes = @($scopes)
+            Kinds = @($kinds)
+            Profile = $script:__filterSelectedProfile
+            HasCisRecOnly = [bool]$hasCisRecCheck.IsChecked
+        }
+        $window.DialogResult = $true
+    }.GetNewClosure())
+    $cancelButton.Add_Click({
+        param($EventSender, $e)
+        $window.DialogResult = $false
+    })
+
+    $null = $window.ShowDialog()
+    return $script:__filterDialogResult
+}
+
 function Show-AboutWindow {
     param($Owner, [string]$ScriptRoot, [Parameter(Mandatory)][hashtable]$Ui, [System.Collections.Generic.List[object]]$ChangelogEntries)
 
@@ -422,20 +582,3 @@ function Show-UnsavedProjectCloseDialog {
     return $script:__unsavedProjectCloseResult
 }
 
-function Show-BenchmarkWindow {
-    param($Owner, [string]$ScriptRoot, [Parameter(Mandatory)][hashtable]$Ui, $CisIndex)
-
-    $window = Import-XamlWindow -ScriptRoot $ScriptRoot -Name 'BenchmarkWindow' -Owner $Owner
-    $window.Title = $Ui.BenchmarkWindowTitle
-    $window.FindName('BenchmarkIntroLabel').Text = $Ui.BenchmarkIntro
-
-    $listBox = $window.FindName('BenchmarkListBox')
-    if ($CisIndex -and $CisIndex.meta -and $CisIndex.meta.sourceFiles) {
-        foreach ($f in @($CisIndex.meta.sourceFiles)) { [void]$listBox.Items.Add($f) }
-    }
-
-    $okButton = $window.FindName('OkButton')
-    $okButton.Content = $Ui.OkButton
-    $okButton.Add_Click({ param($EventSender, $e) $window.DialogResult = $true })
-    $null = $window.ShowDialog()
-}

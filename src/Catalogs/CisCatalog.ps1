@@ -220,7 +220,7 @@ function Get-CisAllEntries {
     $entries = New-Object System.Collections.Generic.List[object]
     # ", $entries" everywhere here: an unprotected return enumerates the
     # collection, so an EMPTY List[object] becomes $null for the caller.
-    # Real bug found/fixed in Select-OnlyConfiguredItems (GpEdit.ps1) -
+    # Real bug found/fixed in Select-FilteredItems (GpEdit.ps1) -
     # applied here as a precaution since this can genuinely return 0
     # elements (CisIndex missing/empty).
     if ($null -eq $CisIndex) { return , $entries }

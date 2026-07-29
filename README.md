@@ -62,7 +62,7 @@ projects, built-in release notes.
 From an **elevated** PowerShell prompt:
 
 ```powershell
-cd gpedit_custom\src
+cd gpeditor_plus\src
 .\GpEdit.ps1
 ```
 

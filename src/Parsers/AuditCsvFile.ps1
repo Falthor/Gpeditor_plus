@@ -37,7 +37,7 @@ function Read-AuditCsv {
     $rows = @{}
     if (-not (Test-Path -LiteralPath $Path)) { return $rows }
 
-    $lines = Get-Content -LiteralPath $Path -Encoding UTF8
+    $lines = @(Get-Content -LiteralPath $Path -Encoding UTF8)
     if ($lines.Count -le 1) { return $rows }
 
     $columns = ($lines[0] -split ',')

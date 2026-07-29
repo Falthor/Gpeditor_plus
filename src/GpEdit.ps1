@@ -233,9 +233,14 @@ if (-not $script:CisDefaultProfile) { $script:CisDefaultProfile = Get-CisDefault
 $script:CisActiveProfileForColumn = $script:CisDefaultProfile
 $script:CisProfileFilter = $null
 
-# View > Only Set: shows only configured settings in the current view
-# (see Select-OnlyConfiguredItems).
-$script:OnlyShowConfigured = $false
+# Filter menu state (see Show-FilterDialog / Test-CisProfileFilterMatch /
+# Test-ScopeFilterMatch / Test-KindFilterMatch / Test-StateFilterMatch).
+# Defaults reproduce the old behavior: no state/scope/kind restriction, no
+# CIS profile filter.
+$script:FilterStateMode = 'Any'
+$script:FilterScopes = @('Machine', 'User')
+$script:FilterKinds = @('Admx', 'Security', 'AdvancedAudit')
+$script:FilterHasCisRecOnly = $false
 
 # Patch notes (right-hand pane + ? > Patch note).
 $script:ChangelogEntries = Get-ChangelogEntries -Path (Join-Path $PSScriptRoot '..\CHANGELOG.md')
@@ -319,16 +324,62 @@ function Test-PolicyMatchesScope {
     return ($PolicyClass -eq 'User' -or $PolicyClass -eq 'Both')
 }
 
+function Test-StateFilterMatch {
+    # $AdmxState: raw Admx state ('Enabled'/'Disabled'/'NotConfigured'),
+    # only meaningful for Kind = 'Admx' - Security/AdvancedAudit settings
+    # are value-based, not enabled/disabled toggles, so they never match
+    # the Enabled/Disabled modes (pass $null for those Kinds).
+    param([string]$AdmxState, [bool]$IsConfigured)
+    switch ($script:FilterStateMode) {
+        'ConfiguredOnly' { return $IsConfigured }
+        'NotConfigured'  { return -not $IsConfigured }
+        'Enabled'        { return ($AdmxState -eq 'Enabled') }
+        'Disabled'       { return ($AdmxState -eq 'Disabled') }
+        default          { return $true }   # 'Any'
+    }
+}
+
+function Test-ScopeFilterMatch {
+    # $Scope: 'Machine'/'User', or $null for Security/AdvancedAudit
+    # settings (always Computer-scoped in this app).
+    param([string]$Scope)
+    $effectiveScope = if ($Scope) { $Scope } else { 'Machine' }
+    return ($script:FilterScopes -contains $effectiveScope)
+}
+
+function Test-KindFilterMatch {
+    param([string]$Kind)
+    return ($script:FilterKinds -contains $Kind)
+}
+
+function Test-AnyStateScopeKindFilterActive {
+    # $true if the Filter menu's State/Scope/Kind dimensions currently
+    # restrict the tree (used by Build-MainTreeRoots to decide whether an
+    # otherwise-empty root container should still be shown).
+    return (
+        $script:FilterStateMode -ne 'Any' -or
+        @($script:FilterScopes).Count -ne 2 -or
+        @($script:FilterKinds).Count -ne 3
+    )
+}
+
 function Test-CategoryHasPolicies {
+    # A category only counts as "having policies" if at least one of them
+    # passes the active Filter menu state/scope/kind - otherwise its folder
+    # would still show up empty in the tree.
     param([string]$CategoryId, [string]$Scope, [hashtable]$Cache)
 
     if ($Cache.ContainsKey($CategoryId)) { return $Cache[$CategoryId] }
     $Cache[$CategoryId] = $false   # cycle guard
 
     $has = $false
-    if ($script:policiesByCategory.ContainsKey($CategoryId)) {
+    if ((Test-KindFilterMatch -Kind 'Admx') -and (Test-ScopeFilterMatch -Scope $Scope) -and $script:policiesByCategory.ContainsKey($CategoryId)) {
+        $lookup = if ($Scope -eq 'Machine') { $machineLookup } else { $userLookup }
         foreach ($pol in $script:policiesByCategory[$CategoryId]) {
-            if (Test-PolicyMatchesScope -PolicyClass $pol.class -Scope $Scope) { $has = $true; break }
+            if (-not (Test-PolicyMatchesScope -PolicyClass $pol.class -Scope $Scope)) { continue }
+            if ($script:FilterStateMode -eq 'Any') { $has = $true; break }
+            $state = Get-AdmxPolicyState -Policy $pol -PolLookup $lookup
+            if (Test-StateFilterMatch -AdmxState $state -IsConfigured ($state -ne 'NotConfigured')) { $has = $true; break }
         }
     }
     if (-not $has -and $script:childrenByParent.ContainsKey($CategoryId)) {
@@ -338,6 +389,28 @@ function Test-CategoryHasPolicies {
     }
     $Cache[$CategoryId] = $has
     return $has
+}
+
+function Test-SecurityCategoryHasPolicies {
+    # Same reasoning as Test-CategoryHasPolicies, for the static Security
+    # Settings leaves (Password Policy, Audit Policy, etc.).
+    param([string]$Category)
+    if (-not (Test-KindFilterMatch -Kind 'Security') -or -not (Test-ScopeFilterMatch -Scope $null)) { return $false }
+    if ($script:FilterStateMode -eq 'Any') { return $true }
+    foreach ($setting in $script:securityIndex.settings) {
+        if ($setting.category -eq $Category -and (Test-StateFilterMatch -AdmxState $null -IsConfigured $setting.isConfigured)) { return $true }
+    }
+    return $false
+}
+
+function Test-AdvAuditCategoryHasPolicies {
+    param([string]$Category)
+    if (-not (Test-KindFilterMatch -Kind 'AdvancedAudit') -or -not (Test-ScopeFilterMatch -Scope $null)) { return $false }
+    if ($script:FilterStateMode -eq 'Any') { return $true }
+    foreach ($setting in $script:advancedAuditIndex.settings) {
+        if ($setting.category -eq $Category -and (Test-StateFilterMatch -AdmxState $null -IsConfigured $setting.isConfigured)) { return $true }
+    }
+    return $false
 }
 
 function New-CategoryTreeViewItem {
@@ -451,7 +524,7 @@ function Build-MainTreeRoots {
             [void]$computerAdmxRoot.Items.Add((New-CategoryTreeViewItem -CategoryId $rootCatId -Scope 'Machine' -Cache $machineCache -Ancestors $machineAncestors))
         }
     }
-    [void]$computerRoot.Items.Add($computerAdmxRoot)
+    if ($computerAdmxRoot.Items.Count -gt 0 -or -not (Test-AnyStateScopeKindFilterActive)) { [void]$computerRoot.Items.Add($computerAdmxRoot) }
 
     # "Windows Settings" and "Security Settings" are two distinct nested
     # folders, as in real gpedit.msc, not one combined node.
@@ -459,29 +532,30 @@ function Build-MainTreeRoots {
     $securityRoot = New-StaticNode -Header $Ui.SecuritySettings -GroupId 'ComputerSecurityRoot' -Ancestors ([System.Collections.Generic.List[object]]@($computerRoot, $windowsSettingsRoot))
     $accountPoliciesRoot = New-StaticNode -Header $Ui.AccountPolicies -GroupId 'AccountPoliciesRoot' -Ancestors ([System.Collections.Generic.List[object]]@($computerRoot, $windowsSettingsRoot, $securityRoot))
     $accountAncestors = [System.Collections.Generic.List[object]]@($computerRoot, $windowsSettingsRoot, $securityRoot, $accountPoliciesRoot)
-    [void]$accountPoliciesRoot.Items.Add((New-SecurityLeafItem -Header $Ui.PasswordPolicy -Category 'Password Policy' -Ancestors $accountAncestors))
-    [void]$accountPoliciesRoot.Items.Add((New-SecurityLeafItem -Header $Ui.AccountLockoutPolicy -Category 'Account Lockout Policy' -Ancestors $accountAncestors))
-    [void]$securityRoot.Items.Add($accountPoliciesRoot)
+    if (Test-SecurityCategoryHasPolicies -Category 'Password Policy') { [void]$accountPoliciesRoot.Items.Add((New-SecurityLeafItem -Header $Ui.PasswordPolicy -Category 'Password Policy' -Ancestors $accountAncestors)) }
+    if (Test-SecurityCategoryHasPolicies -Category 'Account Lockout Policy') { [void]$accountPoliciesRoot.Items.Add((New-SecurityLeafItem -Header $Ui.AccountLockoutPolicy -Category 'Account Lockout Policy' -Ancestors $accountAncestors)) }
+    if ($accountPoliciesRoot.Items.Count -gt 0) { [void]$securityRoot.Items.Add($accountPoliciesRoot) }
 
     $localPoliciesRoot = New-StaticNode -Header $Ui.LocalPolicies -GroupId 'LocalPoliciesRoot' -Ancestors ([System.Collections.Generic.List[object]]@($computerRoot, $windowsSettingsRoot, $securityRoot))
     $localAncestors = [System.Collections.Generic.List[object]]@($computerRoot, $windowsSettingsRoot, $securityRoot, $localPoliciesRoot)
-    [void]$localPoliciesRoot.Items.Add((New-SecurityLeafItem -Header $Ui.AuditPolicy -Category 'Audit Policy' -Ancestors $localAncestors))
-    [void]$localPoliciesRoot.Items.Add((New-SecurityLeafItem -Header $Ui.UserRightsAssignment -Category 'User Rights Assignment' -Ancestors $localAncestors))
-    [void]$localPoliciesRoot.Items.Add((New-SecurityLeafItem -Header $Ui.SecurityOptions -Category 'Security Options' -Ancestors $localAncestors))
-    [void]$securityRoot.Items.Add($localPoliciesRoot)
+    if (Test-SecurityCategoryHasPolicies -Category 'Audit Policy') { [void]$localPoliciesRoot.Items.Add((New-SecurityLeafItem -Header $Ui.AuditPolicy -Category 'Audit Policy' -Ancestors $localAncestors)) }
+    if (Test-SecurityCategoryHasPolicies -Category 'User Rights Assignment') { [void]$localPoliciesRoot.Items.Add((New-SecurityLeafItem -Header $Ui.UserRightsAssignment -Category 'User Rights Assignment' -Ancestors $localAncestors)) }
+    if (Test-SecurityCategoryHasPolicies -Category 'Security Options') { [void]$localPoliciesRoot.Items.Add((New-SecurityLeafItem -Header $Ui.SecurityOptions -Category 'Security Options' -Ancestors $localAncestors)) }
+    if ($localPoliciesRoot.Items.Count -gt 0) { [void]$securityRoot.Items.Add($localPoliciesRoot) }
 
     $advAuditConfigRoot = New-StaticNode -Header $Ui.AdvancedAuditPolicyConfig -GroupId 'AdvAuditConfigRoot' -Ancestors ([System.Collections.Generic.List[object]]@($computerRoot, $windowsSettingsRoot, $securityRoot))
     $advAuditObjectRoot = New-StaticNode -Header $Ui.AdvancedAuditPolicyObject -GroupId 'AdvAuditObjectRoot' -Ancestors ([System.Collections.Generic.List[object]]@($computerRoot, $windowsSettingsRoot, $securityRoot, $advAuditConfigRoot))
     $advAuditAncestors = [System.Collections.Generic.List[object]]@($computerRoot, $windowsSettingsRoot, $securityRoot, $advAuditConfigRoot, $advAuditObjectRoot)
     foreach ($catKey in $script:AdvancedAuditCategoryOrder) {
+        if (-not (Test-AdvAuditCategoryHasPolicies -Category $catKey)) { continue }
         $catHeader = $Ui["AdvAudit$catKey"]
         [void]$advAuditObjectRoot.Items.Add((New-AdvancedAuditLeafItem -Header $catHeader -Category $catKey -Ancestors $advAuditAncestors))
     }
-    [void]$advAuditConfigRoot.Items.Add($advAuditObjectRoot)
-    [void]$securityRoot.Items.Add($advAuditConfigRoot)
+    if ($advAuditObjectRoot.Items.Count -gt 0) { [void]$advAuditConfigRoot.Items.Add($advAuditObjectRoot) }
+    if ($advAuditConfigRoot.Items.Count -gt 0) { [void]$securityRoot.Items.Add($advAuditConfigRoot) }
 
-    [void]$windowsSettingsRoot.Items.Add($securityRoot)
-    [void]$computerRoot.Items.Add($windowsSettingsRoot)
+    if ($securityRoot.Items.Count -gt 0) { [void]$windowsSettingsRoot.Items.Add($securityRoot) }
+    if ($windowsSettingsRoot.Items.Count -gt 0 -or -not (Test-AnyStateScopeKindFilterActive)) { [void]$computerRoot.Items.Add($windowsSettingsRoot) }
 
     $userRoot = New-StaticNode -Header $Ui.UserConfig -GroupId 'UserConfig' -Glyph $script:IconGlyphUser -Color '#5A6B87'
     $userAdmxRoot = New-StaticNode -Header $Ui.AdminTemplates -GroupId 'UserAdminTemplates' -Ancestors ([System.Collections.Generic.List[object]]@($userRoot))
@@ -492,7 +566,7 @@ function Build-MainTreeRoots {
             [void]$userAdmxRoot.Items.Add((New-CategoryTreeViewItem -CategoryId $rootCatId -Scope 'User' -Cache $userCache -Ancestors $userAncestors))
         }
     }
-    [void]$userRoot.Items.Add($userAdmxRoot)
+    if ($userAdmxRoot.Items.Count -gt 0 -or -not (Test-AnyStateScopeKindFilterActive)) { [void]$userRoot.Items.Add($userAdmxRoot) }
 
     return [pscustomobject]@{ OverviewRoot = $overviewRoot; ComputerRoot = $computerRoot; UserRoot = $userRoot }
 }
@@ -547,13 +621,10 @@ $fileOptionsMenuItem = $window.FindName('FileOptionsMenuItem')
 $fileExitMenuItem  = $window.FindName('FileExitMenuItem')
 $viewMenu          = $window.FindName('ViewMenu')
 $viewColumnsMenuItem = $window.FindName('ViewColumnsMenuItem')
-$viewProfileMenu   = $window.FindName('ViewProfileMenu')
-$viewRemoveCisFilterMenuItem = $window.FindName('ViewRemoveCisFilterMenuItem')
-$viewOnlySetMenuItem = $window.FindName('ViewOnlySetMenuItem')
+$filterMenu        = $window.FindName('FilterMenu')
 $helpMenu          = $window.FindName('HelpMenu')
 $helpAboutMenuItem = $window.FindName('HelpAboutMenuItem')
 $helpPatchNoteMenuItem = $window.FindName('HelpPatchNoteMenuItem')
-$helpBenchmarkMenuItem = $window.FindName('HelpBenchmarkMenuItem')
 $helpLogsMenuItem  = $window.FindName('HelpLogsMenuItem')
 $patchNotesPanel   = $window.FindName('PatchNotesPanel')
 $patchNotesTitleLabel = $window.FindName('PatchNotesTitleLabel')
@@ -596,14 +667,11 @@ function Update-StaticUiText {
     $fileExitMenuItem.Header = $Ui.MenuFileExit
     $viewMenu.Header = $Ui.MenuView
     $viewColumnsMenuItem.Header = $Ui.MenuViewColumns
-    $viewProfileMenu.Header = $Ui.MenuViewProfile
-    $viewOnlySetMenuItem.Header = $Ui.MenuViewOnlySet
     $helpMenu.Header = $Ui.MenuHelp
     $helpAboutMenuItem.Header = $Ui.MenuHelpAbout
     $helpPatchNoteMenuItem.Header = $Ui.MenuHelpPatchNote
-    $helpBenchmarkMenuItem.Header = $Ui.MenuHelpBenchmark
     $patchNotesTitleLabel.Text = $Ui.PatchNotesTitle
-    Update-RemoveFilterMenuItemLabel -Ui $Ui
+    Update-FilterMenuLabel -Ui $Ui
     if (-not $script:HasLeftInitialPatchNotesView) { Update-PatchNotesPanelContent }
 }
 
@@ -616,13 +684,32 @@ function Rebuild-Tree {
     [void]$categoryTree.Items.Add($roots.UserRoot)
 }
 
-function Select-OnlyConfiguredItems {
-    # View > Only Set: keeps only IsConfigured items when active.
-    # Leading comma prevents PowerShell unwrapping an empty result to $null
-    # (which would crash callers doing "$null.Count" under StrictMode).
+function Select-FilteredItems {
+    <#
+        Filter menu: applies Scope/Kind/State on top of the already-built
+        item list (Kind/Scope/IsConfigured are set on every item - see
+        Update-PolicyList/Invoke-Search). State's Enabled/Disabled modes
+        are reconstructed from StateLabel for Admx items only, since raw
+        Admx state isn't kept on the item itself (see Test-StateFilterMatch).
+        Leading comma prevents PowerShell unwrapping an empty result to
+        $null (which would crash callers doing "$null.Count" under
+        StrictMode).
+    #>
     param($Items)
-    if (-not $script:OnlyShowConfigured) { return , $Items }
-    return , [System.Collections.Generic.List[object]]@($Items | Where-Object { $_.IsConfigured })
+    $ui = Get-CurrentUi
+    $filtered = [System.Collections.Generic.List[object]]@($Items | Where-Object {
+        $item = $_
+        if (-not (Test-ScopeFilterMatch -Scope $item.Scope)) { return $false }
+        if (-not (Test-KindFilterMatch -Kind $item.Kind)) { return $false }
+        $admxState = $null
+        if ($item.Kind -eq 'Admx') {
+            $admxState = if ($item.StateLabel -eq $ui.StateEnabled) { 'Enabled' }
+                elseif ($item.StateLabel -eq $ui.StateDisabled) { 'Disabled' }
+                else { 'NotConfigured' }
+        }
+        return (Test-StateFilterMatch -AdmxState $admxState -IsConfigured $item.IsConfigured)
+    })
+    return , $filtered
 }
 
 function Refresh-ListForCisStateChange {
@@ -640,9 +727,11 @@ function Refresh-ListForCisStateChange {
 }
 
 function Test-CisProfileFilterMatch {
-    # $true if no profile filter is active, or $CisEntry has a
-    # recommendation for the filtered profile.
+    # $true if $CisEntry passes both the "has a CIS recommendation" filter
+    # and the profile filter (no profile filter is active, or $CisEntry
+    # has a recommendation for the filtered profile).
     param($CisEntry)
+    if ($script:FilterHasCisRecOnly -and $null -eq $CisEntry) { return $false }
     if ($null -eq $script:CisProfileFilter) { return $true }
     return ($null -ne (Get-CisRecommendationValueForProfile -CisEntry $CisEntry -ActiveProfile $script:CisProfileFilter))
 }
@@ -677,12 +766,14 @@ function Get-CisRowLabels {
 
 function Update-TreeVisibilityForCisFilter {
     <#
-        Filtering by CIS profile must not leave empty tree nodes - same
-        principle as search filtering (Update-TreeVisibilityForSearch) but
-        computed over all settings, both scopes. Restores full tree if no
-        filter is active.
+        Filtering by CIS profile and/or "has a CIS recommendation" must not
+        leave empty tree nodes - same principle as search filtering
+        (Update-TreeVisibilityForSearch) but computed over all settings,
+        both scopes. Restores full tree if no filter is active. State/
+        Scope/Kind filtering is handled separately, by rebuilding the tree
+        itself (see Test-CategoryHasPolicies and the FilterMenu handler).
     #>
-    if ($null -eq $script:CisProfileFilter) {
+    if ($null -eq $script:CisProfileFilter -and -not $script:FilterHasCisRecOnly) {
         Show-AllTreeItems
         return
     }
@@ -1216,46 +1307,69 @@ function Set-CisProfileFilter {
     $script:CisProfileFilter = $NewProfile
     $script:CisActiveProfileForColumn = if ($NewProfile) { $NewProfile } else { $script:CisDefaultProfile }
     Update-ActiveProfileLabel
-    # In search mode, Invoke-Search already recomputes tree filtering
-    # combined with the CIS profile - don't overwrite with a version that
-    # ignores the search text.
-    if (-not $script:IsSearchActive) { Update-TreeVisibilityForCisFilter }
-    Refresh-ListForCisStateChange
 }
 
-function Update-RemoveFilterMenuItemLabel {
+function Get-ActiveFilterCount {
+    # Feeds the Filter menu badge (Ui.MenuFilterActiveFormat) - counts how
+    # many of the independent filter dimensions are non-default.
+    $count = 0
+    if ($null -ne $script:CisProfileFilter) { $count++ }
+    if ($script:FilterHasCisRecOnly) { $count++ }
+    if ($script:FilterStateMode -ne 'Any') { $count++ }
+    if (@($script:FilterScopes).Count -ne 2) { $count++ }
+    if (@($script:FilterKinds).Count -ne 3) { $count++ }
+    return $count
+}
+
+function Update-FilterMenuLabel {
     param([hashtable]$Ui)
-    $viewRemoveCisFilterMenuItem.Header = $Ui.MenuViewProfileRemoveFilter
+    $activeCount = Get-ActiveFilterCount
+    $filterMenu.Header = if ($activeCount -gt 0) { $Ui.MenuFilterActiveFormat -f $activeCount } else { $Ui.MenuFilter }
 }
 
-function Update-ProfileMenuVisibility {
-    # Hidden along with the "Remove profile filter" item if no CIS index
-    # is loaded.
-    if ($null -eq $script:CisIndex) {
-        $viewProfileMenu.Visibility = 'Collapsed'
-        $viewRemoveCisFilterMenuItem.Visibility = 'Collapsed'
-        return
+Update-FilterMenuLabel -Ui (Get-CurrentUi)
+
+$filterMenu.Add_Click({
+    param($EventSender, $e)
+    $currentState = [pscustomobject]@{
+        StateMode = $script:FilterStateMode
+        Scopes = $script:FilterScopes
+        Kinds = $script:FilterKinds
+        Profile = $script:CisProfileFilter
+        HasCisRecOnly = $script:FilterHasCisRecOnly
     }
-    $viewProfileMenu.Visibility = 'Visible'
-    $viewRemoveCisFilterMenuItem.Visibility = 'Visible'
-    Update-RemoveFilterMenuItemLabel -Ui (Get-CurrentUi)
-}
-Update-ProfileMenuVisibility
+    $ui = Get-CurrentUi
+    $result = Show-FilterDialog -Owner $window -ScriptRoot $PSScriptRoot -Ui $ui -CisIndex $script:CisIndex -CurrentState $currentState
+    if ($null -eq $result) { return }
 
-$viewProfileMenu.Add_Click({
-    param($EventSender, $e)
-    $selected = Show-ProfileSelectionDialog -Owner $window -ScriptRoot $PSScriptRoot -Ui (Get-CurrentUi) -CisIndex $script:CisIndex -CurrentProfile $script:CisProfileFilter
-    if ($selected) { Set-CisProfileFilter -NewProfile $selected }
-})
+    # State/Scope/Kind change which category folders even qualify as
+    # "having policies" (Test-CategoryHasPolicies), so the tree itself -
+    # not just the list - needs to be rebuilt for those three. CIS
+    # profile/HasCisRecOnly instead just hide/show existing nodes (see
+    # Update-TreeVisibilityForCisFilter) - cheaper, no rebuild needed.
+    $treeDimensionsChanged = (
+        $result.StateMode -ne $script:FilterStateMode -or
+        (Compare-Object $result.Scopes $script:FilterScopes) -or
+        (Compare-Object $result.Kinds $script:FilterKinds)
+    )
 
-$viewRemoveCisFilterMenuItem.Add_Click({
-    param($EventSender, $e)
-    Set-CisProfileFilter -NewProfile $null
-})
+    $script:FilterStateMode = $result.StateMode
+    $script:FilterScopes = $result.Scopes
+    $script:FilterKinds = $result.Kinds
+    $script:FilterHasCisRecOnly = $result.HasCisRecOnly
+    Set-CisProfileFilter -NewProfile $result.Profile
+    Update-FilterMenuLabel -Ui $ui
 
-$viewOnlySetMenuItem.Add_Click({
-    param($EventSender, $e)
-    $script:OnlyShowConfigured = $EventSender.IsChecked
+    if ($treeDimensionsChanged) {
+        $restoreInfo = Get-TreeSelectionRestoreInfo
+        Rebuild-Tree -Ui $ui
+        Restore-TreeSelection -Info $restoreInfo
+    }
+    # In search mode, Invoke-Search (called below by
+    # Refresh-ListForCisStateChange) already recomputes tree filtering
+    # combined with the active filters - don't overwrite with a version
+    # that ignores the search text.
+    if (-not $script:IsSearchActive) { Update-TreeVisibilityForCisFilter }
     Refresh-ListForCisStateChange
 })
 
@@ -1423,7 +1537,7 @@ $viewColumnsMenuItem.Add_Click({
 $fileNewMenuItem.Add_Click({ param($EventSender, $e) New-GpoProject })
 $fileOpenMenuItem.Add_Click({ param($EventSender, $e) Open-GpoProject })
 
-# --- Help menu (About / Patch note / Benchmark) ---------------------------
+# --- Help menu (About / Patch note) ---------------------------------------
 $helpAboutMenuItem.Add_Click({
     param($EventSender, $e)
     Show-AboutWindow -Owner $window -ScriptRoot $PSScriptRoot -Ui (Get-CurrentUi) -ChangelogEntries $script:ChangelogEntries
@@ -1431,10 +1545,6 @@ $helpAboutMenuItem.Add_Click({
 $helpPatchNoteMenuItem.Add_Click({
     param($EventSender, $e)
     Show-PatchNoteWindow -Owner $window -ScriptRoot $PSScriptRoot -Ui (Get-CurrentUi) -ChangelogEntries $script:ChangelogEntries
-})
-$helpBenchmarkMenuItem.Add_Click({
-    param($EventSender, $e)
-    Show-BenchmarkWindow -Owner $window -ScriptRoot $PSScriptRoot -Ui (Get-CurrentUi) -CisIndex $script:CisIndex
 })
 $helpLogsMenuItem.Add_Click({
     param($EventSender, $e)
@@ -1685,7 +1795,7 @@ function Update-PolicyList {
         Set-CisStatesColumnVisible -Visible $false
     }
 
-    $items = Select-OnlyConfiguredItems -Items $items
+    $items = Select-FilteredItems -Items $items
     $policyList.ItemsSource = $items
     $statusLabel.Text = ($ui.StatusItemsDisplayed -f $items.Count)
 
@@ -1907,13 +2017,16 @@ function Invoke-Search {
         # CIS number - reused inside the scope loop below.
         $cisRec = Get-CisRecommendationForRegistry -CisIndex $script:CisIndex -RegistryKey $pol.registryKey -ValueName $pol.valueName
         if (-not (Test-SearchMatchAdmx -Field $searchField -Query $Query -Policy $pol -CisEntry $cisRec)) { continue }
+        if (-not (Test-KindFilterMatch -Kind 'Admx')) { continue }
         foreach ($scope in @('Machine', 'User')) {
             if (-not (Test-PolicyMatchesScope -PolicyClass $pol.class -Scope $scope)) { continue }
+            if (-not (Test-ScopeFilterMatch -Scope $scope)) { continue }
             $lookup = if ($scope -eq 'Machine') { $machineLookup } else { $userLookup }
             $state = Get-AdmxPolicyState -Policy $pol -PolLookup $lookup
             $treeKey = "$($pol.categoryId)|$scope"
             $treeNode = if ($script:TreeItemsByAdmxCategoryScope.ContainsKey($treeKey)) { $script:TreeItemsByAdmxCategoryScope[$treeKey] } else { $null }
             if (-not (Test-CisProfileFilterMatch -CisEntry $cisRec)) { continue }
+            if (-not (Test-StateFilterMatch -AdmxState $state -IsConfigured ($state -ne 'NotConfigured'))) { continue }
             $cisRowLabels = Get-CisRowLabels -CisEntry $cisRec -Ui $ui
             $items.Add([pscustomobject]@{
                 DisplayName   = $pol.displayName
@@ -1936,65 +2049,72 @@ function Invoke-Search {
         }
     }
 
-    foreach ($setting in $script:securityIndex.settings) {
-        $cisRec = Get-CisRecommendationForSecuritySetting -CisIndex $script:CisIndex -Section $setting.section -Name $setting.name
-        if (-not (Test-SearchMatchSecurity -Field $searchField -Query $Query -Setting $setting -CisEntry $cisRec)) { continue }
-        $catKey = $script:SecurityCategoryToUiKey[$setting.category]
-        $catLabel = if ($catKey) { $ui[$catKey] } else { $setting.category }
-        $treeNode = if ($script:TreeItemsBySecurityCategory.ContainsKey($setting.category)) { $script:TreeItemsBySecurityCategory[$setting.category] } else { $null }
-        if (-not (Test-CisProfileFilterMatch -CisEntry $cisRec)) { continue }
-        $cisRowLabels = Get-CisRowLabels -CisEntry $cisRec -Ui $ui
-        $items.Add([pscustomobject]@{
-            DisplayName   = $setting.displayName
-            StateLabel    = Format-SecuritySettingValue -Setting $setting -Ui $ui
-            ScopeLabel    = $ui.ScopeComputer
-            CategoryLabel = "$($ui.WindowsSettings) > $($ui.SecuritySettings) > $catLabel"
-            CisLabel      = $cisRowLabels.CisLabel
-            RecommendedStateLabel = $cisRowLabels.RecommendedStateLabel
-            CisStatesLabel = $cisRowLabels.CisStatesLabel
-            PolicyId      = $setting.id
-            IconGlyph     = $script:IconGlyphSecuritySetting
-            Kind          = 'Security'
-            Scope         = $null
-            TreeNode      = $treeNode
-            IsConfigured  = $setting.isConfigured
-        })
-        if ($treeNode) {
-            Add-TreeKeepVisible -KeepSet $keepVisible -Node $treeNode -Ancestors $script:TreeAncestorsBySecurityCategory[$setting.category]
+    if ((Test-KindFilterMatch -Kind 'Security') -and (Test-ScopeFilterMatch -Scope $null)) {
+        foreach ($setting in $script:securityIndex.settings) {
+            $cisRec = Get-CisRecommendationForSecuritySetting -CisIndex $script:CisIndex -Section $setting.section -Name $setting.name
+            if (-not (Test-SearchMatchSecurity -Field $searchField -Query $Query -Setting $setting -CisEntry $cisRec)) { continue }
+            $catKey = $script:SecurityCategoryToUiKey[$setting.category]
+            $catLabel = if ($catKey) { $ui[$catKey] } else { $setting.category }
+            $treeNode = if ($script:TreeItemsBySecurityCategory.ContainsKey($setting.category)) { $script:TreeItemsBySecurityCategory[$setting.category] } else { $null }
+            if (-not (Test-CisProfileFilterMatch -CisEntry $cisRec)) { continue }
+            if (-not (Test-StateFilterMatch -AdmxState $null -IsConfigured $setting.isConfigured)) { continue }
+            $cisRowLabels = Get-CisRowLabels -CisEntry $cisRec -Ui $ui
+            $items.Add([pscustomobject]@{
+                DisplayName   = $setting.displayName
+                StateLabel    = Format-SecuritySettingValue -Setting $setting -Ui $ui
+                ScopeLabel    = $ui.ScopeComputer
+                CategoryLabel = "$($ui.WindowsSettings) > $($ui.SecuritySettings) > $catLabel"
+                CisLabel      = $cisRowLabels.CisLabel
+                RecommendedStateLabel = $cisRowLabels.RecommendedStateLabel
+                CisStatesLabel = $cisRowLabels.CisStatesLabel
+                PolicyId      = $setting.id
+                IconGlyph     = $script:IconGlyphSecuritySetting
+                Kind          = 'Security'
+                Scope         = $null
+                TreeNode      = $treeNode
+                IsConfigured  = $setting.isConfigured
+            })
+            if ($treeNode) {
+                Add-TreeKeepVisible -KeepSet $keepVisible -Node $treeNode -Ancestors $script:TreeAncestorsBySecurityCategory[$setting.category]
+            }
         }
     }
 
-    foreach ($setting in $script:advancedAuditIndex.settings) {
-        $cisRec = Get-CisRecommendationForAuditSubcategory -CisIndex $script:CisIndex -SubcategoryNameEn $setting.name
-        if (-not (Test-SearchMatchAdvancedAudit -Field $searchField -Query $Query -Setting $setting -CisEntry $cisRec)) { continue }
-        $catLabel = $ui["AdvAudit$($setting.category)"]
-        $treeNode = if ($script:TreeItemsByAdvAuditCategory.ContainsKey($setting.category)) { $script:TreeItemsByAdvAuditCategory[$setting.category] } else { $null }
-        if (-not (Test-CisProfileFilterMatch -CisEntry $cisRec)) { continue }
-        $cisRowLabels = Get-CisRowLabels -CisEntry $cisRec -Ui $ui
-        $items.Add([pscustomobject]@{
-            DisplayName   = $setting.displayName
-            StateLabel    = Format-SecuritySettingValue -Setting $setting -Ui $ui
-            ScopeLabel    = $ui.ScopeComputer
-            CategoryLabel = "$($ui.AdvancedAuditPolicyConfig) > $($ui.AdvancedAuditPolicyObject) > $catLabel"
-            CisLabel      = $cisRowLabels.CisLabel
-            RecommendedStateLabel = $cisRowLabels.RecommendedStateLabel
-            CisStatesLabel = $cisRowLabels.CisStatesLabel
-            PolicyId      = $setting.id
-            IconGlyph     = $script:IconGlyphAuditSetting
-            Kind          = 'AdvancedAudit'
-            Scope         = $null
-            TreeNode      = $treeNode
-            IsConfigured  = $setting.isConfigured
-        })
-        if ($treeNode) {
-            Add-TreeKeepVisible -KeepSet $keepVisible -Node $treeNode -Ancestors $script:TreeAncestorsByAdvAuditCategory[$setting.category]
+    if ((Test-KindFilterMatch -Kind 'AdvancedAudit') -and (Test-ScopeFilterMatch -Scope $null)) {
+        foreach ($setting in $script:advancedAuditIndex.settings) {
+            $cisRec = Get-CisRecommendationForAuditSubcategory -CisIndex $script:CisIndex -SubcategoryNameEn $setting.name
+            if (-not (Test-SearchMatchAdvancedAudit -Field $searchField -Query $Query -Setting $setting -CisEntry $cisRec)) { continue }
+            $catLabel = $ui["AdvAudit$($setting.category)"]
+            $treeNode = if ($script:TreeItemsByAdvAuditCategory.ContainsKey($setting.category)) { $script:TreeItemsByAdvAuditCategory[$setting.category] } else { $null }
+            if (-not (Test-CisProfileFilterMatch -CisEntry $cisRec)) { continue }
+            if (-not (Test-StateFilterMatch -AdmxState $null -IsConfigured $setting.isConfigured)) { continue }
+            $cisRowLabels = Get-CisRowLabels -CisEntry $cisRec -Ui $ui
+            $items.Add([pscustomobject]@{
+                DisplayName   = $setting.displayName
+                StateLabel    = Format-SecuritySettingValue -Setting $setting -Ui $ui
+                ScopeLabel    = $ui.ScopeComputer
+                CategoryLabel = "$($ui.AdvancedAuditPolicyConfig) > $($ui.AdvancedAuditPolicyObject) > $catLabel"
+                CisLabel      = $cisRowLabels.CisLabel
+                RecommendedStateLabel = $cisRowLabels.RecommendedStateLabel
+                CisStatesLabel = $cisRowLabels.CisStatesLabel
+                PolicyId      = $setting.id
+                IconGlyph     = $script:IconGlyphAuditSetting
+                Kind          = 'AdvancedAudit'
+                Scope         = $null
+                TreeNode      = $treeNode
+                IsConfigured  = $setting.isConfigured
+            })
+            if ($treeNode) {
+                Add-TreeKeepVisible -KeepSet $keepVisible -Node $treeNode -Ancestors $script:TreeAncestorsByAdvAuditCategory[$setting.category]
+            }
         }
     }
 
     $items = [System.Collections.Generic.List[object]]@($items | Sort-Object DisplayName)
-    # Only Set filter applied before storing SearchResultItems: later
-    # category restriction must start from this filtered subset.
-    $items = Select-OnlyConfiguredItems -Items $items
+    # Filter menu state already applied per-item above (Kind/Scope/State)
+    # and via Test-CisProfileFilterMatch (profile/HasCisRecOnly) - nothing
+    # left to reapply here, unlike the tree-click path where
+    # Select-FilteredItems runs after Update-PolicyList builds $items.
     $script:SearchResultItems = $items
     $policyList.ItemsSource = $items
     $categoryPathLabel.Text = ($ui.SearchResultsHeaderFormat -f $Query, $items.Count)
