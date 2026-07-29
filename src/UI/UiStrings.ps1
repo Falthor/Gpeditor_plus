@@ -7,7 +7,7 @@
 Set-StrictMode -Version Latest
 
 $script:UiStrings = @{
-    WindowTitle              = 'Local Group Policy Editor (custom)'
+    WindowTitle              = 'GPeditor Plus'
     SearchPlaceholder         = 'Search for a setting (name, description)...'
     SearchButton              = 'Search'
     ClearSearchButton         = 'Clear'

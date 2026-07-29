@@ -433,13 +433,13 @@ function Show-FilterDialog {
             $script:__filterSelectedProfile = $selected
             Update-FilterCisProfileLabel
         }
-    }.GetNewClosure())
+    })
 
     $clearProfileButton.Add_Click({
         param($EventSender, $e)
         $script:__filterSelectedProfile = $null
         Update-FilterCisProfileLabel
-    }.GetNewClosure())
+    })
 
     $resetButton.Add_Click({
         param($EventSender, $e)
@@ -451,7 +451,7 @@ function Show-FilterDialog {
             Kinds = @('Admx', 'Security', 'AdvancedAudit')
             HasCisRecOnly = $false
         })
-    }.GetNewClosure())
+    })
 
     $script:__filterDialogResult = $null
     $okButton.Add_Click({
@@ -476,7 +476,7 @@ function Show-FilterDialog {
             HasCisRecOnly = [bool]$hasCisRecCheck.IsChecked
         }
         $window.DialogResult = $true
-    }.GetNewClosure())
+    })
     $cancelButton.Add_Click({
         param($EventSender, $e)
         $window.DialogResult = $false
