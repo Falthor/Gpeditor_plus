@@ -1,5 +1,5 @@
 <#
-    File > Options: sidebar (Path / File / Editor / Close) on the left,
+    File > Options: sidebar (Path / File / Others / Close) on the left,
     right panel toggles between the 3 tabs (Close just closes the window).
 #>
 
@@ -25,33 +25,37 @@ function Show-OptionsDialog {
     $closeNavButton.Content = $Ui.OptionsNavClose
 
     $window.FindName('PathTabLogLabel').Text = $Ui.PathTabLogLabel
-    $window.FindName('PathTabTempLabel').Text = $Ui.PathTabTempLabel
     $window.FindName('PathTabBackupLabel').Text = $Ui.PathTabBackupLabel
     $window.FindName('PathTabImportExportLabel').Text = $Ui.PathTabImportExportLabel
     $window.FindName('PathTabAuditLabel').Text = $Ui.PathTabAuditLabel
-    $window.FindName('PathTabIndexLabel').Text = $Ui.PathTabIndexLabel
     $window.FindName('PathTabProjectsLabel').Text = $Ui.PathTabProjectsLabel
     $window.FindName('AppPreferenceGroupBox').Header = $Ui.PathGroupAppPreferenceHeader
-    $window.FindName('UserPreferenceGroupBox').Header = $Ui.PathGroupUserPreferenceHeader
     $window.FindName('FileTabAuditListHeader').Text = $Ui.FileTabAuditListHeader
     $window.FindName('AddAuditFileButton').Content = $Ui.AddAuditFileButton
     $window.FindName('DeleteAuditFileButton').Content = $Ui.DeleteAuditFileButton
+    $window.FindName('EditionGroupBox').Header = $Ui.OthersGroupEditionHeader
     $window.FindName('EditorModeExplanationLabel').Text = $Ui.EditorModeWarning
     $window.FindName('EditorModeCheckBox').Content = $Ui.EditorModeCheckboxLabel
+    $window.FindName('ImportGroupBox').Header = $Ui.OthersGroupImportHeader
+    $window.FindName('OthersImportExplanationLabel').Text = $Ui.OthersImportExplanation
+    $window.FindName('DefaultImportModeLabel').Text = $Ui.DefaultImportModeLabel
+    $window.FindName('DefaultImportModeClassicItem').Content = $Ui.ImportModeClassic
+    $window.FindName('DefaultImportModeStandardItem').Content = $Ui.ImportModeStandard
+    $window.FindName('DefaultImportModeAdvancedItem').Content = $Ui.ImportModeAdvanced
     $window.FindName('BusyOverlayLabel').Text = $Ui.OptionsBusyOverlayLabel
 
-    foreach ($name in @('LogPathResetButton', 'TempPathResetButton', 'BackupPathResetButton',
-                         'ImportExportPathResetButton', 'AuditPathResetButton', 'IndexPathResetButton',
+    foreach ($name in @('LogPathResetButton', 'BackupPathResetButton',
+                         'ImportExportPathResetButton', 'AuditPathResetButton',
                          'ProjectsPathResetButton')) {
         $window.FindName($name).Content = $Ui.ResetToDefaultButton
     }
-    foreach ($name in @('LogPathBrowseButton', 'TempPathBrowseButton', 'BackupPathBrowseButton',
-                         'ImportExportPathBrowseButton', 'AuditPathBrowseButton', 'IndexPathBrowseButton',
+    foreach ($name in @('LogPathBrowseButton', 'BackupPathBrowseButton',
+                         'ImportExportPathBrowseButton', 'AuditPathBrowseButton',
                          'ProjectsPathBrowseButton')) {
         $window.FindName($name).Content = $Ui.BrowseEllipsisButton
     }
-    foreach ($name in @('LogPathOpenButton', 'TempPathOpenButton', 'BackupPathOpenButton',
-                         'ImportExportPathOpenButton', 'AuditPathOpenButton', 'IndexPathOpenButton',
+    foreach ($name in @('LogPathOpenButton', 'BackupPathOpenButton',
+                         'ImportExportPathOpenButton', 'AuditPathOpenButton',
                          'ProjectsPathOpenButton')) {
         $window.FindName($name).ToolTip = $Ui.OpenFolderButtonTooltip
     }
@@ -75,11 +79,9 @@ function Show-OptionsDialog {
     # silently confirm unwanted path changes.
     $pathRows = @(
         @{ Key = 'logDir';          TextBox = $window.FindName('LogPathTextBox');          Browse = $window.FindName('LogPathBrowseButton');          Open = $window.FindName('LogPathOpenButton');          Reset = $window.FindName('LogPathResetButton') }
-        @{ Key = 'tempDir';         TextBox = $window.FindName('TempPathTextBox');         Browse = $window.FindName('TempPathBrowseButton');         Open = $window.FindName('TempPathOpenButton');         Reset = $window.FindName('TempPathResetButton') }
         @{ Key = 'backupRoot';      TextBox = $window.FindName('BackupPathTextBox');       Browse = $window.FindName('BackupPathBrowseButton');       Open = $window.FindName('BackupPathOpenButton');       Reset = $window.FindName('BackupPathResetButton') }
         @{ Key = 'importExportDir'; TextBox = $window.FindName('ImportExportPathTextBox'); Browse = $window.FindName('ImportExportPathBrowseButton'); Open = $window.FindName('ImportExportPathOpenButton'); Reset = $window.FindName('ImportExportPathResetButton') }
         @{ Key = 'auditFilesDir';   TextBox = $window.FindName('AuditPathTextBox');        Browse = $window.FindName('AuditPathBrowseButton');        Open = $window.FindName('AuditPathOpenButton');        Reset = $window.FindName('AuditPathResetButton') }
-        @{ Key = 'indexDir';        TextBox = $window.FindName('IndexPathTextBox');        Browse = $window.FindName('IndexPathBrowseButton');        Open = $window.FindName('IndexPathOpenButton');        Reset = $window.FindName('IndexPathResetButton') }
         @{ Key = 'projectsDir';     TextBox = $window.FindName('ProjectsPathTextBox');     Browse = $window.FindName('ProjectsPathBrowseButton');     Open = $window.FindName('ProjectsPathOpenButton');     Reset = $window.FindName('ProjectsPathResetButton') }
     )
     $defaultPaths = Get-DefaultAppPaths
@@ -174,12 +176,22 @@ function Show-OptionsDialog {
         }
     })
 
-    # --- Editor tab: Editor Mode, applies immediately + persisted -----------
+    # --- Others tab: Editor Mode + default import mode, both apply immediately + persisted ---
     $editorModeCheckBox = $window.FindName('EditorModeCheckBox')
     $editorModeCheckBox.IsChecked = $script:AppSettings.editorMode
     $editorModeCheckBox.Add_Click({
         $script:CatalogEditingEnabled = [bool]$editorModeCheckBox.IsChecked
         $script:AppSettings.editorMode = [bool]$editorModeCheckBox.IsChecked
+        Save-AppSettings -Settings $script:AppSettings
+    })
+
+    $defaultImportModeComboBox = $window.FindName('DefaultImportModeComboBox')
+    $defaultImportModeComboBox.Items | Where-Object { $_.Tag -eq $script:AppSettings.defaultImportMode } | ForEach-Object { $defaultImportModeComboBox.SelectedItem = $_ }
+    if (-not $defaultImportModeComboBox.SelectedItem) { $defaultImportModeComboBox.SelectedItem = $window.FindName('DefaultImportModeClassicItem') }
+    $defaultImportModeComboBox.Add_SelectionChanged({
+        $selected = $defaultImportModeComboBox.SelectedItem
+        if (-not $selected) { return }
+        $script:AppSettings.defaultImportMode = $selected.Tag
         Save-AppSettings -Settings $script:AppSettings
     })
 

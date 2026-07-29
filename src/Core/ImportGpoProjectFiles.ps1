@@ -62,7 +62,59 @@ function Resolve-GpoImportFiles {
         UserPolPath    = Join-Path $folderPath $f.userPol
         SecEditInfPath = Join-Path $folderPath $f.secEditInf
         AuditCsvPath   = Join-Path $folderPath $f.auditCsv
+        Hashes         = $manifest.Hashes
     }
+}
+
+function Test-GpoProjectManifestIntegrity {
+    <#
+        Re-checks the SHA-256 hashes Save-GpoProjectManifest recorded at
+        export/backup time against the files actually on disk now - the
+        gate that stops a hand-edited/replaced/deleted file from being
+        silently imported or restored. Used both by Import-GpoProjectFiles
+        (user-picked *_Info.xml) and Restore-LiveGpoFilesFromImportBackup
+        (the pre-import safety backup, now written in the same layout, see
+        Backup-LiveGpoFilesForImport).
+
+        $ImportFiles.Hashes is $null for a manifest written before this
+        field existed - that whole manifest is treated as unverifiable
+        (Valid=$true, no mismatches raised) rather than failing every old
+        export/backup outright.
+
+        Returns @{ Valid = [bool]; Mismatches = [string[]] } - each
+        mismatch a human-readable "<Tag>: <reason>" line for direct display.
+    #>
+    param([Parameter(Mandatory)]$ImportFiles)
+
+    $mismatches = New-Object System.Collections.Generic.List[string]
+
+    if ($null -eq $ImportFiles.Hashes) {
+        return [pscustomobject]@{ Valid = $true; Mismatches = @() }
+    }
+
+    foreach ($pair in @(
+        @{ Tag = 'Machine\registry.pol'; Path = $ImportFiles.MachinePolPath; Expected = $ImportFiles.Hashes.machinePol },
+        @{ Tag = 'User\registry.pol'; Path = $ImportFiles.UserPolPath; Expected = $ImportFiles.Hashes.userPol },
+        @{ Tag = 'secedit.inf'; Path = $ImportFiles.SecEditInfPath; Expected = $ImportFiles.Hashes.secEditInf },
+        @{ Tag = 'audit.csv'; Path = $ImportFiles.AuditCsvPath; Expected = $ImportFiles.Hashes.auditCsv }
+    )) {
+        $exists = Test-Path -LiteralPath $pair.Path
+        if ($exists) {
+            if (-not $pair.Expected) {
+                $mismatches.Add("$($pair.Tag): file present but not recorded in the manifest (added after export)")
+                continue
+            }
+            $actual = (Get-FileHash -LiteralPath $pair.Path -Algorithm SHA256).Hash
+            if ($actual -ne $pair.Expected) {
+                $mismatches.Add("$($pair.Tag): content does not match the manifest (modified after export)")
+            }
+        }
+        elseif ($pair.Expected) {
+            $mismatches.Add("$($pair.Tag): file missing (present at export, deleted since)")
+        }
+    }
+
+    return [pscustomobject]@{ Valid = ($mismatches.Count -eq 0); Mismatches = @($mismatches) }
 }
 
 # --- Live snapshot readers (always the real machine) -----------------------
@@ -172,7 +224,7 @@ function Get-SecurityOptionsRemovalCandidates {
     return , $rows
 }
 
-function Get-GranularSecurityDiffRows {
+function Get-AdvancedSecurityDiffRows {
     # GRANULAR mode: every secedit.inf-backed category in one pass (Account
     # Policies, User Rights Assignment, Security Options, Audit Policy - the
     # catalog already flattens all of them, see Get-SecurityCatalogEntries).
@@ -202,7 +254,7 @@ function Get-GranularSecurityDiffRows {
                 PolicyId         = $null
                 CurrentState     = $null
                 ImportState      = (Format-SecuritySettingValue -Setting $import -Ui $Ui)
-                Location         = (Get-SecurityTechnicalDetailText -Setting $live -Ui $Ui)
+                Location         = $live.name
                 LiveIsConfigured = $false
                 LiveRawValue     = $null
                 IsSelected       = $true
@@ -233,8 +285,8 @@ function Get-GranularSecurityDiffRows {
     return [pscustomobject]@{ Change = $changeRows; Add = $addRows }
 }
 
-function Get-GranularAuditDiffRows {
-    # Same Change/Add split as Get-GranularSecurityDiffRows, over the
+function Get-AdvancedAuditDiffRows {
+    # Same Change/Add split as Get-AdvancedSecurityDiffRows, over the
     # Advanced Audit settings array. Build-AdvancedAuditIndex.ps1's item
     # shape (isConfigured/rawValue/valueType='audit') matches what
     # Format-SecuritySettingValue already expects, so it is reused as-is -
@@ -265,7 +317,7 @@ function Get-GranularAuditDiffRows {
                 PolicyId         = $null
                 CurrentState     = $null
                 ImportState      = (Format-SecuritySettingValue -Setting $import -Ui $Ui)
-                Location         = (Get-AdvancedAuditTechnicalDetailText -Setting $live -Ui $Ui)
+                Location         = $live.name
                 LiveIsConfigured = $false
                 LiveRawValue     = $null
                 IsSelected       = $true
@@ -332,7 +384,7 @@ function Get-AdmxPolicyStateSummaryText {
     return "$label ($($parts -join ', '))"
 }
 
-function Get-GranularAdmxDiffRows {
+function Get-AdvancedAdmxDiffRows {
     # Administrative Templates have no prebuilt index-from-arbitrary-.pol
     # builder (unlike Security/Advanced Audit) - walks the in-memory ADMX
     # policy list ($script:admxIndex.policies, already loaded at startup)
@@ -381,7 +433,7 @@ function Get-GranularAdmxDiffRows {
                     PolicyId         = $pol.id
                     CurrentState     = $null
                     ImportState      = $importText
-                    Location         = (Get-AdmxTechnicalDetailText -Policy $pol -Scope $scope -Ui $Ui)
+                    Location         = "$scope\$($pol.registryKey)"
                     LiveIsConfigured = $false
                     LiveRawValue     = $null
                     IsSelected       = $true
@@ -493,49 +545,84 @@ function Get-RegistryValuesBaselineKeysForImport {
 function Backup-LiveGpoFilesForImport {
     # Timestamped backup of the 3 real target stores (the fresh live secedit
     # export, both real .pol files, the real audit.csv) before any real
-    # write - reuses the existing New-TimestampedBackup (PolicyWriter.ps1),
-    # same convention as Get-OrCreateSessionBackup. Returns the backup dir,
-    # or $null if nothing existed to back up.
+    # write. Written in the EXACT same folder layout + manifest (with
+    # SHA-256 hashes) as Export-GpoProjectFiles/Save-GpoProjectAs (GpEdit.ps1)
+    # instead of New-TimestampedBackup's flat tag-named copy - so the backup
+    # this app creates for itself is verified by the same
+    # Test-GpoProjectManifestIntegrity gate on rollback
+    # (Restore-LiveGpoFilesFromImportBackup below) as a user-picked import,
+    # rather than being a special, unverified case. Named by timestamp
+    # (never user-chosen: this backup is created automatically). Returns
+    # the backup dir, or $null if nothing existed to back up.
     param([Parameter(Mandatory)][string]$LiveSecEditInfPath)
 
-    $filesToBackup = @{}
-    if (Test-Path -LiteralPath $LiveSecEditInfPath) { $filesToBackup['secedit.inf'] = $LiveSecEditInfPath }
-    if (Test-Path -LiteralPath $script:RealMachinePolPath) { $filesToBackup['Machine_registry.pol'] = $script:RealMachinePolPath }
-    if (Test-Path -LiteralPath $script:RealUserPolPath) { $filesToBackup['User_registry.pol'] = $script:RealUserPolPath }
-    if (Test-Path -LiteralPath $script:RealAuditCsvPath) { $filesToBackup['audit.csv'] = $script:RealAuditCsvPath }
-    if ($filesToBackup.Count -eq 0) { return $null }
+    $hasAnySource = (Test-Path -LiteralPath $LiveSecEditInfPath) -or (Test-Path -LiteralPath $script:RealMachinePolPath) -or (Test-Path -LiteralPath $script:RealUserPolPath) -or (Test-Path -LiteralPath $script:RealAuditCsvPath)
+    if (-not $hasAnySource) { return $null }
 
-    $result = New-TimestampedBackup -FilesToBackup $filesToBackup -BackupRoot $script:BackupRoot
-    return $result.BackupDir
+    $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
+    $backupDir = Join-Path $script:BackupRoot $stamp
+
+    $files = @{
+        machinePol = 'Machine\registry.pol'
+        userPol    = 'User\registry.pol'
+        secEditInf = 'secedit.inf'
+        auditCsv   = 'Machine\Microsoft\Windows NT\Audit\audit.csv'
+    }
+
+    New-Item -ItemType Directory -Path $backupDir -Force | Out-Null
+    New-Item -ItemType Directory -Path (Join-Path $backupDir 'Machine') -Force | Out-Null
+    New-Item -ItemType Directory -Path (Join-Path $backupDir 'User') -Force | Out-Null
+    New-Item -ItemType Directory -Path (Join-Path $backupDir 'Machine\Microsoft\Windows NT\Audit') -Force | Out-Null
+
+    Copy-GpoWorkingFile -CurrentPath $script:RealMachinePolPath -Destination (Join-Path $backupDir $files.machinePol)
+    Copy-GpoWorkingFile -CurrentPath $script:RealUserPolPath -Destination (Join-Path $backupDir $files.userPol)
+    Copy-GpoWorkingFile -CurrentPath $LiveSecEditInfPath -Destination (Join-Path $backupDir $files.secEditInf)
+    Copy-GpoWorkingFile -CurrentPath $script:RealAuditCsvPath -Destination (Join-Path $backupDir $files.auditCsv)
+
+    Save-GpoProjectManifest -Path (Join-Path $backupDir "$($stamp)_Info.xml") -Name $stamp -Files $files
+
+    return $backupDir
 }
 
 function Restore-LiveGpoFilesFromImportBackup {
     # Replays the pre-import backup through the SAME apply primitives used
     # for a real import - since the backup captured the pre-import live
-    # state, re-applying it undoes the failed import. Success deletes the
-    # backup dir; failure keeps it (caller surfaces its path for manual
-    # recovery), per the user's explicit choice.
+    # state, re-applying it undoes the failed import. Resolves the backup's
+    # own files through its manifest (same Resolve-GpoImportFiles used for a
+    # user-picked import) and re-verifies their hashes
+    # (Test-GpoProjectManifestIntegrity) before touching anything real - a
+    # rollback replaying a tampered backup would be just as dangerous as
+    # importing a tampered export. Success deletes the backup dir; failure
+    # (including a failed integrity check) keeps it (caller surfaces its
+    # path for manual recovery), per the user's explicit choice.
     param([Parameter(Mandatory)][string]$BackupDir)
 
     try {
-        $secBackupPath = Join-Path $BackupDir 'secedit.inf'
-        if (Test-Path -LiteralPath $secBackupPath) {
-            $secResult = Invoke-SecEditInfApply -SecEditInfPath $secBackupPath
+        $manifestPath = Get-ChildItem -LiteralPath $BackupDir -Filter '*_Info.xml' -File -ErrorAction Stop | Select-Object -First 1 -ExpandProperty FullName
+        if (-not $manifestPath) { throw "No backup manifest found in '$BackupDir'." }
+
+        $backupFiles = Resolve-GpoImportFiles -ManifestPath $manifestPath
+        if (-not $backupFiles) { throw "The backup manifest at '$manifestPath' is invalid." }
+
+        $integrity = Test-GpoProjectManifestIntegrity -ImportFiles $backupFiles
+        if (-not $integrity.Valid) {
+            throw "Backup integrity check failed, rollback aborted:`r`n$($integrity.Mismatches -join "`r`n")"
+        }
+
+        if (Test-Path -LiteralPath $backupFiles.SecEditInfPath) {
+            $secResult = Invoke-SecEditInfApply -SecEditInfPath $backupFiles.SecEditInfPath
             if ($secResult.ExitCode -ne 0) { throw $secResult.Output }
         }
 
-        $machineBackupPath = Join-Path $BackupDir 'Machine_registry.pol'
-        $userBackupPath = Join-Path $BackupDir 'User_registry.pol'
-        if ((Test-Path -LiteralPath $machineBackupPath) -or (Test-Path -LiteralPath $userBackupPath)) {
-            $machineEntries = $(if (Test-Path -LiteralPath $machineBackupPath) { Read-PolFile -Path $machineBackupPath } else { New-Object System.Collections.Generic.List[object] })
-            $userEntries = $(if (Test-Path -LiteralPath $userBackupPath) { Read-PolFile -Path $userBackupPath } else { New-Object System.Collections.Generic.List[object] })
+        if ((Test-Path -LiteralPath $backupFiles.MachinePolPath) -or (Test-Path -LiteralPath $backupFiles.UserPolPath)) {
+            $machineEntries = $(if (Test-Path -LiteralPath $backupFiles.MachinePolPath) { Read-PolFile -Path $backupFiles.MachinePolPath } else { New-Object System.Collections.Generic.List[object] })
+            $userEntries = $(if (Test-Path -LiteralPath $backupFiles.UserPolPath) { Read-PolFile -Path $backupFiles.UserPolPath } else { New-Object System.Collections.Generic.List[object] })
             $admxResult = Invoke-ImportAdmxApply -MachineEntries $machineEntries -UserEntries $userEntries
             if ($admxResult.ExitCode -ne 0) { throw $admxResult.Output }
         }
 
-        $auditBackupPath = Join-Path $BackupDir 'audit.csv'
-        if (Test-Path -LiteralPath $auditBackupPath) {
-            $backedUpRows = Read-AuditCsv -Path $auditBackupPath
+        if (Test-Path -LiteralPath $backupFiles.AuditCsvPath) {
+            $backedUpRows = Read-AuditCsv -Path $backupFiles.AuditCsvPath
             $audResult = Invoke-ImportAuditCsvApply -MergedRows $backedUpRows
             if ($audResult.ExitCode -ne 0) { throw $audResult.Output }
         }
@@ -572,7 +659,11 @@ function Invoke-ImportAdmxApply {
     # $script:RealMachinePolPath/$script:RealUserPolPath, bumps the real
     # GPT.ini, then forces gpupdate so it takes effect immediately - per the
     # user's explicit choice (accepted side effect: reapplies ALL machine+
-    # user policy, not just the imported subset).
+    # user policy, not just the imported subset). /wait:0 tells gpupdate not
+    # to block on policy processing finishing (its default is to wait up to
+    # 600s) - the command still triggers the refresh, it just returns as soon
+    # as it has been kicked off instead of hanging the import for however
+    # long the full client-side processing takes.
     # AllowEmptyCollection: a Mandatory List[object] parameter otherwise
     # rejects a real, valid empty list (e.g. no User-scope policies exported)
     # with "Cannot bind argument ... because it is an empty collection" - a
@@ -590,7 +681,7 @@ function Invoke-ImportAdmxApply {
     Step-GptIniVersion -GptIni $gptIni -IncrementMachine -IncrementUser | Out-Null
     Write-GptIni -Path $script:RealGptIniPath -GptIni $gptIni
 
-    $output = & gpupdate.exe /force 2>&1 | Out-String
+    $output = & gpupdate.exe /force /wait:0 2>&1 | Out-String
     return [pscustomobject]@{ ExitCode = $LASTEXITCODE; Output = $output }
 }
 
@@ -608,38 +699,11 @@ function Invoke-ImportAuditCsvApply {
 
 # --- Dialogs -----------------------------------------------------------------
 
-function Show-ImportModeDialog {
-    # Standard/Granular radio choice. Returns 'Standard'/'Granular', or
-    # $null on Cancel.
-    param($Owner, [string]$ScriptRoot, [Parameter(Mandatory)][hashtable]$Ui)
-
-    $window = Import-XamlWindow -ScriptRoot $ScriptRoot -Name 'ImportModeWindow' -Owner $Owner
-    $window.Title = $Ui.ImportModeWindowTitle
-    $standardRadio = $window.FindName('ImportModeStandardRadioButton')
-    $granularRadio = $window.FindName('ImportModeGranularRadioButton')
-    $standardRadio.Content = $Ui.ImportModeStandard
-    $granularRadio.Content = $Ui.ImportModeGranular
-
-    $okButton = $window.FindName('OkButton')
-    $cancelButton = $window.FindName('CancelButton')
-    $okButton.Content = $Ui.ApplyButton
-    $cancelButton.Content = $Ui.CancelButton
-
-    $okButton.Add_Click({ param($EventSender, $e) $window.DialogResult = $true })
-    $cancelButton.Add_Click({ param($EventSender, $e) $window.DialogResult = $false })
-
-    if ($window.ShowDialog()) {
-        if ($granularRadio.IsChecked) { return 'Granular' }
-        return 'Standard'
-    }
-    return $null
-}
-
 function Show-ImportConfirmationDialog {
-    # Shared review window for both Standard's single table and Granular's
-    # Change/Add tabs. Returns [pscustomobject]@{ ChangeRows = ... } (each
-    # row's final .IsSelected reflecting the user's checkbox choices), or
-    # $null on Cancel - which the caller must treat as aborting the WHOLE
+    # Shared review window for both Standard's single table and Advanced's
+    # Change/New tabs. Returns [pscustomobject]@{ ChangeRows = ...; AddRows = ... }
+    # (each row's final .IsSelected reflecting the user's checkbox choices),
+    # or $null on Cancel - which the caller must treat as aborting the WHOLE
     # import, not just this review step.
     param($Owner, [string]$ScriptRoot, [Parameter(Mandatory)][hashtable]$Ui, [object[]]$ChangeRows, [object[]]$AddRows)
 
@@ -650,8 +714,10 @@ function Show-ImportConfirmationDialog {
     $changeTab.Header = $Ui.ImportChangeTabHeader
     $addTab.Header = $Ui.ImportAddTabHeader
 
-    $selectAllCheck = $window.FindName('ImportChangeSelectAllCheckBox')
-    $selectAllCheck.Content = $Ui.SelectAllLabel
+    $changeSelectAllCheck = $window.FindName('ImportChangeSelectAllCheckBox')
+    $changeSelectAllCheck.Content = $Ui.SelectAllLabel
+    $addSelectAllCheck = $window.FindName('ImportAddSelectAllCheckBox')
+    $addSelectAllCheck.Content = $Ui.SelectAllLabel
     $changeGrid = $window.FindName('ImportChangeGrid')
     $addGrid = $window.FindName('ImportAddGrid')
 
@@ -659,17 +725,24 @@ function Show-ImportConfirmationDialog {
     foreach ($row in @($ChangeRows)) { $changeList.Add($row) }
     $changeGrid.ItemsSource = $changeList
 
+    $addList = New-Object System.Collections.ObjectModel.ObservableCollection[object]
     if (@($AddRows).Count -gt 0) {
-        $addGrid.ItemsSource = @($AddRows)
+        foreach ($row in @($AddRows)) { $addList.Add($row) }
+        $addGrid.ItemsSource = $addList
     }
     else {
         $addTab.Visibility = 'Collapsed'
     }
 
-    $selectAllCheck.Add_Click({
+    $changeSelectAllCheck.Add_Click({
         param($EventSender, $e)
-        foreach ($row in $changeList) { $row.IsSelected = $selectAllCheck.IsChecked }
+        foreach ($row in $changeList) { $row.IsSelected = $changeSelectAllCheck.IsChecked }
         $changeGrid.Items.Refresh()
+    })
+    $addSelectAllCheck.Add_Click({
+        param($EventSender, $e)
+        foreach ($row in $addList) { $row.IsSelected = $addSelectAllCheck.IsChecked }
+        $addGrid.Items.Refresh()
     })
 
     $okButton = $window.FindName('OkButton')
@@ -684,7 +757,10 @@ function Show-ImportConfirmationDialog {
         # the pipeline form is the confirmed-safe way to snapshot an existing
         # collection variable into a plain array on this machine (see the
         # @()-around-a-List[object] footgun noted elsewhere in this file).
-        $script:__importConfirmResult = [pscustomobject]@{ ChangeRows = @($changeList | ForEach-Object { $_ }) }
+        $script:__importConfirmResult = [pscustomobject]@{
+            ChangeRows = @($changeList | ForEach-Object { $_ })
+            AddRows    = @($addList | ForEach-Object { $_ })
+        }
         $window.DialogResult = $true
     })
     $cancelButton.Add_Click({ param($EventSender, $e) $window.DialogResult = $false })
@@ -709,8 +785,15 @@ function Import-GpoProjectFiles {
         return
     }
 
-    $mode = Show-ImportModeDialog -Owner $window -ScriptRoot $script:ImportGpoScriptRoot -Ui $ui
-    if (-not $mode) { return }
+    $integrity = Test-GpoProjectManifestIntegrity -ImportFiles $importFiles
+    if (-not $integrity.Valid) {
+        [System.Windows.MessageBox]::Show(($ui.ImportIntegrityCheckFailedMessage -f ($integrity.Mismatches -join "`r`n")), $ui.WriteErrorTitle, 'OK', 'Error') | Out-Null
+        return
+    }
+
+    # No mode-selection dialog: the import mode is fixed in Options > Others
+    # > Import (Classic by default), so File > Import runs straight through.
+    $mode = $script:AppSettings.defaultImportMode
 
     $liveSecEditInfPath = $null
     try {
@@ -743,9 +826,9 @@ function Import-GpoProjectFiles {
         $importMachineLookup = New-PolLookup -Entries $importMachineEntries
         $importUserLookup = New-PolLookup -Entries $importUserEntries
 
-        $secRows = Get-GranularSecurityDiffRows -DiffIndexPair $diffPair -Ui $ui
-        $audRows = Get-GranularAuditDiffRows -DiffIndexPair $diffPair -Ui $ui
-        $admxRows = Get-GranularAdmxDiffRows -LiveMachineLookup $liveMachineLookup -LiveUserLookup $liveUserLookup -ImportMachineLookup $importMachineLookup -ImportUserLookup $importUserLookup -Ui $ui
+        $secRows = Get-AdvancedSecurityDiffRows -DiffIndexPair $diffPair -Ui $ui
+        $audRows = Get-AdvancedAuditDiffRows -DiffIndexPair $diffPair -Ui $ui
+        $admxRows = Get-AdvancedAdmxDiffRows -LiveMachineLookup $liveMachineLookup -LiveUserLookup $liveUserLookup -ImportMachineLookup $importMachineLookup -ImportUserLookup $importUserLookup -Ui $ui
 
         # .ToArray(), not @() - $secRows.Change/etc. are List[object]
         # properties, and @() wrapping an existing List[object] variable
@@ -755,7 +838,12 @@ function Import-GpoProjectFiles {
         $allChangeRows = $secRows.Change.ToArray() + $audRows.Change.ToArray() + $admxRows.Change.ToArray()
         $allAddRows = $secRows.Add.ToArray() + $audRows.Add.ToArray() + $admxRows.Add.ToArray()
 
-        if ($mode -eq 'Standard') {
+        if ($mode -eq 'Classic') {
+            # No review at all: everything from the import is applied as-is,
+            # $checkedRemoval/$uncheckedChange stay empty (see initialization
+            # above), same code paths below as Standard otherwise take.
+        }
+        elseif ($mode -eq 'Standard') {
             $candidates = Get-SecurityOptionsRemovalCandidates -DiffIndexPair $diffPair -Ui $ui
             if ($candidates.Count -gt 0) {
                 $result = Show-ImportConfirmationDialog -Owner $window -ScriptRoot $script:ImportGpoScriptRoot -Ui $ui -ChangeRows $candidates -AddRows @()
@@ -768,7 +856,12 @@ function Import-GpoProjectFiles {
             $result = Show-ImportConfirmationDialog -Owner $window -ScriptRoot $script:ImportGpoScriptRoot -Ui $ui -ChangeRows $allChangeRows -AddRows $allAddRows
             if (-not $result) { return }
             $checkedRemoval = @($result.ChangeRows | Where-Object { $_.IsSelected })
-            $uncheckedChange = @($result.ChangeRows | Where-Object { -not $_.IsSelected })
+            # Unchecked New rows are restored to their (NotConfigured/NotDefined)
+            # live value exactly like unchecked Change rows - the restore
+            # functions below key off Kind/PolicyId/Guid, not off which tab a
+            # row came from, so appending here is enough to make an unchecked
+            # New row a no-op for that setting.
+            $uncheckedChange = @($result.ChangeRows | Where-Object { -not $_.IsSelected }) + @($result.AddRows | Where-Object { -not $_.IsSelected })
         }
 
         $backupDir = Backup-LiveGpoFilesForImport -LiveSecEditInfPath $liveSecEditInfPath
@@ -801,7 +894,7 @@ function Import-GpoProjectFiles {
             $secResult = Invoke-ImportSecEditApply -ImportGpt $importGpt -RegistryValuesBaselineKeys $baselineKeys
             if ($secResult.ExitCode -ne 0) { throw $secResult.Output }
 
-            if ($mode -eq 'Granular') {
+            if ($mode -eq 'Advanced') {
                 $mergedMachine = Restore-UncheckedAdmxRowsToImportEntries -ImportEntries $importMachineEntries -UncheckedRows @(@($uncheckedChange) | Where-Object { $_.Kind -eq 'Admx' }) -Scope 'Machine' -PoliciesById $policiesById -LiveLookup $liveMachineLookup
                 $mergedUser = Restore-UncheckedAdmxRowsToImportEntries -ImportEntries $importUserEntries -UncheckedRows @(@($uncheckedChange) | Where-Object { $_.Kind -eq 'Admx' }) -Scope 'User' -PoliciesById $policiesById -LiveLookup $liveUserLookup
             }
@@ -813,7 +906,7 @@ function Import-GpoProjectFiles {
             if ($admxResult.ExitCode -ne 0) { throw $admxResult.Output }
 
             $importAuditRows = Read-AuditCsv -Path $importFiles.AuditCsvPath
-            if ($mode -eq 'Granular') {
+            if ($mode -eq 'Advanced') {
                 Restore-UncheckedAuditRowsToImportRows -ImportRows $importAuditRows -UncheckedRows @(@($uncheckedChange) | Where-Object { $_.Kind -eq 'AdvancedAudit' }) -LiveRows (Get-LiveAuditCsvRows)
             }
             $audResult = Invoke-ImportAuditCsvApply -MergedRows $importAuditRows

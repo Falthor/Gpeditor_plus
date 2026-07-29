@@ -1,7 +1,11 @@
 <#
-    Configurable default locations (File > Options) and "Editor Mode" toggle,
-    persisted in %LocalAppData%\Gpeditor_plus\settings.json. Only the 7 paths
-    from Get-DefaultAppPaths and the editorMode bool are user-editable.
+    Configurable default locations (File > Options), "Editor Mode" toggle and
+    default File > Import mode, persisted in
+    %LocalAppData%\Gpeditor_plus\settings.json. Of the 7 paths from
+    Get-DefaultAppPaths, tempDir and indexDir are fixed (not exposed in the
+    Options UI); the other 5, the editorMode bool and defaultImportMode
+    (Classic/Standard/Advanced, see Options > Others > Import) are
+    user-editable.
 
     Each "paths" key replaces a historically repo-relative default (see
     GpEdit.ps1) with a standard Windows location. No migration of old repo
@@ -36,8 +40,9 @@ function Get-AppSettings {
     #>
     $defaults = Get-DefaultAppPaths
     $settings = [pscustomobject]@{
-        paths      = [pscustomobject]$defaults
-        editorMode = $true
+        paths             = [pscustomobject]$defaults
+        editorMode        = $true
+        defaultImportMode = 'Classic'
     }
 
     $path = Get-AppSettingsPath
@@ -60,6 +65,9 @@ function Get-AppSettings {
     }
     if ($loaded.PSObject.Properties['editorMode']) {
         $settings.editorMode = [bool]$loaded.editorMode
+    }
+    if ($loaded.PSObject.Properties['defaultImportMode'] -and $loaded.defaultImportMode) {
+        $settings.defaultImportMode = $loaded.defaultImportMode
     }
 
     return $settings

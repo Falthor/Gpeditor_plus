@@ -51,7 +51,7 @@
         <!-- Top menu: File > Project/Action/Tools groups, View > columns, Filter, Help > About/Patch note/Logs -->
         <Menu Grid.Row="0" x:Name="MainMenu" Background="Transparent" BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="0,0,0,1">
             <MenuItem x:Name="FileMenu" Header="File">
-                <MenuItem Header="Project" IsEnabled="False" FontWeight="Bold" />
+                <MenuItem Header="Project" IsEnabled="False" FontWeight="Bold" MinWidth="200" />
                 <MenuItem x:Name="FileNewMenuItem" Header="New" />
                 <MenuItem x:Name="FileOpenMenuItem" Header="Open" />
                 <MenuItem x:Name="FileSaveMenuItem" Header="Save" IsEnabled="False" />
@@ -890,41 +890,15 @@
   </Window>
 
   <!-- ==========================================================================
-       BLOCK: ImportModeWindow.xaml
-       "File > Import" first step: choose between Standard (imports every
-       file in the export as-is, only flags Security Options settings that
-       would become Not Defined) and Granular (reviews every category's
-       changes/additions before applying). OK/Cancel.
-       ========================================================================== -->
-  <Window x:Name="ImportModeWindow" Title="Import Group Policy" Height="220" Width="380"
-          WindowStartupLocation="CenterOwner" ShowInTaskbar="False" ResizeMode="NoResize">
-    <Grid Margin="14">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="*" />
-            <RowDefinition Height="Auto" />
-        </Grid.RowDefinitions>
-
-        <StackPanel Grid.Row="0">
-            <RadioButton x:Name="ImportModeStandardRadioButton" GroupName="ImportMode" Content="Standard" IsChecked="True" Margin="0,0,0,10" />
-            <RadioButton x:Name="ImportModeGranularRadioButton" GroupName="ImportMode" Content="Granular" />
-        </StackPanel>
-
-        <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
-            <Button x:Name="OkButton" Content="Apply" Width="90" Margin="0,0,8,0" Padding="4" IsDefault="True" />
-            <Button x:Name="CancelButton" Content="Cancel" Width="90" Padding="4" IsCancel="True" />
-        </StackPanel>
-    </Grid>
-  </Window>
-
-  <!-- ==========================================================================
        BLOCK: ImportConfirmationWindow.xaml
        "File > Import" review step - shared by both Standard (Change tab
-       only, Security Options removals) and Granular (Change + Add tabs,
-       every category) modes. Change tab: checkbox per row plus a select-all
-       master checkbox, columns Name/Current State/Import State. Add tab
-       (hidden when empty, which covers Standard mode): read-only,
-       Name/State/Location. Apply/Cancel - Cancel aborts the WHOLE import,
-       not just this review step.
+       only, Security Options removals) and Advanced (Change + New tabs,
+       every category) modes. Both tabs: checkbox per row plus a select-all
+       master checkbox. Change tab columns: Name/Current State/Import State.
+       New tab (hidden when empty, which covers Standard mode) columns:
+       Name/State/Location (registry key path only for Admx rows).
+       Apply/Cancel - Cancel aborts the WHOLE import, not just this review
+       step.
        ========================================================================== -->
   <Window x:Name="ImportConfirmationWindow" Title="Review Import" Height="620" Width="920"
           WindowStartupLocation="CenterOwner" ShowInTaskbar="False">
@@ -944,11 +918,18 @@
 
                     <CheckBox x:Name="ImportChangeSelectAllCheckBox" Grid.Row="0" Content="Select all" IsChecked="True" Margin="0,0,0,8" />
 
-                    <DataGrid x:Name="ImportChangeGrid" Grid.Row="1" AutoGenerateColumns="False" CanUserAddRows="False"
+                    <DataGrid x:Name="ImportChangeGrid" Grid.Row="1" FontSize="12" AutoGenerateColumns="False" CanUserAddRows="False"
                               CanUserDeleteRows="False" CanUserReorderColumns="False" CanUserResizeRows="False"
                               HeadersVisibility="Column" GridLinesVisibility="Horizontal" BorderThickness="0">
                         <DataGrid.Columns>
-                            <DataGridCheckBoxColumn x:Name="ImportChangeSelectColumn" Header="" Binding="{Binding IsSelected, Mode=TwoWay}" Width="34" />
+                            <DataGridTemplateColumn x:Name="ImportChangeSelectColumn" Header="" Width="34">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <CheckBox HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                  IsChecked="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
                             <DataGridTextColumn x:Name="ImportChangeNameColumn" Header="Name" Binding="{Binding Name}" IsReadOnly="True" Width="2.4*" />
                             <DataGridTextColumn x:Name="ImportChangeCurrentColumn" Header="Current State" Binding="{Binding CurrentState}" IsReadOnly="True" Width="*" />
                             <DataGridTextColumn x:Name="ImportChangeImportColumn" Header="Import State" Binding="{Binding ImportState}" IsReadOnly="True" Width="*" />
@@ -956,16 +937,33 @@
                     </DataGrid>
                 </Grid>
             </TabItem>
-            <TabItem x:Name="ImportAddTabItem" Header="Add">
-                <DataGrid x:Name="ImportAddGrid" Margin="0,8,0,0" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False"
-                          CanUserDeleteRows="False" CanUserReorderColumns="False" CanUserResizeRows="False"
-                          HeadersVisibility="Column" GridLinesVisibility="Horizontal" BorderThickness="0">
-                    <DataGrid.Columns>
-                        <DataGridTextColumn x:Name="ImportAddNameColumn" Header="Name" Binding="{Binding Name}" Width="2.4*" />
-                        <DataGridTextColumn x:Name="ImportAddStateColumn" Header="State" Binding="{Binding ImportState}" Width="*" />
-                        <DataGridTextColumn x:Name="ImportAddLocationColumn" Header="Location" Binding="{Binding Location}" Width="2*" />
-                    </DataGrid.Columns>
-                </DataGrid>
+            <TabItem x:Name="ImportAddTabItem" Header="New">
+                <Grid Margin="0,8,0,0">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+
+                    <CheckBox x:Name="ImportAddSelectAllCheckBox" Grid.Row="0" Content="Select all" IsChecked="True" Margin="0,0,0,8" />
+
+                    <DataGrid x:Name="ImportAddGrid" Grid.Row="1" FontSize="12" AutoGenerateColumns="False" CanUserAddRows="False"
+                              CanUserDeleteRows="False" CanUserReorderColumns="False" CanUserResizeRows="False"
+                              HeadersVisibility="Column" GridLinesVisibility="Horizontal" BorderThickness="0">
+                        <DataGrid.Columns>
+                            <DataGridTemplateColumn x:Name="ImportAddSelectColumn" Header="" Width="34">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <CheckBox HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                  IsChecked="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTextColumn x:Name="ImportAddNameColumn" Header="Name" Binding="{Binding Name}" IsReadOnly="True" Width="2.4*" />
+                            <DataGridTextColumn x:Name="ImportAddStateColumn" Header="State" Binding="{Binding ImportState}" IsReadOnly="True" Width="*" />
+                            <DataGridTextColumn x:Name="ImportAddLocationColumn" Header="Location" Binding="{Binding Location}" IsReadOnly="True" Width="2*" />
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </Grid>
             </TabItem>
         </TabControl>
 
@@ -1074,14 +1072,12 @@
 
         <Grid x:Name="OptionsContentGrid" Grid.Column="1">
 
-            <!-- Path tab: 6 configurable default directories, grouped into
-                 Application preference (shared machine-wide defaults) and
-                 User preference (this user's working files), + Save. Each
-                 row's path TextBox is a fixed (reduced) width rather than
-                 filling the row, so a long path doesn't stretch the panel. -->
+            <!-- Path tab: 5 configurable default directories under
+                 Application preference, + Save. Each row's path TextBox is a
+                 fixed (reduced) width rather than filling the row, so a long
+                 path doesn't stretch the panel. -->
             <Grid x:Name="PathPanel">
                 <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
                     <RowDefinition Height="Auto" />
@@ -1134,7 +1130,7 @@
                             <Button x:Name="ImportExportPathResetButton" Grid.Column="4" Content="Default" Padding="8,2" />
                         </Grid>
 
-                        <Grid>
+                        <Grid Margin="0,0,0,10">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="140" />
                                 <ColumnDefinition Width="260" />
@@ -1147,40 +1143,6 @@
                             <Button x:Name="AuditPathBrowseButton" Grid.Column="2" Content="..." Width="30" Padding="0" Margin="0,0,4,0" />
                             <Button x:Name="AuditPathOpenButton" Grid.Column="3" Content="&#128194;" Width="30" Padding="0" Margin="0,0,4,0" ToolTip="Open in Explorer" />
                             <Button x:Name="AuditPathResetButton" Grid.Column="4" Content="Default" Padding="8,2" />
-                        </Grid>
-                    </StackPanel>
-                </GroupBox>
-
-                <GroupBox x:Name="UserPreferenceGroupBox" Grid.Row="1" Header="User preference" Margin="0,0,0,10">
-                    <StackPanel Margin="4">
-                        <Grid Margin="0,0,0,10">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="140" />
-                                <ColumnDefinition Width="260" />
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-                            <TextBlock x:Name="PathTabTempLabel" Grid.Column="0" Text="Temporary files" VerticalAlignment="Center" />
-                            <TextBox x:Name="TempPathTextBox" Grid.Column="1" IsReadOnly="True" Padding="4,2" Margin="0,0,8,0" VerticalContentAlignment="Center" />
-                            <Button x:Name="TempPathBrowseButton" Grid.Column="2" Content="..." Width="30" Padding="0" Margin="0,0,4,0" />
-                            <Button x:Name="TempPathOpenButton" Grid.Column="3" Content="&#128194;" Width="30" Padding="0" Margin="0,0,4,0" ToolTip="Open in Explorer" />
-                            <Button x:Name="TempPathResetButton" Grid.Column="4" Content="Default" Padding="8,2" />
-                        </Grid>
-
-                        <Grid Margin="0,0,0,10">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="140" />
-                                <ColumnDefinition Width="260" />
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-                            <TextBlock x:Name="PathTabIndexLabel" Grid.Column="0" Text="Generated indexes" VerticalAlignment="Center" />
-                            <TextBox x:Name="IndexPathTextBox" Grid.Column="1" IsReadOnly="True" Padding="4,2" Margin="0,0,8,0" VerticalContentAlignment="Center" />
-                            <Button x:Name="IndexPathBrowseButton" Grid.Column="2" Content="..." Width="30" Padding="0" Margin="0,0,4,0" />
-                            <Button x:Name="IndexPathOpenButton" Grid.Column="3" Content="&#128194;" Width="30" Padding="0" Margin="0,0,4,0" ToolTip="Open in Explorer" />
-                            <Button x:Name="IndexPathResetButton" Grid.Column="4" Content="Default" Padding="8,2" />
                         </Grid>
 
                         <Grid>
@@ -1200,7 +1162,7 @@
                     </StackPanel>
                 </GroupBox>
 
-                <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
+                <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
                     <Button x:Name="SavePathsButton" Content="Save" Width="90" Padding="6,4" />
                 </StackPanel>
             </Grid>
@@ -1223,11 +1185,31 @@
                 </StackPanel>
             </Grid>
 
-            <!-- Editor tab: live catalog editing (Name / Explain / CIS recommendation) toggle -->
+            <!-- Others tab: live catalog editing (Name / Explain / CIS recommendation)
+                 toggle, and the default File > Import mode. -->
             <StackPanel x:Name="EditorPanel" Visibility="Collapsed">
-                <TextBlock x:Name="EditorModeExplanationLabel" TextWrapping="Wrap" Margin="0,0,0,10"
-                           Text="When enabled, this lets you edit the Name, Explain and CIS recommendation of a setting directly from this app. These edits are local to this app only and are never reflected in the classic Windows Local Group Policy Editor." />
-                <CheckBox x:Name="EditorModeCheckBox" Content="Editor Mode" IsChecked="True" />
+                <GroupBox x:Name="EditionGroupBox" Header="Edition" Margin="0,0,0,10">
+                    <StackPanel Margin="4">
+                        <TextBlock x:Name="EditorModeExplanationLabel" TextWrapping="Wrap" Margin="0,0,0,10"
+                                   Text="When enabled, this lets you edit the Name, Explain and CIS recommendation of a setting directly from this app. These edits are local to this app only and are never reflected in the classic Windows Local Group Policy Editor." />
+                        <CheckBox x:Name="EditorModeCheckBox" Content="Editor Mode" IsChecked="True" />
+                    </StackPanel>
+                </GroupBox>
+
+                <GroupBox x:Name="ImportGroupBox" Header="Import" Margin="0,0,0,10">
+                    <StackPanel Margin="4">
+                        <TextBlock x:Name="OthersImportExplanationLabel" TextWrapping="Wrap" Margin="0,0,0,10"
+                                   Text="Classic - Applies every setting with no review at all.&#10;&#10;Standard - Imports every file as-is. Only Security Options settings that would become Not Defined are flagged for review.&#10;&#10;Advanced - Reviews every category's changes and additions before applying anything, letting you select exactly what gets imported." />
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock x:Name="DefaultImportModeLabel" Text="Default import mode:" VerticalAlignment="Center" Margin="0,0,8,0" />
+                            <ComboBox x:Name="DefaultImportModeComboBox" Width="140" VerticalContentAlignment="Center">
+                                <ComboBoxItem x:Name="DefaultImportModeClassicItem" Content="Classic" Tag="Classic" />
+                                <ComboBoxItem x:Name="DefaultImportModeStandardItem" Content="Standard" Tag="Standard" />
+                                <ComboBoxItem x:Name="DefaultImportModeAdvancedItem" Content="Advanced" Tag="Advanced" />
+                            </ComboBox>
+                        </StackPanel>
+                    </StackPanel>
+                </GroupBox>
             </StackPanel>
         </Grid>
 
@@ -1260,6 +1242,7 @@
     <SolidColorBrush x:Key="CardBackgroundBrush" Color="#FFFFFF" />
     <SolidColorBrush x:Key="CardBorderBrush" Color="#C7C7C7" />
     <SolidColorBrush x:Key="HoverBrush" Color="#F0F0F0" />
+    <SolidColorBrush x:Key="TopMenuHoverBrush" Color="#D8D8D8" />
     <SolidColorBrush x:Key="PressedBrush" Color="#E5E5E5" />
     <SolidColorBrush x:Key="ButtonBackgroundBrush" Color="#E5E5E5" />
     <SolidColorBrush x:Key="ButtonHoverBrush" Color="#D8D8D8" />
@@ -1902,7 +1885,7 @@
 
     <Style TargetType="MenuItem">
         <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
-        <Setter Property="Padding" Value="10,6" />
+        <Setter Property="Padding" Value="10,3" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="MenuItem">
@@ -1910,10 +1893,10 @@
                         <Border x:Name="Bd" CornerRadius="4" Background="{TemplateBinding Background}">
                             <Grid Margin="{TemplateBinding Padding}">
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="18" />
+                                    <ColumnDefinition x:Name="CheckMarkColumn" Width="18" />
                                     <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="Auto" />
-                                    <ColumnDefinition Width="18" />
+                                    <ColumnDefinition x:Name="SubmenuArrowColumn" Width="18" />
                                 </Grid.ColumnDefinitions>
                                 <!-- Coche pour les items IsCheckable (choix de langue/profil actif). -->
                                 <Path x:Name="CheckMark" Grid.Column="0" Data="M 1 4 L 4 7 L 9 1" Stroke="{StaticResource AccentBrush}"
@@ -1945,7 +1928,22 @@
                     </Grid>
                     <ControlTemplate.Triggers>
                         <Trigger Property="Role" Value="TopLevelHeader">
-                            <Setter Property="Padding" Value="12,7" />
+                            <Setter Property="Padding" Value="6,7" />
+                            <!-- Top bar items never show a checkmark/submenu-arrow -
+                                 collapsing these two reserved 18px columns removes
+                                 36px of dead space per item, which is what actually
+                                 made File/View/Filter/? look far apart (the Padding
+                                 change above alone barely moves the text). -->
+                            <Setter TargetName="CheckMarkColumn" Property="Width" Value="0" />
+                            <Setter TargetName="SubmenuArrowColumn" Property="Width" Value="0" />
+                        </Trigger>
+                        <!-- Filter has no submenu, so its Role is TopLevelItem (not
+                             TopLevelHeader) - same treatment so it isn't wider than
+                             File/View/?. -->
+                        <Trigger Property="Role" Value="TopLevelItem">
+                            <Setter Property="Padding" Value="6,7" />
+                            <Setter TargetName="CheckMarkColumn" Property="Width" Value="0" />
+                            <Setter TargetName="SubmenuArrowColumn" Property="Width" Value="0" />
                         </Trigger>
                         <Trigger Property="Role" Value="SubmenuHeader">
                             <Setter TargetName="SubmenuArrow" Property="Visibility" Value="Visible" />
@@ -1963,6 +1961,25 @@
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter Property="Foreground" Value="{StaticResource DisabledForegroundBrush}" />
                         </Trigger>
+                        <!-- File/View/Filter/? hover: darker background, on plain
+                             mouse-over - IsHighlighted alone (used above) only
+                             turns True once the menu bar is already "active"
+                             (after a first click), not on a bare hover, which is
+                             why IsMouseOver is used here instead. -->
+                        <MultiTrigger>
+                            <MultiTrigger.Conditions>
+                                <Condition Property="Role" Value="TopLevelHeader" />
+                                <Condition Property="IsMouseOver" Value="True" />
+                            </MultiTrigger.Conditions>
+                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource TopMenuHoverBrush}" />
+                        </MultiTrigger>
+                        <MultiTrigger>
+                            <MultiTrigger.Conditions>
+                                <Condition Property="Role" Value="TopLevelItem" />
+                                <Condition Property="IsMouseOver" Value="True" />
+                            </MultiTrigger.Conditions>
+                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource TopMenuHoverBrush}" />
+                        </MultiTrigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
             </Setter.Value>

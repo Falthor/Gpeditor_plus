@@ -1114,8 +1114,20 @@ function Save-GpoProjectManifest {
         XmlDocument (not string interpolation) so a project name containing
         XML-special characters, which SaveFileDialog doesn't prevent, is
         escaped correctly.
+
+        Also records a SHA-256 of each file's actual on-disk bytes, computed
+        from $Path's own folder (i.e. the files as just written there) -
+        this is the integrity anchor Import/Restore later re-checks to
+        detect a file that was hand-edited/replaced/deleted after export
+        (see Test-GpoProjectManifestIntegrity, ImportGpoProjectFiles.ps1). A
+        category legitimately absent from disk (e.g. an untouched
+        User\registry.pol) simply gets no Hash child - Test-
+        GpoProjectManifestIntegrity treats "no hash recorded" as "no file
+        expected", not as "skip the check".
     #>
     param([Parameter(Mandatory)][string]$Path, [Parameter(Mandatory)][string]$Name, [Parameter(Mandatory)][hashtable]$Files)
+
+    $baseDir = Split-Path -Parent $Path
 
     $xml = New-Object System.Xml.XmlDocument
     $xml.AppendChild($xml.CreateXmlDeclaration('1.0', 'UTF-8', $null)) | Out-Null
@@ -1132,6 +1144,8 @@ function Save-GpoProjectManifest {
 
     $filesEl = $xml.CreateElement('Files')
     $root.AppendChild($filesEl) | Out-Null
+    $hashesEl = $xml.CreateElement('Hashes')
+    $root.AppendChild($hashesEl) | Out-Null
     foreach ($pair in @(
         @{ Key = 'MachinePol'; Value = $Files.machinePol },
         @{ Key = 'UserPol'; Value = $Files.userPol },
@@ -1141,6 +1155,13 @@ function Save-GpoProjectManifest {
         $el = $xml.CreateElement($pair.Key)
         $el.InnerText = $pair.Value
         $filesEl.AppendChild($el) | Out-Null
+
+        $filePath = Join-Path $baseDir $pair.Value
+        if (Test-Path -LiteralPath $filePath) {
+            $hashEl = $xml.CreateElement($pair.Key)
+            $hashEl.InnerText = (Get-FileHash -LiteralPath $filePath -Algorithm SHA256).Hash
+            $hashesEl.AppendChild($hashEl) | Out-Null
+        }
     }
 
     $xml.Save($Path)
@@ -1151,6 +1172,14 @@ function Get-GpoProjectManifest {
         Reads a <name>_Info.xml manifest back. Returns $null on anything
         malformed/incomplete so the caller can show its own "invalid
         project" message.
+
+        .Hashes is a plain hashtable (same 4 keys as .Files) with each
+        file's recorded SHA-256, or $null for a key that had no Hash child
+        (file absent at export time). A manifest written before this field
+        existed has no <Hashes> element at all - .Hashes is then $null,
+        which Test-GpoProjectManifestIntegrity reads as "nothing to check"
+        rather than "every file is tampered", so old exports/backups still
+        open without a false-positive integrity failure.
     #>
     param([Parameter(Mandatory)][string]$Path)
 
@@ -1168,7 +1197,30 @@ function Get-GpoProjectManifest {
             auditCsv   = $filesNode.AuditCsv
         }
         if (-not $files.machinePol -or -not $files.userPol -or -not $files.secEditInf -or -not $files.auditCsv) { return $null }
-        return [pscustomobject]@{ Name = $name; Files = $files }
+
+        # SelectSingleNode, not $root.Hashes: a manifest written before this
+        # field existed has no <Hashes> element at all, and dot-property
+        # access for a wholly-missing child throws under this app's
+        # Set-StrictMode -Version Latest (see the SelectSingleNode note
+        # below for the per-file case).
+        $hashesNode = $root.SelectSingleNode('Hashes')
+        $hashes = $null
+        if ($hashesNode) {
+            # SelectSingleNode, not dot-property access: a file absent at
+            # export time legitimately has no matching Hash child, and
+            # under this app's Set-StrictMode -Version Latest (active for
+            # the whole script scope once ImportGpoProjectFiles.ps1 is
+            # dot-sourced), $hashesNode.UserPol on a MISSING child throws
+            # PropertyNotFoundException instead of returning $null.
+            $hashes = @{
+                machinePol = $(if ($n = $hashesNode.SelectSingleNode('MachinePol')) { $n.InnerText } else { $null })
+                userPol    = $(if ($n = $hashesNode.SelectSingleNode('UserPol')) { $n.InnerText } else { $null })
+                secEditInf = $(if ($n = $hashesNode.SelectSingleNode('SecEditInf')) { $n.InnerText } else { $null })
+                auditCsv   = $(if ($n = $hashesNode.SelectSingleNode('AuditCsv')) { $n.InnerText } else { $null })
+            }
+        }
+
+        return [pscustomobject]@{ Name = $name; Files = $files; Hashes = $hashes }
     }
     catch {
         return $null

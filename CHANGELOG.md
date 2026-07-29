@@ -5,6 +5,18 @@ section per release date, most recent first. This file is the single
 source for the "Release Notes" panel in the right-hand pane and for
 ? > Patch note
 
+## 2026-07-30 — Integrity check on Export/Import and pre-import backups
+
+- Export and the automatic pre-import backup now record a SHA-256 hash of
+  each file (`Machine\registry.pol`, `User\registry.pol`, `secedit.inf`,
+  `Machine\Microsoft\Windows NT\Audit\audit.csv`) in their `*_Info.xml`
+  manifest. File > Import re-checks these hashes before applying anything
+  real, and blocks with a clear error if a file was modified, deleted, or
+  added outside GPedit since it was generated - manifests created before
+  this change are unaffected and still import normally. The automatic
+  rollback that follows a failed import now goes through this same check
+  before replaying the backup.
+
 ## 2026-07-29 — Readable logs, project Close, Options fixes, Import bug fix
 
 - The app log (`gpedit.log`) is now one field per line (Name/Registry/Old
