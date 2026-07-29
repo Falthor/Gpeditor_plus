@@ -47,7 +47,7 @@ New-Item -ItemType Directory -Path $TempDir -Force | Out-Null
 $env:LOCALAPPDATA = Join-Path $TempDir 'AppData'
 New-Item -ItemType Directory -Path $env:LOCALAPPDATA -Force | Out-Null
 
-. (Join-Path $PSScriptRoot '..\AppSettings.ps1')
+. (Join-Path $PSScriptRoot '..\Core\AppSettings.ps1')
 
 # Fake ScriptRoot with a fake DefaultData\*.audit, to test first-run logic
 # without depending on the repo's real CIS files.

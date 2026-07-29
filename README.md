@@ -95,9 +95,10 @@ configurable from **File > Options** and persisted in
 ```
 src/
 ├── GpEdit.ps1              # Entry point: WPF window, orchestration
-├── AppSettings.ps1         # Configurable paths + Editor Mode (settings.json)
-├── AppLog.ps1              # File logging
-├── ImportGpoProjectFiles.ps1
+├── Core/                    # App infrastructure (settings, logging, import)
+│   ├── AppSettings.ps1         # Configurable paths + Editor Mode (settings.json)
+│   ├── AppLog.ps1              # File logging
+│   └── ImportGpoProjectFiles.ps1
 ├── Catalogs/                # Per-domain setting definitions
 │   ├── SecurityCatalog.ps1     # Account/Local Policies, Security Options
 │   ├── AdvancedAuditCatalog.ps1

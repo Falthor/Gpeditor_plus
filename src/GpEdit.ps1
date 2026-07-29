@@ -29,8 +29,8 @@ $ErrorActionPreference = 'Stop'
 
 Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase, System.Xaml, System.Windows.Forms | Out-Null
 
-. (Join-Path $PSScriptRoot 'AppLog.ps1')
-. (Join-Path $PSScriptRoot 'AppSettings.ps1')
+. (Join-Path $PSScriptRoot 'Core\AppLog.ps1')
+. (Join-Path $PSScriptRoot 'Core\AppSettings.ps1')
 . (Join-Path $PSScriptRoot 'Parsers\PolFile.ps1')
 . (Join-Path $PSScriptRoot 'Parsers\GptIniFile.ps1')
 . (Join-Path $PSScriptRoot 'Parsers\GptTmplFile.ps1')
@@ -49,7 +49,7 @@ Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase, Sys
 . (Join-Path $PSScriptRoot 'Catalogs\CisCatalog.ps1')
 . (Join-Path $PSScriptRoot 'Parsers\ChangelogFile.ps1')
 . (Join-Path $PSScriptRoot 'UI\AppDialogs.ps1')
-. (Join-Path $PSScriptRoot 'ImportGpoProjectFiles.ps1')
+. (Join-Path $PSScriptRoot 'Core\ImportGpoProjectFiles.ps1')
 
 # --- Mandatory elevation on launch --------------------------------------
 # Test-IsRunningAsAdministrator alone covers both UAC-enabled (not elevated)

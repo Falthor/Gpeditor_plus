@@ -24,14 +24,14 @@ Everything starts from `Gpeditor_plus\src\GpEdit.ps1` (~2600 lines).
 Startup sequence:
 
 1. Load WPF assemblies, then dot-source modules in a fixed order:
-   `AppLog.ps1`, `AppSettings.ps1` → `Parsers\*.ps1` →
+   `Core\AppLog.ps1`, `Core\AppSettings.ps1` → `Parsers\*.ps1` →
    `Catalogs\SecurityCatalog.ps1` → `Policy\PolicyState.ps1` →
    `UI\EditDialogs.ps1`, `SelectPrincipalsDialog.ps1`, `OptionsDialog.ps1`,
    `UiStrings.ps1` → `Indexers\*Fingerprint.ps1` →
    `Policy\PolicyWriter.ps1`, `ChangeApplier.ps1` →
    `Parsers\AuditCsvFile.ps1` → `Catalogs\AdvancedAuditCatalog.ps1`,
    `CisCatalog.ps1` → `Parsers\ChangelogFile.ps1` → `UI\AppDialogs.ps1` →
-   `ImportGpoProjectFiles.ps1`.
+   `Core\ImportGpoProjectFiles.ps1`.
 2. Admin elevation check (`Test-IsRunningAsAdministrator`,
    `Policy\ChangeApplier.ps1`) — otherwise a blocking message and exit.
 3. Load `AppSettings` (JSON persisted at
@@ -156,7 +156,7 @@ never shows stale state.
 - `UiStrings.ps1` — a flat hashtable of all UI label strings
   (English only).
 
-### AppSettings.ps1 / AppLog.ps1
+### Core\AppSettings.ps1 / Core\AppLog.ps1
 - `AppSettings.ps1` — persists 6 configurable paths plus the
   `editorMode` boolean to
   `%LocalAppData%\Gpeditor_plus\settings.json`.

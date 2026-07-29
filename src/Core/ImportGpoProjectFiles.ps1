@@ -16,6 +16,12 @@
 
 Set-StrictMode -Version Latest
 
+# This file lives in src\Core; the app's real script root (holding
+# Indexers\, UI\, etc.) is one level up. Captured once here rather than
+# passing it down, since Import-GpoProjectFiles is invoked with no args
+# (GpEdit.ps1).
+$script:ImportGpoScriptRoot = Split-Path -Parent $PSScriptRoot
+
 # --- Folder pick + manifest resolution ------------------------------------
 
 function Select-GpoImportManifestPath {
@@ -700,7 +706,7 @@ function Import-GpoProjectFiles {
         return
     }
 
-    $mode = Show-ImportModeDialog -Owner $window -ScriptRoot $PSScriptRoot -Ui $ui
+    $mode = Show-ImportModeDialog -Owner $window -ScriptRoot $script:ImportGpoScriptRoot -Ui $ui
     if (-not $mode) { return }
 
     $liveSecEditInfPath = $null
@@ -713,7 +719,7 @@ function Import-GpoProjectFiles {
             return
         }
 
-        $diffPair = Get-DiffIndexPair -ScriptRoot $PSScriptRoot -LiveSecEditInfPath $liveSecEditInfPath -ImportSecEditInfPath $importFiles.SecEditInfPath -LiveAuditCsvPath $script:RealAuditCsvPath -ImportAuditCsvPath $importFiles.AuditCsvPath
+        $diffPair = Get-DiffIndexPair -ScriptRoot $script:ImportGpoScriptRoot -LiveSecEditInfPath $liveSecEditInfPath -ImportSecEditInfPath $importFiles.SecEditInfPath -LiveAuditCsvPath $script:RealAuditCsvPath -ImportAuditCsvPath $importFiles.AuditCsvPath
 
         $checkedRemoval = @()
         $uncheckedChange = @()
@@ -749,14 +755,14 @@ function Import-GpoProjectFiles {
         if ($mode -eq 'Standard') {
             $candidates = Get-SecurityOptionsRemovalCandidates -DiffIndexPair $diffPair -Ui $ui
             if ($candidates.Count -gt 0) {
-                $result = Show-ImportConfirmationDialog -Owner $window -ScriptRoot $PSScriptRoot -Ui $ui -ChangeRows $candidates -AddRows @()
+                $result = Show-ImportConfirmationDialog -Owner $window -ScriptRoot $script:ImportGpoScriptRoot -Ui $ui -ChangeRows $candidates -AddRows @()
                 if (-not $result) { return }
                 $checkedRemoval = @($result.ChangeRows | Where-Object { $_.IsSelected })
                 $uncheckedChange = @($result.ChangeRows | Where-Object { -not $_.IsSelected })
             }
         }
         else {
-            $result = Show-ImportConfirmationDialog -Owner $window -ScriptRoot $PSScriptRoot -Ui $ui -ChangeRows $allChangeRows -AddRows $allAddRows
+            $result = Show-ImportConfirmationDialog -Owner $window -ScriptRoot $script:ImportGpoScriptRoot -Ui $ui -ChangeRows $allChangeRows -AddRows $allAddRows
             if (-not $result) { return }
             $checkedRemoval = @($result.ChangeRows | Where-Object { $_.IsSelected })
             $uncheckedChange = @($result.ChangeRows | Where-Object { -not $_.IsSelected })
