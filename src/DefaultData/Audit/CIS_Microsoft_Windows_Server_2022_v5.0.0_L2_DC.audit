@@ -1,0 +1,2283 @@
+#TRUSTED 426813b6950c96ba1469bd5a8cfd66e8c6de9c64b52881383b806473f23cf552e74d0807630caf29ddbc504ad59f82f9dbcc4394db42f485fae77bc38bf7caf89e12da742708156944fc5f01c778a487ec70abbfc931c74261ff3f326fffb8545a1d53d9e88ba1c8d7382f896249d456b08be7916d65ad8a1f9edd71a9a818e30853cd8ee24daed0d03275f4d2962bd0424cccde627952826f6cd7177baa2d9b7b0edcf5da1fb94ebfe1856a386cae8ba753b6760ba0f1850b666da2bcb8756e143e91f1320ecc274d38318fabe984e355cd2be06246a9850a46dac462e5da1dae3ac024d46ba1ee66cf6efffada358a8e2a0bf012ab72c3d7522f59ebf49f1d1458daf53a6d770de897bc01fd44e7a10f3080eddb555e6bcf48b30aee484f9fd1a255e4f0bff204465535986899de72f1fd7cac59078c279c099cf450f1c71d017515b3826ae00cefeed4a6cf46f753d9fbdefd9a99479738319007ad5004cbeade7dfd9f26c946a70e19855918153f18221bbb616064f52c6a36d2b9d8168c7885819ce474fe5e2a060ae62d8ecde6864c1161163282b447e12e413f753404fbe2064830f54d04c388ca8720ce6a940cc9a4492a50f5425bb5095dd7062be8670b0ee3a23de9be6b2fc341552ff67c7126b93f69bccf684f808d275d0a84549ef70b343c96c20e6fc3ac5f56e5fe5191a1788bc21616d0f88bae18808ab0fd
+#TRUST-RSA-SHA256 34cc372f9656e1441cfc96c21ec7717095f04fb2e3a7464c0e7682694410cd0e6c3b5e7b52de98bdaf7356d23bf70a6e3aefcbf470412925a48be0d2fa83844f1057f16c3d3bf4fd28edf4a1c92c9fbb35f4cd2687c056b6b42f6d0a91648be6fa461e50eff0c7921e4efbb5bd51793976ce362a890c44e0bbe80c7d7769addb7b105d3b336b2a7e8e4e20edd3e3ec9c0892fb6b25819ab8378e11f3b2bc695b30b73079d061d257d872ec6646e6e479edb28f9c9b2df9986ab7c4ef0a35d354abbfb4c20790341f32b2f2a7dbac40d6a85083f3968d481663bf7687ea2fbb5ed05225bbcf245e59704a8aacf84cb75fedcfa721ce8ac603d4a4c3c28b202e4aef3937891b4ffd7f7e4ef20fe96bbd9de8dd195f9e8c91f1d7336e3c77cb5f4edcc2cf621bf17f2d94d127747f9c448dc23a2a7af429b0e4018a0664417f75a0a4f67bce2f4bcffc899ea84ab144ae4f4c38810462abb8eba538ee040f5ce0df84e3ca60d40bcf5309d8e822d1c6124bd1630d624f246855d994946bbe541f46e34ee358a3d59ebd1c40e12adbbfc71ca69eede2b2afa6dd42e6b1703978815b7848d4a1e1fddf3faa69915c471b3a0d8c18c63988e3c20d8ef1e35926cda7e2f3ef60a10be960ff5d8894ee3e67d6299fe5fe2c755cf508e00a52497a78a4673d82d535c6ac119fcdcd21d8172408e6c677fee44efb02280dfecc9ff38cb4a0
+#
+# This script is Copyright (C) 2004-2026 and is owned by Tenable, Inc. or an Affiliate thereof.
+#
+# This script is released under the Tenable Subscription License and
+# may not be used from within scripts released under another license
+# without authorization from Tenable, Inc.
+#
+# See the following licenses for details:
+#
+# http://static.tenable.com/prod_docs/Nessus_6_SLA_and_Subscription_Agreement.pdf
+#
+# @PROFESSIONALFEED@
+# $Revision: 1.0 $
+# $Date: 2026/03/23 $
+#
+# description : This .audit is designed against the CIS Microsoft Windows Server 2022 Benchmark 5.0.0
+#
+#<ui_metadata>
+#<display_name>CIS Microsoft Windows Server 2022 v5.0.0 L2 DC</display_name>
+#<spec>
+#  <type>CIS</type>
+#  <name>Microsoft Windows Server 2022</name>
+#  <profile>L2 DC</profile>
+#  <version>5.0.0</version>
+#  <link>https://workbench.cisecurity.org/benchmarks/25733</link>
+#</spec>
+#<labels>agent,windows_server_dc_2022</labels>
+#<benchmark_refs>CSCv7,CSCv8,LEVEL</benchmark_refs>
+#<variables>
+#  <variable>
+#    <name>PLATFORM_VERSION</name>
+#    <default>2022</default>
+#    <description>Windows Server Version</description>
+#    <info>Windows Server Version</info>
+#    <value_type>INTEGER</value_type>
+#  </variable>
+#</variables>
+#</ui_metadata>
+
+<check_type:"Windows" version:"2">
+<group_policy:"CIS Microsoft Windows Server 2022">
+
+<if>
+  <condition type:"AND">
+    <custom_item>
+      type        : REGISTRY_SETTING
+      description : "Windows Server 2022 is installed"
+      value_type  : POLICY_TEXT
+      value_data  : "^[a-zA-Z0-9\(\)\s]*@PLATFORM_VERSION@[\s]*[a-zA-Z0-9\(\)\s:]*$"
+      reg_key     : "HKLM\Software\Microsoft\Windows Nt\Currentversion"
+      reg_item    : "ProductName"
+      check_type  : CHECK_REGEX
+    </custom_item>
+
+    <custom_item>
+      type          : WMI_POLICY
+      description   : "Check if server is Domain Controller"
+      value_type    : POLICY_DWORD
+      value_data    : 4 || 5
+      wmi_namespace : "root/CIMV2"
+      wmi_request   : "select DomainRole from Win32_ComputerSystem"
+      wmi_attribute : "DomainRole"
+      wmi_key       : "DomainRole"
+    </custom_item>
+  </condition>
+
+  <then>
+    <report type:"PASSED">
+      description : "CIS_Microsoft_Windows_Server_2022_v5.0.0_L2_DC.audit from CIS Microsoft Windows Server 2022 5.0.0"
+      see_also    : "https://workbench.cisecurity.org/benchmarks/25733"
+      show_output : YES
+    </report>
+
+    <custom_item>
+      type        : REGISTRY_SETTING
+      description : "18.10.11.1 Ensure 'Allow Use of Camera' is set to 'Disabled'"
+      info        : "This policy setting controls whether the use of Camera devices on the machine are permitted.
+
+The recommended state for this setting is: Disabled.
+
+Cameras in a high security environment can pose serious privacy and data exfiltration risks - they should be disabled to help mitigate that risk."
+      solution    : "To establish the recommended configuration via GP, set the following UI path to Disabled :
+
+Computer Configuration\Policies\Administrative Templates\Windows Components\Camera\Allow Use of Camera
+
+Note: This Group Policy path may not exist by default. It is provided by the Group Policy template Camera.admx/adml that is included with the Microsoft Windows 10 Release 1607 & Server 2016 Administrative Templates (or newer).
+
+Impact:
+
+Users will not be able to utilize the camera on a system."
+      reference   : "800-171|3.4.2,800-171|3.4.6,800-171|3.4.7,800-171r3|03.04.02,800-171r3|03.04.06,800-53|CM-6,800-53|CM-7,800-53r5|CM-6,800-53r5|CM-7,CSCv8|4.8,CSF|PR.IP-1,CSF|PR.PT-3,CSF2.0|DE.CM-09,CSF2.0|PR.PS-01,GDPR|32.1.b,HIPAA|164.306(a)(1),ISO-27001-2022|A.8.9,ITSG-33|CM-6,ITSG-33|CM-7,LEVEL|2A,NIAv2|SS15a,PCI-DSSv3.2.1|2.2.2,SWIFT-CSCv1|2.3"
+      see_also    : "https://workbench.cisecurity.org/benchmarks/25733"
+      value_type  : POLICY_DWORD
+      value_data  : "0"
+      reg_key     : "HKLM\Software\Policies\Microsoft\Camera"
+      reg_item    : "AllowCamera"
+      reg_option  : CAN_NOT_BE_NULL
+    </custom_item>
+
+    <custom_item>
+      type        : REGISTRY_SETTING
+      description : "18.10.13.2 Ensure 'Turn off cloud optimized content' is set to 'Enabled'"
+      info        : "This policy setting turns off cloud optimized content in all Windows experiences.
+
+The recommended state for this setting is: Enabled.
+
+In high-security environments, data must never be shared with third-parties without explicit consent, as it may contain sensitive information."
+      solution    : "To establish the recommended configuration via GP, set the following UI path to Enabled :
+
+Computer Configuration\Policies\Administrative Templates\Windows Components\Cloud Content\Turn off cloud optimized content
+
+Note: This Group Policy path may not exist by default. It is provided by the Group Policy template CloudContent.admx/adml that is included with the Microsoft Windows 10 Release 20H2 Administrative Templates (or newer).
+
+Impact:
+
+Windows experiences that use the cloud optimized content client component, will present the default fallback content instead of customized content."
+      reference   : "800-171|3.4.2,800-171|3.4.6,800-171|3.4.7,800-171r3|03.04.02,800-171r3|03.04.06,800-53|CM-6,800-53|CM-7,800-53r5|CM-6,800-53r5|CM-7,CSCv7|9.2,CSCv8|4.8,CSF|PR.IP-1,CSF|PR.PT-3,CSF2.0|DE.CM-09,CSF2.0|PR.PS-01,GDPR|32.1.b,HIPAA|164.306(a)(1),ISO-27001-2022|A.8.9,ITSG-33|CM-6,ITSG-33|CM-7,LEVEL|2A,NIAv2|SS15a,PCI-DSSv3.2.1|2.2.2,SWIFT-CSCv1|2.3"
+      see_also    : "https://workbench.cisecurity.org/benchmarks/25733"
+      value_type  : POLICY_DWORD
+      value_data  : "1"
+      reg_key     : "HKLM\Software\Policies\Microsoft\Windows\CloudContent"
+      reg_item    : "DisableCloudOptimizedContent"
+      reg_option  : CAN_NOT_BE_NULL
+    </custom_item>
+
+    <custom_item>
+      type        : REGISTRY_SETTING
+      description : "18.10.16.2 Ensure 'Configure Authenticated Proxy usage for the Connected User Experience and Telemetry service' is set to 'Enabled: Disable Authenticated Proxy usage'"
+      info        : "This policy setting controls whether the Connected User Experience and Telemetry service can automatically use an authenticated proxy to send data back to Microsoft.
+
+The recommended state for this setting is: Enabled: Disable Authenticated Proxy usage.
+
+In high-security environments, data must never be shared with third-parties without explicit consent, as it may contain sensitive information."
+      solution    : "To establish the recommended configuration via GP, set the following UI path to Enabled: Disable Authenticated Proxy usage :
+
+Computer Configuration\Policies\Administrative Templates\Windows Components\Data Collection and Preview Builds\Configure Authenticated Proxy usage for the Connected User Experience and Telemetry service
+
+Note: This Group Policy path may not exist by default. It is provided by the Group Policy template DataCollection.admx/adml that is included with the Microsoft Windows 10 Release 1703 Administrative Templates (or newer).
+
+Impact:
+
+The Connected User Experience and Telemetry service will be blocked from automatically using an authenticated proxy."
+      reference   : "800-171|3.4.6,800-171|3.4.7,800-171r3|03.04.06b.,800-53|CM-7b.,800-53r5|CM-7b.,CN-L3|7.1.3.5(c),CN-L3|7.1.3.7(d),CN-L3|8.1.4.4(b),CSCv7|9.2,CSF|PR.IP-1,CSF|PR.PT-3,CSF2.0|PR.PS-01,GDPR|32.1.b,HIPAA|164.306(a)(1),ITSG-33|CM-7a.,LEVEL|2A,NIAv2|SS13b,NIAv2|SS14a,NIAv2|SS14c,PCI-DSSv3.2.1|2.2.2,PCI-DSSv4.0|2.2.4,QCSC-v1|3.2,SWIFT-CSCv1|2.3"
+      see_also    : "https://workbench.cisecurity.org/benchmarks/25733"
+      value_type  : POLICY_DWORD
+      value_data  : "1"
+      reg_key     : "HKLM\Software\Policies\Microsoft\Windows\DataCollection"
+      reg_item    : "DisableEnterpriseAuthProxy"
+      reg_option  : CAN_NOT_BE_NULL
+    </custom_item>
+
+    <custom_item>
+      type        : REGISTRY_SETTING
+      description : "18.10.16.4 Ensure 'Enable OneSettings Auditing' is set to 'Enabled'"
+      info        : "This policy setting controls whether Windows records attempts to connect with the OneSettings service to the Event Log.
+
+The recommended state for this setting is: Enabled.
+
+If events are not recorded it may be difficult or impossible to determine the root cause of system problems or the unauthorized activities of threat actors."
+      solution    : "To establish the recommended configuration via GP, set the following UI path to Enabled :
+
+Computer Configuration\Policies\Administrative Templates\Windows Components\Data Collection and Preview Builds\Enable OneSettings Auditing
+
+Note: This Group Policy path may not exist by default. It is provided by the Group Policy template DataCollection.admx/adml that is included with the Microsoft Windows 11 Release 21H2 Administrative Templates (or newer).
+
+Impact:
+
+Windows will record attempts to connect with the OneSettings service to the Applications and Services Logs\Microsoft\Windows\Privacy-Auditing\Operational Event Log channel."
+      reference   : "800-171|3.3.1,800-171|3.3.2,800-171|3.3.6,800-171r3|03.03.02a.,800-171r3|03.03.02b.,800-171r3|03.03.03,800-171r3|03.03.06a.,800-53|AU-3,800-53|AU-3(1),800-53|AU-7,800-53|AU-12,800-53r5|AU-3,800-53r5|AU-3(1),800-53r5|AU-7,800-53r5|AU-12,CN-L3|7.1.2.3(a),CN-L3|7.1.2.3(b),CN-L3|7.1.2.3(c),CN-L3|7.1.3.3(a),CN-L3|7.1.3.3(b),CN-L3|8.1.4.3(b),CSCv7|8.5,CSCv8|8.5,CSF|DE.CM-1,CSF|DE.CM-3,CSF|DE.CM-7,CSF|PR.PT-1,CSF|RS.AN-3,CSF2.0|DE.CM-01,CSF2.0|DE.CM-03,CSF2.0|DE.CM-09,CSF2.0|PR.PS-04,CSF2.0|RS.AN-03,CSF2.0|RS.AN-06,CSF2.0|RS.AN-07,GDPR|32.1.b,HIPAA|164.306(a)(1),HIPAA|164.312(b),ISO-27001-2022|A.5.28,ISO-27001-2022|A.8.15,ITSG-33|AU-3,ITSG-33|AU-3(1),ITSG-33|AU-7,ITSG-33|AU-12,LEVEL|2A,NESA|T3.6.2,NIAv2|AM34a,NIAv2|AM34b,NIAv2|AM34c,NIAv2|AM34d,NIAv2|AM34e,NIAv2|AM34f,NIAv2|AM34g,PCI-DSSv3.2.1|10.1,PCI-DSSv3.2.1|10.3,PCI-DSSv3.2.1|10.3.1,PCI-DSSv3.2.1|10.3.2,PCI-DSSv3.2.1|10.3.3,PCI-DSSv3.2.1|10.3.4,PCI-DSSv3.2.1|10.3.5,PCI-DSSv3.2.1|10.3.6,PCI-DSSv4.0|10.2.2,QCSC-v1|3.2,QCSC-v1|6.2,QCSC-v1|8.2.1,QCSC-v1|10.2.1,QCSC-v1|11.2,QCSC-v1|13.2,SWIFT-CSCv1|6.4"
+      see_also    : "https://workbench.cisecurity.org/benchmarks/25733"
+      value_type  : POLICY_DWORD
+      value_data  : "1"
+      reg_key     : "HKLM\Software\Policies\Microsoft\Windows\DataCollection"
+      reg_item    : "EnableOneSettingsAuditing"
+      reg_option  : CAN_NOT_BE_NULL
+    </custom_item>
+
+    <custom_item>
+      type        : REGISTRY_SETTING
+      description : "18.10.16.5 Ensure 'Limit Diagnostic Log Collection' is set to 'Enabled'"
+      info        : "This policy setting controls whether additional diagnostic logs are collected when more information is needed to troubleshoot a problem on the device.
+
+The recommended state for this setting is: Enabled.
+
+Note: Diagnostic logs are only sent when the device has been configured to send optional diagnostic data. Diagnostic data is limited when recommendation Allow Diagnostic Data is set to Enabled: Diagnostic data off (not recommended) or Enabled: Send required diagnostic data to send only basic information.
+
+In high-security environments, data must never be shared with third-parties without explicit consent, as it may contain sensitive information."
+      solution    : "To establish the recommended configuration via GP, set the following UI path to Enabled :
+
+Computer Configuration\Policies\Administrative Templates\Windows Components\Data Collection and Preview Builds\Limit Diagnostic Log Collection
+
+Note: This Group Policy path may not exist by default. It is provided by the Group Policy template DataCollection.admx/adml that is included with the Microsoft Windows 11 Release 21H2 Administrative Templates (or newer).
+
+Impact:
+
+Diagnostic logs and information such as crash dumps will not be collected for transmission to Microsoft."
+      reference   : "800-171|3.4.2,800-171|3.4.6,800-171|3.4.7,800-171r3|03.04.02,800-171r3|03.04.06,800-53|CM-6,800-53|CM-7,800-53r5|CM-6,800-53r5|CM-7,CSCv8|4.8,CSF|PR.IP-1,CSF|PR.PT-3,CSF2.0|DE.CM-09,CSF2.0|PR.PS-01,GDPR|32.1.b,HIPAA|164.306(a)(1),ISO-27001-2022|A.8.9,ITSG-33|CM-6,ITSG-33|CM-7,LEVEL|2A,NIAv2|SS15a,PCI-DSSv3.2.1|2.2.2,SWIFT-CSCv1|2.3"
+      see_also    : "https://workbench.cisecurity.org/benchmarks/25733"
+      value_type  : POLICY_DWORD
+      value_data  : "1"
+      reg_key     : "HKLM\Software\Policies\Microsoft\Windows\DataCollection"
+      reg_item    : "LimitDiagnosticLogCollection"
+      reg_option  : CAN_NOT_BE_NULL
+    </custom_item>
+
+    <custom_item>
+      type        : REGISTRY_SETTING
+      description : "18.10.16.6 Ensure 'Limit Dump Collection' is set to 'Enabled'"
+      info        : "This policy setting limits the type of memory dumps that can be collected when more information is needed to troubleshoot a problem.
+
+The recommended state for this setting is: Enabled.
+
+Note: Memory dumps are only sent when the device has been configured to send optional diagnostic data. Diagnostic data is limited when recommendation Allow Diagnostic Data is set to Enabled: Diagnostic data off (not recommended) or Enabled: Send required diagnostic data to send only basic information.
+
+Data must never be shared with third-parties without explicit consent, as it may contain sensitive information."
+      solution    : "To establish the recommended configuration via GP, set the following UI path to Enabled.
+
+Computer Configuration\Policies\Administrative Templates\Windows Components\Data Collection and Preview Builds\Limit Dump Collection
+
+Note: This Group Policy path may not exist by default. It is provided by the Group Policy template DataCollection.admx/adml that is included with the Microsoft Windows 11 Release 21H2 Administrative Templates (or newer).
+
+Impact:
+
+Windows Error Reporting will not send full and/or heap memory dumps to Microsoft - they will be limited to kernel mini and/or user mode triage memory dumps (if sending optional diagnostic data is permitted)."
+      reference   : "800-171|3.3.1,800-171|3.3.2,800-171r3|03.03.01,800-53|AU-2,800-53r5|AU-2,CN-L3|8.1.4.3(a),CSF|PR.PT-1,CSF2.0|PR.PS-04,GDPR|32.1.b,HIPAA|164.306(a)(1),HIPAA|164.312(b),ISO-27001-2022|A.8.15,ITSG-33|AU-2,LEVEL|2A,NESA|M1.2.2,NESA|M5.5.1,NIAv2|AM7,NIAv2|AM11a,NIAv2|AM11b,NIAv2|AM11c,NIAv2|AM11d,NIAv2|AM11e,NIAv2|SS30,NIAv2|VL8,QCSC-v1|8.2.1,QCSC-v1|13.2,SWIFT-CSCv1|6.4"
+      see_also    : "https://workbench.cisecurity.org/benchmarks/25733"
+      value_type  : POLICY_DWORD
+      value_data  : "1"
+      reg_key     : "HKLM\Software\Policies\Microsoft\Windows\DataCollection"
+      reg_item    : "LimitDumpCollection"
+      reg_option  : CAN_NOT_BE_NULL
+    </custom_item>
+
+    <custom_item>
+      type        : REGISTRY_SETTING
+      description : "18.10.18.1 Ensure 'Enable App Installer' is set to 'Disabled'"
+      info        : "This policy setting controls whether user have access to the Windows Package Manager. Windows Package Manager is a package manager solution that consists of a command line tool and set of services for installing applications on Microsoft Windows Server 2019 (or newer).
+
+The recommended state for this setting is: Disabled.
+
+Windows Package Manager is a command line tool can be used to discover, install, upgrade, remove and configure applications, and it can be used as a distribution channel for software packages containing tools and applications. Users should not have access to these types of development tools."
+      solution    : "To establish the recommended configuration via GP, set the following UI path to Disabled :
+
+Computer Configuration\Policies\Administrative Templates\Windows Components\Desktop App Installer\Enable App Installer
+
+Note: This Group Policy path may not exist by default. It is provided by the Group Policy template DesktopAppInstaller.admx/adml that is included with the Microsoft Windows 11 Release 22H2 Administrative Templates v1.0 (or newer).
+
+Impact:
+
+Users will not have access to the command line tool, winget to discover, install, upgrade, remove, configure, or distribute applications."
+      reference   : "800-171|3.4.2,800-171|3.4.6,800-171|3.4.7,800-171r3|03.04.02,800-171r3|03.04.06,800-53|CM-6,800-53|CM-7,800-53r5|CM-6,800-53r5|CM-7,CSCv7|9.2,CSCv8|4.8,CSF|PR.IP-1,CSF|PR.PT-3,CSF2.0|DE.CM-09,CSF2.0|PR.PS-01,GDPR|32.1.b,HIPAA|164.306(a)(1),ISO-27001-2022|A.8.9,ITSG-33|CM-6,ITSG-33|CM-7,LEVEL|2A,NIAv2|SS15a,PCI-DSSv3.2.1|2.2.2,SWIFT-CSCv1|2.3"
+      see_also    : "https://workbench.cisecurity.org/benchmarks/25733"
+      value_type  : POLICY_DWORD
+      value_data  : "0"
+      reg_key     : "HKLM\Software\Policies\Microsoft\Windows\AppInstaller"
+      reg_item    : "EnableAppInstaller"
+      reg_option  : CAN_NOT_BE_NULL
+    </custom_item>
+
+    <custom_item>
+      type        : REGISTRY_SETTING
+      description : "18.10.18.7 Ensure 'Enable Windows Package Manager command line interfaces' is set to 'Disabled'"
+      info        : "This policy setting controls whether a user can perform actions using the Windows Package Manager through a command line interface (Windows CLI or PowerShell).
+
+The recommended state for this setting is: Disabled.
+
+Note: This policy does not override the Enable App Installer policy, which is set to Disabled in the L2 profile of the CIS Windows Operating System Benchmarks.
+
+Windows Package Manager is a command line tool can be used to discover, install, upgrade, remove and configure applications. It can also be used as a distribution channel for software packages containing tools and applications. Users should not have access to these types of development tools."
+      solution    : "To establish the recommended configuration via GP, set the following UI path to Disabled :
+
+Computer Configuration\Policies\Administrative Templates\Windows Components\Desktop App Installer\Enable Windows Package Manager command line interfaces
+
+Note: This Group Policy path is provided by the Group Policy template DesktopAppInstaller.admx/adml that is included with the Microsoft Windows 11 Release 24H2 Administrative Templates (or newer).
+
+Impact:
+
+Users will not have the ability to use Windows Package Manager with Windows CLI or PowerShell."
+      reference   : "800-171|3.4.2,800-171|3.4.6,800-171|3.4.7,800-171r3|03.04.02,800-171r3|03.04.06,800-53|CM-6,800-53|CM-7,800-53r5|CM-6,800-53r5|CM-7,CSCv7|9.2,CSCv8|4.8,CSF|PR.IP-1,CSF|PR.PT-3,CSF2.0|DE.CM-09,CSF2.0|PR.PS-01,GDPR|32.1.b,HIPAA|164.306(a)(1),ISO-27001-2022|A.8.9,ITSG-33|CM-6,ITSG-33|CM-7,LEVEL|2A,NIAv2|SS15a,PCI-DSSv3.2.1|2.2.2,SWIFT-CSCv1|2.3"
+      see_also    : "https://workbench.cisecurity.org/benchmarks/25733"
+      value_type  : POLICY_DWORD
+      value_data  : "0"
+      reg_key     : "HKLM\Software\Policies\Microsoft\Windows\AppInstaller"
+      reg_item    : "EnableWindowsPackageManagerCommandLineInterfaces"
+      reg_option  : CAN_NOT_BE_NULL
+    </custom_item>
+
+    <custom_item>
+      type        : REGISTRY_SETTING
+      description : "18.10.36.1 Ensure 'Turn off location' is set to 'Enabled'"
+      info        : "This policy setting turns off the location feature for the computer.
+
+The recommended state for this setting is: Enabled.
+
+This setting affects the location feature (e.g. GPS or other location tracking). From a security perspective, it's not a good idea to reveal your location to software in most cases, but there are legitimate uses, such as mapping software. However, they should not be used in high security environments."
+      solution    : "To establish the recommended configuration via GP, set the following UI path to Enabled :
+
+Computer Configuration\Policies\Administrative Templates\Windows Components\Location and Sensors\Turn off location
+
+Note: This Group Policy path may not exist by default. It is provided by the Group Policy template Sensors.admx/adml that is included with the Microsoft Windows 7 & Server 2008 R2 Administrative Templates (or newer).
+
+Impact:
+
+The location feature is turned off, and all programs on the computer are prevented from using location information from the location feature."
+      reference   : "800-171|3.4.2,800-171|3.4.6,800-171|3.4.7,800-171r3|03.04.02,800-171r3|03.04.06,800-53|CM-6,800-53|CM-7,800-53r5|CM-6,800-53r5|CM-7,CSCv7|9.2,CSCv8|4.8,CSF|PR.IP-1,CSF|PR.PT-3,CSF2.0|DE.CM-09,CSF2.0|PR.PS-01,GDPR|32.1.b,HIPAA|164.306(a)(1),ISO-27001-2022|A.8.9,ITSG-33|CM-6,ITSG-33|CM-7,LEVEL|2A,NIAv2|SS15a,PCI-DSSv3.2.1|2.2.2,SWIFT-CSCv1|2.3"
+      see_also    : "https://workbench.cisecurity.org/benchmarks/25733"
+      value_type  : POLICY_DWORD
+      value_data  : "1"
+      reg_key     : "HKLM\Software\Policies\Microsoft\Windows\LocationAndSensors"
+      reg_item    : "DisableLocation"
+      reg_option  : CAN_NOT_BE_NULL
+    </custom_item>
+
+    <custom_item>
+      type        : REGISTRY_SETTING
+      description : "18.10.40.1 Ensure 'Allow Message Service Cloud Sync' is set to 'Disabled'"
+      info        : "This policy setting allows backup and restore of cellular text messages to Microsoft's cloud services.
+
+The recommended state for this setting is: Disabled.
+
+In high-security environments, data must never be shared with third-parties without explicit consent, as it may contain sensitive information."
+      solution    : "To establish the recommended configuration via GP, set the following UI path to Disabled:
+
+Computer Configuration\Policies\Administrative Templates\Windows Components\Messaging\Allow Message Service Cloud Sync
+
+Note: This Group Policy path may not exist by default. It is provided by the Group Policy template Messaging.admx/adml that is included with the Microsoft Windows 10 Release 1709 Administrative Templates (or newer).
+
+Impact:
+
+Cellular text messages will not be backed up to (or restored from) Microsoft's cloud services."
+      reference   : "800-171|3.4.2,800-171|3.4.6,800-171|3.4.7,800-171r3|03.04.02,800-171r3|03.04.06,800-53|CM-6,800-53|CM-7,800-53r5|CM-6,800-53r5|CM-7,CSCv7|9.2,CSCv8|4.8,CSF|PR.IP-1,CSF|PR.PT-3,CSF2.0|DE.CM-09,CSF2.0|PR.PS-01,GDPR|32.1.b,HIPAA|164.306(a)(1),ISO-27001-2022|A.8.9,ITSG-33|CM-6,ITSG-33|CM-7,LEVEL|2A,NIAv2|SS15a,PCI-DSSv3.2.1|2.2.2,SWIFT-CSCv1|2.3"
+      see_also    : "https://workbench.cisecurity.org/benchmarks/25733"
+      value_type  : POLICY_DWORD
+      value_data  : "0"
+      reg_key     : "HKLM\Software\Policies\Microsoft\Windows\Messaging"
+      reg_item    : "AllowMessageSync"
+      reg_option  : CAN_NOT_BE_NULL
+    </custom_item>
+
+    <custom_item>
+      type        : REGISTRY_SETTING
+      description : "18.10.4.1 Ensure 'Allow a Windows app to share application data between users' is set to 'Disabled'"
+      info        : "Manages a Windows app's ability to share data between users who have installed the app. Data is shared through the SharedLocal folder. This folder is available through the Windows.Storage API.
+
+The recommended state for this setting is: Disabled.
+
+Users of a system could accidentally share sensitive data with other users on the same system."
+      solution    : "To establish the recommended configuration via GP, set the following UI path to Disabled :
+
+Computer Configuration\Policies\Administrative Templates\Windows Components\App Package Deployment\Allow a Windows app to share application data between users
+
+Note: This Group Policy path may not exist by default. It is provided by the Group Policy template AppxPackageManager.admx/adml that is included with the Microsoft Windows 10 RTM (Release 1507) Administrative Templates (or newer).
+
+Impact:
+
+None - this is the default behavior."
+      reference   : "800-171|3.1.1,800-171r3|03.01.02,800-53|AC-3,800-53r5|AC-3,CN-L3|8.1.4.2(f),CN-L3|8.1.4.11(b),CN-L3|8.1.10.2(c),CN-L3|8.5.3.1,CN-L3|8.5.4.1(a),CSCv7|14.6,CSF|PR.AC-4,CSF|PR.PT-3,CSF2.0|PR.AA-05,CSF2.0|PR.DS-10,CSF2.0|PR.IR-01,GDPR|32.1.b,HIPAA|164.306(a)(1),HIPAA|164.312(a)(1),ISO-27001-2022|A.5.15,ISO-27001-2022|A.5.33,ISO-27001-2022|A.8.3,ISO-27001-2022|A.8.18,ISO-27001-2022|A.8.20,ISO/IEC-27001|A.9.4.1,ISO/IEC-27001|A.9.4.5,ITSG-33|AC-3,LEVEL|2A,NESA|T4.2.1,NESA|T5.4.4,NESA|T5.4.5,NESA|T5.5.4,NESA|T5.6.1,NESA|T7.5.2,NESA|T7.5.3,NIAv2|AM3,NIAv2|SS29,QCSC-v1|3.2,QCSC-v1|5.2.2,QCSC-v1|13.2,TBA-FIISB|31.1"
+      see_also    : "https://workbench.cisecurity.org/benchmarks/25733"
+      value_type  : POLICY_DWORD
+      value_data  : "0"
+      reg_key     : "HKLM\SOFTWARE\Policies\Microsoft\Windows\CurrentVersion\AppModel\StateManager"
+      reg_item    : "AllowSharedLocalAppData"
+      reg_option  : CAN_NOT_BE_NULL
+    </custom_item>
+
+    <custom_item>
+      type        : REGISTRY_SETTING
+      description : "18.10.42.11.1.1.1 Ensure 'Configure Brute-Force Protection aggressiveness' is set to 'Enabled: Medium' or higher"
+      info        : "This policy setting configures whether Brute-Force Protection in Microsoft Defender Antivirus is enabled. Brute-force protection can detect and block attempts to forcibly sign in to a system.
+
+The recommended state for this setting is: Enabled: Medium . Configuring this setting to Enabled: High also conforms to the benchmark.
+
+This feature can help reduce the likelihood of a successful brute force attack."
+      solution    : "To establish the recommended configuration via GP, set the following UI path to Enabled: Medium or Enabled: High :
+
+Computer Configuration\Policies\Administrative Templates\Windows Components\Microsoft Defender Antivirus\Remediation\Behavioral Network Blocks\Brute-Force Protection\Configure Brute-Force Protection aggressiveness
+
+Note: This Group Policy path is provided by the Group Policy template WindowsDefender.admx/adml that is included with the Microsoft Windows 11 Release 24H2 Administrative Templates (or newer).
+
+Impact:
+
+Some legitimate authentication attempts may be blocked. When set to Medium, blocks will occur when the confidence level is above 99%. When set to High, blocks will occur when confidence level is above 90%."
+      reference   : "800-171|3.14.2,800-171|3.14.4,800-171|3.14.5,800-171r3|03.14.02,800-53|SI-3,800-53r5|SI-3,CN-L3|7.1.3.6(b),CN-L3|8.1.4.5,CN-L3|8.1.9.6(a),CN-L3|8.1.9.6(b),CN-L3|8.1.10.5(b),CN-L3|8.1.10.7(a),CN-L3|8.1.10.7(b),CSCv7|8.1,CSCv8|10.1,CSF|DE.CM-4,CSF|DE.DP-3,CSF2.0|PR.DS-01,CSF2.0|PR.DS-02,CSF2.0|PR.DS-10,GDPR|32.1.b,HIPAA|164.306(a)(1),ISO-27001-2022|A.8.7,ISO/IEC-27001|A.12.2.1,ITSG-33|SI-3,LEVEL|2A,NIAv2|GS8a,PCI-DSSv3.2.1|5.1,PCI-DSSv3.2.1|5.1.1,PCI-DSSv4.0|5.2.1,QCSC-v1|3.2,QCSC-v1|5.2.3,QCSC-v1|8.2.1,TBA-FIISB|49.2.1,TBA-FIISB|49.2.2,TBA-FIISB|49.3.1,TBA-FIISB|49.3.2,TBA-FIISB|50.2.1,TBA-FIISB|51.2.4,TBA-FIISB|51.2.7"
+      see_also    : "https://workbench.cisecurity.org/benchmarks/25733"
+      value_type  : POLICY_DWORD
+      value_data  : "1" || "2"
+      reg_key     : "HKLM\Software\Policies\Microsoft\Windows Defender\Remediation\Behavioral Network Blocks\Brute Force Protection"
+      reg_item    : "BruteForceProtectionAggressiveness"
+      reg_option  : CAN_NOT_BE_NULL
+    </custom_item>
+
+    <custom_item>
+      type        : REGISTRY_SETTING
+      description : "18.10.42.11.1.2.1 Ensure 'Configure how aggressively Remote Encryption Protection blocks threats' is set to 'Enabled: Medium' or higher"
+      info        : "This policy setting configures how aggressively Remote Encryption Prevention Protection blocks malicious IP addresses.
+
+The recommended state for this setting is: Enabled: Medium or higher. Configuring this setting to Enabled: High also conforms to the benchmark.
+
+This feature can help reduce the likelihood of users visiting malicious websites."
+      solution    : "To establish the recommended configuration via GP, set the following UI path to Enabled: Medium or Enabled: High :
+
+Computer Configuration\Policies\Administrative Templates\Windows Components\Microsoft Defender Antivirus\Remediation\Behavioral Network Blocks\Remote Encryption Protection\Configure how aggressively Remote Encryption Protection blocks threats
+
+Note: This Group Policy path is provided by the Group Policy template WindowsDefender.admx/adml that is included with the Microsoft Windows 11 Release 24H2 Administrative Templates (or newer).
+
+Impact:
+
+Legitimate websites could be blocked by Remote Encryption Prevention Protection. When set to Medium, blocks will occur when the confidence level is above 99%. When set to High, blocks will occur when confidence level is above 90%."
+      reference   : "800-171|3.14.2,800-171|3.14.4,800-171|3.14.5,800-171r3|03.14.02,800-53|SI-3,800-53r5|SI-3,CN-L3|7.1.3.6(b),CN-L3|8.1.4.5,CN-L3|8.1.9.6(a),CN-L3|8.1.9.6(b),CN-L3|8.1.10.5(b),CN-L3|8.1.10.7(a),CN-L3|8.1.10.7(b),CSCv7|8.1,CSCv8|10.1,CSF|DE.CM-4,CSF|DE.DP-3,CSF2.0|PR.DS-01,CSF2.0|PR.DS-02,CSF2.0|PR.DS-10,GDPR|32.1.b,HIPAA|164.306(a)(1),ISO-27001-2022|A.8.7,ISO/IEC-27001|A.12.2.1,ITSG-33|SI-3,LEVEL|2A,NIAv2|GS8a,PCI-DSSv3.2.1|5.1,PCI-DSSv3.2.1|5.1.1,PCI-DSSv4.0|5.2.1,QCSC-v1|3.2,QCSC-v1|5.2.3,QCSC-v1|8.2.1,TBA-FIISB|49.2.1,TBA-FIISB|49.2.2,TBA-FIISB|49.3.1,TBA-FIISB|49.3.2,TBA-FIISB|50.2.1,TBA-FIISB|51.2.4,TBA-FIISB|51.2.7"
+      see_also    : "https://workbench.cisecurity.org/benchmarks/25733"
+      value_type  : POLICY_DWORD
+      value_data  : "1" || "2"
+      reg_key     : "HKLM\Software\Policies\Microsoft\Windows Defender\Remediation\Behavioral Network Blocks\Remote Encryption Protection"
+      reg_item    : "RemoteEncryptionProtectionAggressiveness"
+      reg_option  : CAN_NOT_BE_NULL
+    </custom_item>
+
+    <custom_item>
+      type        : REGISTRY_SETTING
+      description : "18.10.42.12.1 Ensure 'Configure Watson events' is set to 'Disabled'"
+      info        : "This policy setting determines whether or not Watson events are sent to Microsoft. Watson events are the reports that get sent to Microsoft when a program or service crashes or fails, including the possibility of automatic submission.
+
+The recommended state for this setting is: Disabled.
+
+In high-security environments, data must never be shared with third-parties without explicit consent, as it may contain sensitive information."
+      solution    : "To establish the recommended configuration via GP, set the following UI path to Disabled :
+
+Computer Configuration\Policies\Administrative Templates\Windows Components\Microsoft Defender Antivirus\Reporting\Configure Watson events
+
+Note: This Group Policy path may not exist by default. It is provided by the Group Policy template WindowsDefender.admx/adml that is included with the Microsoft Windows 8.1 & Server 2012 R2 Administrative Templates (or newer).
+
+Impact:
+
+Watson events will not be sent to Microsoft automatically when a program or service crashes or fails."
+      reference   : "800-171|3.12.3,800-171r3|03.12.03,800-53|CA-7,800-53r5|CA-7,CSCv7|13.3,CSF|DE.AE-2,CSF|DE.AE-3,CSF|DE.CM-1,CSF|DE.CM-2,CSF|DE.CM-3,CSF|DE.CM-6,CSF|DE.CM-7,CSF|DE.DP-1,CSF|DE.DP-2,CSF|DE.DP-3,CSF|DE.DP-4,CSF|DE.DP-5,CSF|ID.RA-1,CSF|PR.IP-7,CSF|PR.IP-8,CSF|RS.AN-1,CSF|RS.CO-3,CSF|RS.MI-3,CSF2.0|DE.AE-02,CSF2.0|DE.AE-03,CSF2.0|DE.CM-01,CSF2.0|DE.CM-02,CSF2.0|DE.CM-03,CSF2.0|DE.CM-06,CSF2.0|DE.CM-09,CSF2.0|ID.IM-01,CSF2.0|ID.IM-02,CSF2.0|ID.IM-03,CSF2.0|ID.RA-01,CSF2.0|ID.RA-07,GDPR|32.1.b,GDPR|32.1.d,GDPR|32.2,HIPAA|164.306(a)(1),HIPAA|164.312(b),ISO-27001-2022|A.5.36,ISO-27001-2022|9.1,ISO-27001-2022|9.3.2,ISO-27001-2022|9.3.3,ITSG-33|CA-7,LEVEL|2A,NESA|M1.2.2,NESA|M5.3.1,NESA|M5.4.1,NESA|M6.2.2,QCSC-v1|3.2,QCSC-v1|5.2.1,QCSC-v1|5.2.2,QCSC-v1|5.2.3,QCSC-v1|6.2,QCSC-v1|8.2.1,QCSC-v1|10.2.1,QCSC-v1|11.2"
+      see_also    : "https://workbench.cisecurity.org/benchmarks/25733"
+      value_type  : POLICY_DWORD
+      value_data  : "1"
+      reg_key     : "HKLM\Software\Policies\Microsoft\Windows Defender\Reporting"
+      reg_item    : "DisableGenericRePorts"
+      reg_option  : CAN_NOT_BE_NULL
+    </custom_item>
+
+    <custom_item>
+      type        : REGISTRY_SETTING
+      description : "18.10.42.8.1 Ensure 'Convert warn verdict to block' is set to 'Enabled'"
+      info        : "This policy setting controls whether Microsoft Defender Antivirus network protection will display a warning, or block network traffic.
+
+The recommended state for this setting is: Enabled.
+
+Potentially suspicious network traffic should be blocked until it has been reviewed, and an exception has been granted."
+      solution    : "To establish the recommended configuration via GP, set the following UI path to Enabled :
+
+Computer Configuration\Administrative Templates\Windows Components\Microsoft Defender Antivirus\Network Inspection System\Convert warn verdict to block
+
+Note: This Group Policy path is provided by the Group Policy template WindowsDefender.admx/adml that is included with the Microsoft Windows 11 Release 24H2 Administrative Templates (or newer).
+
+Impact:
+
+Legitimate network traffic could be blocked by Microsoft Defender Antivirus network protection."
+      reference   : "800-171|3.14.2,800-171|3.14.4,800-171|3.14.5,800-171r3|03.14.02,800-53|SI-3,800-53r5|SI-3,CN-L3|7.1.3.6(b),CN-L3|8.1.4.5,CN-L3|8.1.9.6(a),CN-L3|8.1.9.6(b),CN-L3|8.1.10.5(b),CN-L3|8.1.10.7(a),CN-L3|8.1.10.7(b),CSCv7|8.1,CSCv8|10.1,CSF|DE.CM-4,CSF|DE.DP-3,CSF2.0|PR.DS-01,CSF2.0|PR.DS-02,CSF2.0|PR.DS-10,GDPR|32.1.b,HIPAA|164.306(a)(1),ISO-27001-2022|A.8.7,ISO/IEC-27001|A.12.2.1,ITSG-33|SI-3,LEVEL|2A,NIAv2|GS8a,PCI-DSSv3.2.1|5.1,PCI-DSSv3.2.1|5.1.1,PCI-DSSv4.0|5.2.1,QCSC-v1|3.2,QCSC-v1|5.2.3,QCSC-v1|8.2.1,TBA-FIISB|49.2.1,TBA-FIISB|49.2.2,TBA-FIISB|49.3.1,TBA-FIISB|49.3.2,TBA-FIISB|50.2.1,TBA-FIISB|51.2.4,TBA-FIISB|51.2.7"
+      see_also    : "https://workbench.cisecurity.org/benchmarks/25733"
+      value_type  : POLICY_DWORD
+      value_data  : "1"
+      reg_key     : "HKLM\Software\Policies\Microsoft\Windows Defender\NIS"
+      reg_item    : "EnableConvertWarnToBlock"
+      reg_option  : CAN_NOT_BE_NULL
+    </custom_item>
+
+    <custom_item>
+      type        : REGISTRY_SETTING
+      description : "18.10.56.1 Ensure 'Turn off Push To Install service' is set to 'Enabled'"
+      info        : "This policy setting controls whether users can push Apps to the device from the Microsoft Store App running on other devices or the web.
+
+The recommended state for this setting is: Enabled.
+
+In a high security managed environment, application installations should be managed centrally by IT staff, not by end users."
+      solution    : "To establish the recommended configuration via GP, set the following UI path to Enabled :
+
+Computer Configuration\Policies\Administrative Templates\Windows Components\Push to Install\Turn off Push To Install service
+
+Note: This Group Policy path may not exist by default. It is provided by the Group Policy template PushToInstall.admx/adml that is included with the Microsoft Windows 10 Release 1709 Administrative Templates (or newer).
+
+Impact:
+
+Users will not be able to push Apps to this device from the Microsoft Store running on other devices or the web."
+      reference   : "800-171|3.4.8,800-171r3|03.04.08,800-53|CM-7(5),800-53|CM-10,800-53r5|CM-7(5),800-53r5|CM-10,CSCv7|9.2,CSCv8|2.5,CSF|DE.CM-3,CSF|PR.IP-1,CSF|PR.PT-3,CSF2.0|DE.CM-03,CSF2.0|DE.CM-09,CSF2.0|PR.PS-01,GDPR|32.1.b,HIPAA|164.306(a)(1),ISO-27001-2022|A.5.32,ISO-27001-2022|A.8.19,ISO/IEC-27001|A.12.5.1,ISO/IEC-27001|A.12.6.2,ITSG-33|CM-7,LEVEL|2A,NIAv2|SS15a,PCI-DSSv3.2.1|2.2.2,QCSC-v1|3.2,QCSC-v1|8.2.1,SWIFT-CSCv1|2.3,TBA-FIISB|44.2.2,TBA-FIISB|49.2.3"
+      see_also    : "https://workbench.cisecurity.org/benchmarks/25733"
+      value_type  : POLICY_DWORD
+      value_data  : "1"
+      reg_key     : "HKLM\Software\Policies\Microsoft\PushToInstall"
+      reg_item    : "DisablePushToInstall"
+      reg_option  : CAN_NOT_BE_NULL
+    </custom_item>
+
+    <custom_item>
+      type        : REGISTRY_SETTING
+      description : "18.10.57.3.10.1 Ensure 'Set time limit for active but idle Remote Desktop Services sessions' is set to 'Enabled: 15 minutes or less, but not Never (0)'"
+      info        : "This policy setting allows you to specify the maximum amount of time that an active Remote Desktop Services session can be idle (without user input) before it is automatically disconnected.
+
+The recommended state for this setting is: Enabled: 15 minutes or less, but not Never (0).
+
+This setting helps to prevent active Remote Desktop sessions from tying up the computer for long periods of time while not in use, preventing computing resources from being consumed by large numbers of inactive sessions. In addition, old, forgotten Remote Desktop sessions that are still active can cause password lockouts if the user's password has changed but the old session is still running. For systems that limit the number of connected users (e.g. servers in the default Administrative mode - 2 sessions only), other users' old but still active sessions can prevent another user from connecting, resulting in an effective denial-of-service.
+
+In addition, session timeouts that are misconfigured or set for a long period of time can leave the system open to a threat actor hijacking the session."
+      solution    : "To establish the recommended configuration via GP, set the following UI path to Enabled: 15 minutes or less, but not Never (0) :
+
+Computer Configuration\Policies\Administrative Templates\Windows Components\Remote Desktop Services\Remote Desktop Session Host\Session Time Limits\Set time limit for active but idle Remote Desktop Services sessions
+
+Note: This Group Policy path is provided by the Group Policy template TerminalServer.admx/adml that is included with all versions of the Microsoft Windows Administrative Templates.
+
+Note #2: In older Microsoft Windows Administrative Templates, this setting was named Set time limit for active but idle Terminal Services sessions, but it was renamed starting with the Windows 7 & Server 2008 R2 Administrative Templates.
+
+Impact:
+
+Remote Desktop Services will automatically disconnect active but idle sessions after 15 minutes (or the specified amount of time). The user receives a warning two minutes before the session disconnects, which allows the user to press a key or move the mouse to keep the session active. Note that idle session time limits do not apply to console sessions."
+      reference   : "800-171|3.1.10,800-171r3|03.01.10,800-53|AC-11,800-53r5|AC-11,CN-L3|8.1.4.1(b),CSCv7|16.11,GDPR|32.1.b,HIPAA|164.306(a)(1),HIPAA|164.312(a)(2)(iii),ISO-27001-2022|A.7.7,ISO-27001-2022|A.8.1,ISO/IEC-27001|A.11.2.8,ITSG-33|AC-11,LEVEL|2A,NIAv2|AM23c,NIAv2|AM23d,PCI-DSSv3.2.1|8.1.8,PCI-DSSv4.0|8.2.8"
+      see_also    : "https://workbench.cisecurity.org/benchmarks/25733"
+      value_type  : POLICY_DWORD
+      value_data  : "[1..900000]"
+      reg_key     : "HKLM\Software\Policies\Microsoft\Windows NT\Terminal Services"
+      reg_item    : "MaxIdleTime"
+      reg_option  : CAN_NOT_BE_NULL
+    </custom_item>
+
+    <custom_item>
+      type        : REGISTRY_SETTING
+      description : "18.10.57.3.10.2 Ensure 'Set time limit for disconnected sessions' is set to 'Enabled: 1 minute'"
+      info        : "This policy setting allows you to configure a time limit for disconnected Remote Desktop Services sessions.
+
+The recommended state for this setting is: Enabled: 1 minute.
+
+This setting helps to prevent active Remote Desktop sessions from tying up the computer for long periods of time while not in use, preventing computing resources from being consumed by large numbers of disconnected but still active sessions. In addition, old, forgotten Remote Desktop sessions that are still active can cause password lockouts if the user's password has changed but the old session is still running. For systems that limit the number of connected users (e.g. servers in the default Administrative mode - 2 sessions only), other users' old but still active sessions can prevent another user from connecting, resulting in an effective denial-of-service. This setting is important to ensure a disconnected session is properly terminated.
+
+In addition, session timeouts that are misconfigured or set for a long period of time can leave the system open to a threat actor hijacking the session."
+      solution    : "To establish the recommended configuration via GP, set the following UI path to Enabled: 1 minute :
+
+Computer Configuration\Policies\Administrative Templates\Windows Components\Remote Desktop Services\Remote Desktop Session Host\Session Time Limits\Set time limit for disconnected sessions
+
+Note: This Group Policy path is provided by the Group Policy template TerminalServer.admx/adml that is included with all versions of the Microsoft Windows Administrative Templates.
+
+Impact:
+
+Disconnected Remote Desktop sessions are deleted from the server after 1 minute. Note that disconnected session time limits do not apply to console sessions."
+      reference   : "800-171|3.1.10,800-171r3|03.01.10,800-53|AC-11,800-53r5|AC-11,CN-L3|8.1.4.1(b),CSCv7|16.11,GDPR|32.1.b,HIPAA|164.306(a)(1),HIPAA|164.312(a)(2)(iii),ISO-27001-2022|A.7.7,ISO-27001-2022|A.8.1,ISO/IEC-27001|A.11.2.8,ITSG-33|AC-11,LEVEL|2A,NIAv2|AM23c,NIAv2|AM23d,PCI-DSSv3.2.1|8.1.8,PCI-DSSv4.0|8.2.8"
+      see_also    : "https://workbench.cisecurity.org/benchmarks/25733"
+      value_type  : POLICY_DWORD
+      value_data  : "60000"
+      reg_key     : "HKLM\Software\Policies\Microsoft\Windows NT\Terminal Services"
+      reg_item    : "MaxDisconnectionTime"
+      reg_option  : CAN_NOT_BE_NULL
+    </custom_item>
+
+    <custom_item>
+      type        : REGISTRY_SETTING
+      description : "18.10.57.3.2.1 Ensure 'Restrict Remote Desktop Services users to a single Remote Desktop Services session' is set to 'Enabled'"
+      info        : "This policy setting allows you to restrict users to a single Remote Desktop Services session.
+
+The recommended state for this setting is: Enabled.
+
+This setting ensures that users & administrators who Remote Desktop to a server will continue to use the same session - if they disconnect and reconnect, they will go back to the same session they were using before, preventing the creation of a second simultaneous session. This both prevents unnecessary resource usage by having the server host unnecessary additional sessions (which would put extra load on the server) and also ensures a consistency of experience for the user."
+      solution    : "To establish the recommended configuration via GP, set the following UI path to Enabled :
+
+Computer Configuration\Policies\Administrative Templates\Windows Components\Remote Desktop Services\Remote Desktop Session Host\Connections\Restrict Remote Desktop Services users to a single Remote Desktop Services session
+
+Note: This Group Policy path is provided by the Group Policy template TerminalServer.admx/adml that is included with all versions of the Microsoft Windows Administrative Templates.
+
+Note #2: In older Microsoft Windows Administrative Templates, this setting was named Restrict Terminal Services users to a single remote session, but it was renamed starting with the Windows 7 & Server 2008 R2 Administrative Templates.
+
+Impact:
+
+None - this is the default behavior."
+      reference   : "800-171|3.4.2,800-171|3.4.6,800-171|3.4.7,800-171r3|03.04.02,800-171r3|03.04.06,800-53|CM-6,800-53|CM-7,800-53r5|CM-6,800-53r5|CM-7,CSCv7|9.2,CSCv8|4.8,CSF|PR.IP-1,CSF|PR.PT-3,CSF2.0|DE.CM-09,CSF2.0|PR.PS-01,GDPR|32.1.b,HIPAA|164.306(a)(1),ISO-27001-2022|A.8.9,ITSG-33|CM-6,ITSG-33|CM-7,LEVEL|2A,NIAv2|SS15a,PCI-DSSv3.2.1|2.2.2,SWIFT-CSCv1|2.3"
+      see_also    : "https://workbench.cisecurity.org/benchmarks/25733"
+      value_type  : POLICY_DWORD
+      value_data  : "1"
+      reg_key     : "HKLM\Software\Policies\Microsoft\Windows NT\Terminal Services"
+      reg_item    : "fSingleSessionPerUser"
+      reg_option  : CAN_NOT_BE_NULL
+    </custom_item>
+
+    <custom_item>
+      type        : REGISTRY_SETTING
+      description : "18.10.57.3.3.1 Ensure 'Allow UI Automation redirection' is set to 'Disabled'"
+      info        : "This policy setting determines whether User Interface (UI) Automation client applications running on the local computer can access UI elements on the server.
+
+UI Automation gives programs access to most UI elements, which allows use of assistive technology products like Magnifier and Narrator that need to interact with the UI in order to work properly. UI information also allows automated test scripts to interact with the UI. For example, the local computer's Narrator and Magnifier clients can be used to interact with UI on a web page opened in a remote session.
+
+The recommended state for this setting is: Disabled.
+
+Note: Remote Desktop sessions don't currently support UI Automation redirection.
+
+In a more security-sensitive environment, it is desirable to reduce the possible attack surface. The need for UI Automation redirection within a Remote Desktop session is rare, and not supported at this time, but it makes sense to reduce the number of unexpected avenues for malicious activity to occur."
+      solution    : "To establish the recommended configuration via GP, set the following UI path to Disabled :
+
+Computer Configuration\Administrative Templates\Windows Components\Remote Desktop Services\Remote Desktop Session Host\Device and Resource Redirection\Allow UI Automation redirection
+
+Note: This Group Policy path may not exist by default. It is provided by the Group Policy template TerminalServer.admx/adml that is included with the Microsoft Windows 10 Release 21H2 Administrative Templates (or newer).
+
+Impact:
+
+UI Automation clients on the local computer will not be able to interact with remote apps."
+      reference   : "800-171|3.4.2,800-171|3.4.6,800-171|3.4.7,800-171r3|03.04.02,800-171r3|03.04.06,800-53|CM-6,800-53|CM-7,800-53r5|CM-6,800-53r5|CM-7,CSCv8|4.8,CSF|PR.IP-1,CSF|PR.PT-3,CSF2.0|DE.CM-09,CSF2.0|PR.PS-01,GDPR|32.1.b,HIPAA|164.306(a)(1),ISO-27001-2022|A.8.9,ITSG-33|CM-6,ITSG-33|CM-7,LEVEL|2A,NIAv2|SS15a,PCI-DSSv3.2.1|2.2.2,SWIFT-CSCv1|2.3"
+      see_also    : "https://workbench.cisecurity.org/benchmarks/25733"
+      value_type  : POLICY_DWORD
+      value_data  : "0"
+      reg_key     : "HKLM\Software\Policies\Microsoft\Windows NT\Terminal Services"
+      reg_item    : "EnableUiaRedirection"
+      reg_option  : CAN_NOT_BE_NULL
+    </custom_item>
+
+    <custom_item>
+      type        : REGISTRY_SETTING
+      description : "18.10.57.3.3.2 Ensure 'Do not allow COM port redirection' is set to 'Enabled'"
+      info        : "This policy setting specifies whether to prevent the redirection of data to client COM ports from the remote computer in a Remote Desktop Services session.
+
+The recommended state for this setting is: Enabled.
+
+In a more security-sensitive environment, it is desirable to reduce the possible attack surface. The need for COM port redirection within a Remote Desktop session is very rare, so makes sense to reduce the number of unexpected avenues for data exfiltration and/or malicious code transfer."
+      solution    : "To establish the recommended configuration via GP, set the following UI path to Enabled :
+
+Computer Configuration\Policies\Administrative Templates\Windows Components\Remote Desktop Services\Remote Desktop Session Host\Device and Resource Redirection\Do not allow COM port redirection
+
+Note: This Group Policy path is provided by the Group Policy template TerminalServer.admx/adml that is included with all versions of the Microsoft Windows Administrative Templates.
+
+Impact:
+
+Users in a Remote Desktop Services session will not be able to redirect server data to local (client) COM ports."
+      reference   : "800-171|3.4.2,800-171|3.4.6,800-171|3.4.7,800-171r3|03.04.02,800-171r3|03.04.06,800-53|CM-6,800-53|CM-7,800-53r5|CM-6,800-53r5|CM-7,CSCv7|9.2,CSCv8|4.8,CSF|PR.IP-1,CSF|PR.PT-3,CSF2.0|DE.CM-09,CSF2.0|PR.PS-01,GDPR|32.1.b,HIPAA|164.306(a)(1),ISO-27001-2022|A.8.9,ITSG-33|CM-6,ITSG-33|CM-7,LEVEL|2A,NIAv2|SS15a,PCI-DSSv3.2.1|2.2.2,SWIFT-CSCv1|2.3"
+      see_also    : "https://workbench.cisecurity.org/benchmarks/25733"
+      value_type  : POLICY_DWORD
+      value_data  : "1"
+      reg_key     : "HKLM\Software\Policies\Microsoft\Windows NT\Terminal Services"
+      reg_item    : "fDisableCcm"
+      reg_option  : CAN_NOT_BE_NULL
+    </custom_item>
+
+    <custom_item>
+      type        : REGISTRY_SETTING
+      description : "18.10.57.3.3.4 Ensure 'Do not allow location redirection' is set to 'Enabled'"
+      info        : "This policy setting controls the redirection of location data to the remote computer in a Remote Desktop Services session.
+
+The recommended state for this setting is: Enabled.
+
+In a more security-sensitive environment, it is desirable to reduce the possible attack surface. The need for location data redirection within a Remote Desktop session is rare, so it makes sense to reduce the number of unexpected avenues for malicious activity to occur."
+      solution    : "To establish the recommended configuration via GP, set the following UI path to Enabled :
+
+Computer Configuration\Administrative Templates\Windows Components\Remote Desktop Services\Remote Desktop Session Host\Device and Resource Redirection\Do not allow location redirection
+
+Note: This Group Policy path may not exist by default. It is provided by the Group Policy template TerminalServer.admx/adml that is included with the Microsoft Windows 10 Release 21H2 Administrative Templates (or newer).
+
+Impact:
+
+Users will not be able to redirect their location data to the remote computer."
+      reference   : "800-171|3.4.2,800-171|3.4.6,800-171|3.4.7,800-171r3|03.04.02,800-171r3|03.04.06,800-53|CM-6,800-53|CM-7,800-53r5|CM-6,800-53r5|CM-7,CSCv8|4.8,CSF|PR.IP-1,CSF|PR.PT-3,CSF2.0|DE.CM-09,CSF2.0|PR.PS-01,GDPR|32.1.b,HIPAA|164.306(a)(1),ISO-27001-2022|A.8.9,ITSG-33|CM-6,ITSG-33|CM-7,LEVEL|2A,NIAv2|SS15a,PCI-DSSv3.2.1|2.2.2,SWIFT-CSCv1|2.3"
+      see_also    : "https://workbench.cisecurity.org/benchmarks/25733"
+      value_type  : POLICY_DWORD
+      value_data  : "1"
+      reg_key     : "HKLM\Software\Policies\Microsoft\Windows NT\Terminal Services"
+      reg_item    : "fDisableLocationRedir"
+      reg_option  : CAN_NOT_BE_NULL
+    </custom_item>
+
+    <custom_item>
+      type        : REGISTRY_SETTING
+      description : "18.10.57.3.3.5 Ensure 'Do not allow LPT port redirection' is set to 'Enabled'"
+      info        : "This policy setting specifies whether to prevent the redirection of data to client LPT ports during a Remote Desktop Services session.
+
+The recommended state for this setting is: Enabled.
+
+In a more security-sensitive environment, it is desirable to reduce the possible attack surface. The need for LPT port redirection within a Remote Desktop session is very rare, so makes sense to reduce the number of unexpected avenues for data exfiltration and/or malicious code transfer."
+      solution    : "To establish the recommended configuration via GP, set the following UI path to Enabled :
+
+Computer Configuration\Policies\Administrative Templates\Windows Components\Remote Desktop Services\Remote Desktop Session Host\Device and Resource Redirection\Do not allow LPT port redirection
+
+Note: This Group Policy path is provided by the Group Policy template TerminalServer.admx/adml that is included with all versions of the Microsoft Windows Administrative Templates.
+
+Impact:
+
+Users in a Remote Desktop Services session will not be able to redirect server data to local (client) LPT ports."
+      reference   : "800-171|3.4.2,800-171|3.4.6,800-171|3.4.7,800-171r3|03.04.02,800-171r3|03.04.06,800-53|CM-6,800-53|CM-7,800-53r5|CM-6,800-53r5|CM-7,CSCv7|9.2,CSCv8|4.8,CSF|PR.IP-1,CSF|PR.PT-3,CSF2.0|DE.CM-09,CSF2.0|PR.PS-01,GDPR|32.1.b,HIPAA|164.306(a)(1),ISO-27001-2022|A.8.9,ITSG-33|CM-6,ITSG-33|CM-7,LEVEL|2A,NIAv2|SS15a,PCI-DSSv3.2.1|2.2.2,SWIFT-CSCv1|2.3"
+      see_also    : "https://workbench.cisecurity.org/benchmarks/25733"
+      value_type  : POLICY_DWORD
+      value_data  : "1"
+      reg_key     : "HKLM\Software\Policies\Microsoft\Windows NT\Terminal Services"
+      reg_item    : "fDisableLPT"
+      reg_option  : CAN_NOT_BE_NULL
+    </custom_item>
+
+    <custom_item>
+      type        : REGISTRY_SETTING
+      description : "18.10.57.3.3.6 Ensure 'Do not allow supported Plug and Play device redirection' is set to 'Enabled'"
+      info        : "This policy setting allows you to control the redirection of supported Plug and Play devices, such as Windows Portable Devices, to the remote computer in a Remote Desktop Services session.
+
+The recommended state for this setting is: Enabled.
+
+In a more security-sensitive environment, it is desirable to reduce the possible attack surface. The need for Plug and Play device redirection within a Remote Desktop session is very rare, so makes sense to reduce the number of unexpected avenues for data exfiltration and/or malicious code transfer."
+      solution    : "To establish the recommended configuration via GP, set the following UI path to Enabled :
+
+Computer Configuration\Policies\Administrative Templates\Windows Components\Remote Desktop Services\Remote Desktop Session Host\Device and Resource Redirection\Do not allow supported Plug and Play device redirection
+
+Note: This Group Policy path is provided by the Group Policy template TerminalServer.admx/adml that is included with all versions of the Microsoft Windows Administrative Templates.
+
+Impact:
+
+Users in a Remote Desktop Services session will not be able to redirect their supported (local client) Plug and Play devices to the remote computer."
+      reference   : "800-171|3.4.6,800-171|3.4.7,800-171r3|03.04.06b.,800-53|CM-7b.,800-53r5|CM-7b.,CN-L3|7.1.3.5(c),CN-L3|7.1.3.7(d),CN-L3|8.1.4.4(b),CSF|PR.IP-1,CSF|PR.PT-3,CSF2.0|PR.PS-01,GDPR|32.1.b,HIPAA|164.306(a)(1),ITSG-33|CM-7a.,LEVEL|2A,NIAv2|SS13b,NIAv2|SS14a,NIAv2|SS14c,PCI-DSSv3.2.1|2.2.2,PCI-DSSv4.0|2.2.4,QCSC-v1|3.2,SWIFT-CSCv1|2.3"
+      see_also    : "https://workbench.cisecurity.org/benchmarks/25733"
+      value_type  : POLICY_DWORD
+      value_data  : "1"
+      reg_key     : "HKLM\Software\Policies\Microsoft\Windows NT\Terminal Services"
+      reg_item    : "fDisablePNPRedir"
+      reg_option  : CAN_NOT_BE_NULL
+    </custom_item>
+
+    <custom_item>
+      type        : REGISTRY_SETTING
+      description : "18.10.57.3.3.7 Ensure 'Do not allow WebAuthn redirection' is set to 'Enabled'"
+      info        : "This policy setting controls the redirection of web authentication (WebAuthn) requests from a Remote Desktop session to the local device. This redirection enables users to authenticate to resources inside the Remote Desktop session using their local authenticator (e.g. Windows Hello for Business, security key, or other).
+
+The recommended state for this setting is: Enabled.
+
+In a more security-sensitive environment, it is desirable to reduce the possible attack surface. To reduce this, resources inside the Remote Desktop session should not be allowed to use the local authenticator."
+      solution    : "To establish the recommended configuration via GP, set the following UI path to Enabled :
+
+Computer Configuration\Policies\Administrative Templates\Windows Components\Remote Desktop Services\Remote Desktop Session Host\Device and Resource Redirection\Do not allow WebAuthn redirection
+
+Note: This Group Policy path is provided by the Group Policy template TerminalServer.admx/adml that is included with the Microsoft Windows 11 Release 22H2 Administrative Templates v1.0 (or newer).
+
+Impact:
+
+Users in a Remote Desktop Services session will not be able to authenticate to resources inside the Remote Desktop session using their local authenticator."
+      reference   : "800-171|3.4.2,800-171|3.4.6,800-171|3.4.7,800-171r3|03.04.02,800-171r3|03.04.06,800-53|CM-6,800-53|CM-7,800-53r5|CM-6,800-53r5|CM-7,CSCv7|9.2,CSCv8|4.8,CSF|PR.IP-1,CSF|PR.PT-3,CSF2.0|DE.CM-09,CSF2.0|PR.PS-01,GDPR|32.1.b,HIPAA|164.306(a)(1),ISO-27001-2022|A.8.9,ITSG-33|CM-6,ITSG-33|CM-7,LEVEL|2A,NIAv2|SS15a,PCI-DSSv3.2.1|2.2.2,SWIFT-CSCv1|2.3"
+      see_also    : "https://workbench.cisecurity.org/benchmarks/25733"
+      value_type  : POLICY_DWORD
+      value_data  : "1"
+      reg_key     : "HKLM\Software\Policies\Microsoft\Windows NT\Terminal Services"
+      reg_item    : "fDisableWebAuthn"
+      reg_option  : CAN_NOT_BE_NULL
+    </custom_item>
+
+    <custom_item>
+      type        : REGISTRY_SETTING
+      description : "18.10.59.2 Ensure 'Allow Cloud Search' is set to 'Enabled: Disable Cloud Search'"
+      info        : "This policy setting allows search and Cortana to search cloud sources like OneDrive and SharePoint.
+
+The recommended state for this setting is: Enabled: Disable Cloud Search.
+
+In high-security environments, data must never be shared with third-parties without explicit consent, as it may contain sensitive information."
+      solution    : "To establish the recommended configuration via GP, set the following UI path to Enabled: Disable Cloud Search :
+
+Computer Configuration\Policies\Administrative Templates\Windows Components\Search\Allow Cloud Search
+
+Note: This Group Policy path may not exist by default. It is provided by the Group Policy template Search.admx/adml that is included with the Microsoft Windows 10 Release 1709 Administrative Templates (or newer).
+
+Impact:
+
+Search and Cortana will not be permitted to search cloud sources like OneDrive and SharePoint."
+      reference   : "800-171|3.4.2,800-171|3.4.6,800-171|3.4.7,800-171r3|03.04.02,800-171r3|03.04.06,800-53|CM-6,800-53|CM-7,800-53r5|CM-6,800-53r5|CM-7,CSCv7|9.2,CSCv8|4.8,CSF|PR.IP-1,CSF|PR.PT-3,CSF2.0|DE.CM-09,CSF2.0|PR.PS-01,GDPR|32.1.b,HIPAA|164.306(a)(1),ISO-27001-2022|A.8.9,ITSG-33|CM-6,ITSG-33|CM-7,LEVEL|2A,NIAv2|SS15a,PCI-DSSv3.2.1|2.2.2,SWIFT-CSCv1|2.3"
+      see_also    : "https://workbench.cisecurity.org/benchmarks/25733"
+      value_type  : POLICY_DWORD
+      value_data  : "0"
+      reg_key     : "HKLM\Software\Policies\Microsoft\Windows\Windows Search"
+      reg_item    : "AllowCloudSearch"
+      reg_option  : CAN_BE_NULL
+    </custom_item>
+
+    <custom_item>
+      type        : REGISTRY_SETTING
+      description : "18.10.59.4 Ensure 'Allow search highlights' is set to 'Disabled'"
+      info        : "This policy setting controls search highlights in the start menu search box and in search home.
+
+The recommended state for this setting is: Disabled.
+
+In high-security environments, data must never be shared with third-parties without explicit consent, as it may contain sensitive information."
+      solution    : 'To establish the recommended configuration via GP, set the following UI path to Disabled :
+
+Computer Configuration\\Policies\\Administrative Templates\\Windows Components\\Search\\Allow search highlights
+
+Note: This Group Policy path may not exist by default. It is provided by the Group Policy template Search.admx/adml that is included with the Microsoft Windows 10 Release 21H2 Administrative Templates (or newer).
+
+Impact:
+
+\'Interesting\', \'informative\', and \'noteworthy\' information about the current date will not be displayed (by Microsoft) to the user.'
+      reference   : "800-171|3.4.2,800-171|3.4.6,800-171|3.4.7,800-171r3|03.04.02,800-171r3|03.04.06,800-53|CM-6,800-53|CM-7,800-53r5|CM-6,800-53r5|CM-7,CSCv8|4.8,CSF|PR.IP-1,CSF|PR.PT-3,CSF2.0|DE.CM-09,CSF2.0|PR.PS-01,GDPR|32.1.b,HIPAA|164.306(a)(1),ISO-27001-2022|A.8.9,ITSG-33|CM-6,ITSG-33|CM-7,LEVEL|2A,NIAv2|SS15a,PCI-DSSv3.2.1|2.2.2,SWIFT-CSCv1|2.3"
+      see_also    : "https://workbench.cisecurity.org/benchmarks/25733"
+      value_type  : POLICY_DWORD
+      value_data  : "0"
+      reg_key     : "HKLM\Software\Policies\Microsoft\Windows\Windows Search"
+      reg_item    : "EnableDynamicContentInWSB"
+      reg_option  : CAN_NOT_BE_NULL
+    </custom_item>
+
+    <custom_item>
+      type        : REGISTRY_SETTING
+      description : "18.10.63.1 Ensure 'Turn off KMS Client Online AVS Validation' is set to 'Enabled'"
+      info        : "The Key Management Service (KMS) is a Microsoft license activation method that entails setting up a local server to store the software licenses. The KMS server itself needs to connect to Microsoft to activate the KMS service, but subsequent on-network clients can activate Microsoft Windows OS and/or their Microsoft Office via the KMS server instead of connecting directly to Microsoft. This policy setting lets you opt-out of sending KMS client activation data to Microsoft automatically.
+
+The recommended state for this setting is: Enabled.
+
+Even though the KMS licensing method does not require KMS clients to connect to Microsoft, they still send KMS client activation state data to Microsoft automatically. In high-security environments, data must never be shared with third-parties without explicit consent, as it may contain sensitive information."
+      solution    : "To establish the recommended configuration via GP, set the following UI path to Enabled :
+
+Computer Configuration\Policies\Administrative Templates\Windows Components\Software Protection Platform\Turn off KMS Client Online AVS Validation
+
+Note: This Group Policy path may not exist by default. It is provided by the Group Policy template AVSValidationGP.admx/adml that is included with the Microsoft Windows 10 RTM (Release 1507) Administrative Templates (or newer).
+
+Impact:
+
+The computer is prevented from sending data to Microsoft regarding its KMS client activation state."
+      reference   : "800-171|3.4.6,800-171|3.4.7,800-171r3|03.04.06b.,800-53|CM-7b.,800-53r5|CM-7b.,CN-L3|7.1.3.5(c),CN-L3|7.1.3.7(d),CN-L3|8.1.4.4(b),CSCv7|9.2,CSF|PR.IP-1,CSF|PR.PT-3,CSF2.0|PR.PS-01,GDPR|32.1.b,HIPAA|164.306(a)(1),ITSG-33|CM-7a.,LEVEL|2A,NIAv2|SS13b,NIAv2|SS14a,NIAv2|SS14c,PCI-DSSv3.2.1|2.2.2,PCI-DSSv4.0|2.2.4,QCSC-v1|3.2,SWIFT-CSCv1|2.3"
+      see_also    : "https://workbench.cisecurity.org/benchmarks/25733"
+      value_type  : POLICY_DWORD
+      value_data  : "1"
+      reg_key     : "HKLM\SOFTWARE\Policies\Microsoft\Windows NT\CurrentVersion\Software Protection Platform"
+      reg_item    : "NoGenTicket"
+      reg_option  : CAN_NOT_BE_NULL
+    </custom_item>
+
+    <custom_item>
+      type        : REGISTRY_SETTING
+      description : "18.10.81.1 Ensure 'Allow suggested apps in Windows Ink Workspace' is set to 'Disabled'"
+      info        : "This policy setting determines whether suggested apps in Windows Ink Workspace are allowed.
+
+The recommended state for this setting is: Disabled.
+
+This Microsoft feature is designed to collect data and suggest apps based on that data collected. Disabling this setting will help ensure your data is not shared with any third party."
+      solution    : "To establish the recommended configuration via GP, set the following UI path to Disabled :
+
+Computer Configuration\Policies\Administrative Templates\Windows Components\Windows Ink Workspace\Allow suggested apps in Windows Ink Workspace
+
+Note: This Group Policy path may not exist by default. It is provided by the Group Policy template WindowsInkWorkspace.admx/adml that is included with the Microsoft Windows 10 Release 1607 & Server 2016 Administrative Templates (or newer).
+
+Impact:
+
+The suggested apps in Windows Ink Workspace will not be allowed."
+      reference   : "800-171|3.4.6,800-171|3.4.7,800-171r3|03.04.06b.,800-53|CM-7b.,800-53r5|CM-7b.,CN-L3|7.1.3.5(c),CN-L3|7.1.3.7(d),CN-L3|8.1.4.4(b),CSCv7|9.2,CSF|PR.IP-1,CSF|PR.PT-3,CSF2.0|PR.PS-01,GDPR|32.1.b,HIPAA|164.306(a)(1),ITSG-33|CM-7a.,LEVEL|2A,NIAv2|SS13b,NIAv2|SS14a,NIAv2|SS14c,PCI-DSSv3.2.1|2.2.2,PCI-DSSv4.0|2.2.4,QCSC-v1|3.2,SWIFT-CSCv1|2.3"
+      see_also    : "https://workbench.cisecurity.org/benchmarks/25733"
+      value_type  : POLICY_DWORD
+      value_data  : "0"
+      reg_key     : "HKLM\SOFTWARE\Policies\Microsoft\WindowsInkWorkspace"
+      reg_item    : "AllowSuggestedAppsInWindowsInkWorkspace"
+      reg_option  : CAN_NOT_BE_NULL
+    </custom_item>
+
+    <custom_item>
+      type        : REGISTRY_SETTING
+      description : "18.10.82.3 Ensure 'Prevent Internet Explorer security prompt for Windows Installer scripts' is set to 'Disabled'"
+      info        : "This policy setting controls whether Web-based programs are allowed to install software on the computer without notifying the user.
+
+The recommended state for this setting is: Disabled.
+
+Suppressing the system warning can pose a security risk and increase the attack surface on the system."
+      solution    : "To establish the recommended configuration via GP, set the following UI path to Disabled :
+
+Computer Configuration\Policies\Administrative Templates\Windows Components\Windows Installer\Prevent Internet Explorer security prompt for Windows Installer scripts
+
+Note: This Group Policy path is provided by the Group Policy template MSI.admx/adml that is included with all versions of the Microsoft Windows Administrative Templates.
+
+Note #2: In older Microsoft Windows Administrative Templates, this setting was initially named Disable IE security prompt for Windows Installer scripts, but it was renamed starting with the Windows 8.0 & Server 2012 (non-R2) Administrative Templates.
+
+Impact:
+
+None - this is the default behavior."
+      reference   : "800-171|3.4.8,800-171r3|03.04.08,800-53|CM-7(5),800-53|CM-10,800-53r5|CM-7(5),800-53r5|CM-10,CSCv8|2.5,CSF|DE.CM-3,CSF|PR.IP-1,CSF|PR.PT-3,CSF2.0|DE.CM-03,CSF2.0|DE.CM-09,CSF2.0|PR.PS-01,GDPR|32.1.b,HIPAA|164.306(a)(1),ISO-27001-2022|A.5.32,ISO-27001-2022|A.8.19,ISO/IEC-27001|A.12.5.1,ISO/IEC-27001|A.12.6.2,ITSG-33|CM-7,LEVEL|2A,NIAv2|SS15a,PCI-DSSv3.2.1|2.2.2,QCSC-v1|3.2,QCSC-v1|8.2.1,SWIFT-CSCv1|2.3,TBA-FIISB|44.2.2,TBA-FIISB|49.2.3"
+      see_also    : "https://workbench.cisecurity.org/benchmarks/25733"
+      value_type  : POLICY_DWORD
+      value_data  : "0"
+      reg_key     : "HKLM\Software\Policies\Microsoft\Windows\Installer"
+      reg_item    : "SafeForScripting"
+      reg_option  : CAN_NOT_BE_NULL
+    </custom_item>
+
+    <custom_item>
+      type        : REGISTRY_SETTING
+      description : "18.10.88.1 Ensure 'Turn on PowerShell Script Block Logging' is set to 'Enabled'"
+      info        : "This policy setting enables logging of all PowerShell script input to the Applications and Services Logs\Microsoft\Windows\PowerShell\Operational Event Log channel.
+
+The recommended state for this setting is: Enabled.
+
+Note: If logging of Script Block Invocation Start/Stop Events is enabled (option box checked), PowerShell will log additional events when invocation of a command, script block, function, or script starts or stops. Enabling this option generates a high volume of event logs. CIS has intentionally chosen not to make a recommendation for this option, since it generates a large volume of events. If an organization chooses to enable the optional setting (checked), this also conforms to the benchmark.
+
+Logs of PowerShell script input can be very valuable when performing forensic investigations of PowerShell attack incidents to determine what occurred."
+      solution    : 'To establish the recommended configuration via GP, set the following UI path to Enabled :
+
+Computer Configuration\\Policies\\Administrative Templates\\Windows Components\\Windows PowerShell\\Turn on PowerShell Script Block Logging
+
+Note: This Group Policy path may not exist by default. It is provided by the Group Policy template PowerShellExecutionPolicy.admx/adml that is included with the Microsoft Windows 10 RTM (Release 1507) Administrative Templates (or newer).
+
+Impact:
+
+PowerShell script input will be logged to the Applications and Services Logs\\Microsoft\\Windows\\PowerShell\\Operational Event Log channel, which can contain credentials and sensitive information.
+
+Note: Configuring this setting to Enabled generates a high volume of event logs which will be overwritten if the log size is not expanded or offloaded to a log collection system.
+
+Warning: There are potential risks of capturing credentials and sensitive information in the PowerShell logs, which could be exposed to users who have read-access to those logs. Microsoft provides a feature called \'Protected Event Logging\' to better secure event log data. For assistance with protecting event logging, visit: About Logging Windows - PowerShell | Microsoft Docs https://docs.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_logging_windows?view=powershell-7.2#protected-event-logging.'
+      reference   : "800-171|3.3.1,800-171|3.3.2,800-171r3|03.03.01,800-53|AU-2,800-53r5|AU-2,CN-L3|8.1.4.3(a),CSCv7|8.8,CSCv8|8.8,CSF|PR.PT-1,CSF2.0|PR.PS-04,GDPR|32.1.b,HIPAA|164.306(a)(1),HIPAA|164.312(b),ISO-27001-2022|A.8.15,ITSG-33|AU-2,LEVEL|2A,NESA|M1.2.2,NESA|M5.5.1,NIAv2|AM7,NIAv2|AM11a,NIAv2|AM11b,NIAv2|AM11c,NIAv2|AM11d,NIAv2|AM11e,NIAv2|SS30,NIAv2|VL8,QCSC-v1|8.2.1,QCSC-v1|13.2,SWIFT-CSCv1|6.4"
+      see_also    : "https://workbench.cisecurity.org/benchmarks/25733"
+      value_type  : POLICY_DWORD
+      value_data  : "1"
+      reg_key     : "HKLM\Software\Policies\Microsoft\Windows\Powershell\ScriptBlockLogging"
+      reg_item    : "EnableScriptBlockLogging"
+      reg_option  : CAN_NOT_BE_NULL
+    </custom_item>
+
+    <custom_item>
+      type        : REGISTRY_SETTING
+      description : "18.10.88.2 Ensure 'Turn on PowerShell Transcription' is set to 'Enabled'"
+      info        : "This Policy setting lets you capture the input and output of Windows PowerShell commands into text-based transcripts.
+
+The recommended state for this setting is: Enabled.
+
+PowerShell transcript input can be very valuable when performing forensic investigations of PowerShell attack incidents to determine what occurred."
+      solution    : "To establish the recommended configuration via GP, set the following UI path to Enabled :
+
+Computer Configuration\Policies\Administrative Templates\Windows Components\Windows PowerShell\Turn on PowerShell Transcription
+
+Note: This Group Policy path may not exist by default. It is provided by the Group Policy template PowerShellExecutionPolicy.admx/adml that is included with the Microsoft Windows 10 RTM (Release 1507) Administrative Templates (or newer).
+
+Impact:
+
+PowerShell transcript input will be logged to PowerShell_transcript output files, which are saved to the My Documents folder (within a separate subfolder for each day) of each users' profile by default. Optionally, a specific output directory name can be specified, which will contain all PowerShell transcript logs in a subfolder of My Documents. If specifying a full path outside the users My Documents folder, other users on the system could have access to view these logs, which may contain sensitive information such as passwords.
+
+Warning: There are potential risks of capturing credentials and sensitive information in PowerShell_transcript output files, which could be exposed to users who have read access to the files.
+
+Warning #2: PowerShell Transcription is not compatible with the natively installed PowerShell v4 on Microsoft Windows 10 Release 1511 and Server 2012 R2 and below. If this recommendation is set as prescribed, PowerShell will need to be updated to at least v5.1 or newer. For more information on updating PowerShell, please see Windows PowerShell System Requirements - PowerShell | Microsoft Learn https://learn.microsoft.com/en-us/powershell/scripting/windows-powershell/install/windows-powershell-system-requirements?view=powershell-7.3#operating-system-requirements."
+      reference   : "800-171|3.3.1,800-171|3.3.2,800-171r3|03.03.01,800-53|AU-2,800-53r5|AU-2,CN-L3|8.1.4.3(a),CSCv8|8.8,CSF|PR.PT-1,CSF2.0|PR.PS-04,GDPR|32.1.b,HIPAA|164.306(a)(1),HIPAA|164.312(b),ISO-27001-2022|A.8.15,ITSG-33|AU-2,LEVEL|2A,NESA|M1.2.2,NESA|M5.5.1,NIAv2|AM7,NIAv2|AM11a,NIAv2|AM11b,NIAv2|AM11c,NIAv2|AM11d,NIAv2|AM11e,NIAv2|SS30,NIAv2|VL8,QCSC-v1|8.2.1,QCSC-v1|13.2,SWIFT-CSCv1|6.4"
+      see_also    : "https://workbench.cisecurity.org/benchmarks/25733"
+      value_type  : POLICY_DWORD
+      value_data  : "1"
+      reg_key     : "HKLM\SOFTWARE\Policies\Microsoft\Windows\PowerShell\Transcription"
+      reg_item    : "EnableTranscripting"
+      reg_option  : CAN_NOT_BE_NULL
+    </custom_item>
+
+    <custom_item>
+      type        : REGISTRY_SETTING
+      description : "18.10.90.2.2 Ensure 'Allow remote server management through WinRM' is set to 'Disabled'"
+      info        : "This policy setting allows you to manage whether the Windows Remote Management (WinRM) service automatically listens on the network for requests on the HTTP transport over the default HTTP port.
+
+The recommended state for this setting is: Disabled.
+
+Any feature is a potential avenue of attack, those that enable inbound network connections are particularly risky. Only enable the use of the Windows Remote Management (WinRM) service on trusted networks and when feasible employ additional controls such as IPsec."
+      solution    : "To establish the recommended configuration via GP, set the following UI path to Disabled:
+
+Computer Configuration\Administrative Templates\Windows Components\Windows Remote Management (WinRM)\WinRM Service\Allow remote server management through WinRM
+
+Note: This Group Policy path is provided by the Group Policy template WindowsRemoteManagement.admx/adml that is included with all versions of the Microsoft Windows Administrative Templates.
+
+Note #2: In older Microsoft Windows Administrative Templates, this setting was initially named Allow automatic configuration of listeners, but it was renamed starting with the Windows 8.0 & Server 2012 (non-R2) Administrative Templates.
+
+Impact:
+
+Remote Management via the WinRM service will not be available."
+      reference   : "800-171|3.4.2,800-171|3.4.6,800-171|3.4.7,800-171r3|03.04.02,800-171r3|03.04.06,800-53|CM-6,800-53|CM-7,800-53r5|CM-6,800-53r5|CM-7,CSCv7|9.2,CSCv8|4.8,CSF|PR.IP-1,CSF|PR.PT-3,CSF2.0|DE.CM-09,CSF2.0|PR.PS-01,GDPR|32.1.b,HIPAA|164.306(a)(1),ISO-27001-2022|A.8.9,ITSG-33|CM-6,ITSG-33|CM-7,LEVEL|2A,NIAv2|SS15a,PCI-DSSv3.2.1|2.2.2,SWIFT-CSCv1|2.3"
+      see_also    : "https://workbench.cisecurity.org/benchmarks/25733"
+      value_type  : POLICY_DWORD
+      value_data  : "0"
+      reg_key     : "HKLM\SOFTWARE\Policies\Microsoft\Windows\WinRM\Service"
+      reg_item    : "AllowAutoConfig"
+      reg_option  : CAN_NOT_BE_NULL
+    </custom_item>
+
+    <custom_item>
+      type        : REGISTRY_SETTING
+      description : "18.10.91.1 Ensure 'Allow Remote Shell Access' is set to 'Disabled'"
+      info        : "This policy setting allows you to manage configuration of remote access to all supported shells to execute scripts and commands.
+
+The recommended state for this setting is: Disabled.
+
+Note: The GPME help text for this setting is incorrectly worded, implying that configuring it to Enabled will reject new Remote Shell connections, and setting it to Disabled will allow Remote Shell connections. The opposite is true (and is consistent with the title of the setting). This is a wording mistake by Microsoft in the Administrative Template.
+
+Any feature is a potential avenue of attack, those that enable inbound network connections are particularly risky. Only enable the use of the Windows Remote Shell on trusted networks and when feasible employ additional controls such as IPsec."
+      solution    : "To establish the recommended configuration via GP, set the following UI path to Disabled :
+
+Computer Configuration\Policies\Administrative Templates\Windows Components\Windows Remote Shell\Allow Remote Shell Access
+
+Note: This Group Policy path is provided by the Group Policy template WindowsRemoteShell.admx/adml that is included with all versions of the Microsoft Windows Administrative Templates.
+
+Impact:
+
+New Remote Shell connections are not allowed and are rejected by the server.
+
+Note: On Server 2012 (non-R2) or newer, due to design changes in the OS after Server 2008 R2, configuring this setting as prescribed will prevent the ability to add or remove Roles and Features (even locally) via the GUI. We therefore recommend that the necessary Roles and Features be installed prior to configuring this setting on a Level 2 server. Alternatively, Roles and Features can still be added or removed using the PowerShell commands Add-WindowsFeature or Remove-WindowsFeature in the Server Manager module, even with this setting configured."
+      reference   : "800-171|3.4.2,800-171|3.4.6,800-171|3.4.7,800-171r3|03.04.02,800-171r3|03.04.06,800-53|CM-6,800-53|CM-7,800-53r5|CM-6,800-53r5|CM-7,CSCv7|9.2,CSCv8|4.8,CSF|PR.IP-1,CSF|PR.PT-3,CSF2.0|DE.CM-09,CSF2.0|PR.PS-01,GDPR|32.1.b,HIPAA|164.306(a)(1),ISO-27001-2022|A.8.9,ITSG-33|CM-6,ITSG-33|CM-7,LEVEL|2A,NIAv2|SS15a,PCI-DSSv3.2.1|2.2.2,SWIFT-CSCv1|2.3"
+      see_also    : "https://workbench.cisecurity.org/benchmarks/25733"
+      value_type  : POLICY_DWORD
+      value_data  : "0"
+      reg_key     : "HKLM\Software\Policies\Microsoft\Windows\WinRM\Service\WinRS"
+      reg_item    : "AllowRemoteShellAccess"
+      reg_option  : CAN_NOT_BE_NULL
+    </custom_item>
+
+    <custom_item>
+      type        : REGISTRY_SETTING
+      description : "18.1.3 Ensure 'Allow Online Tips' is set to 'Disabled'"
+      info        : "This policy setting configures the retrieval of online tips and help for the Settings app.
+
+The recommended state for this setting is: Disabled.
+
+In high-security environments, data must never be shared with third-parties without explicit consent, as it may contain sensitive information."
+      solution    : "To establish the recommended configuration via GP, set the following UI path to Disabled :
+
+Computer Configuration\Policies\Administrative Templates\Control Panel\Allow Online Tips
+
+Note: This Group Policy path may not exist by default. It is provided by the Group Policy template ControlPanel.admx/adml that is included with the Microsoft Windows 10 Release 1709 Administrative Templates (or newer).
+
+Impact:
+
+Settings will not contact Microsoft content services to retrieve tips and help content."
+      reference   : "800-171|3.4.6,800-171|3.4.7,800-171|3.11.2,800-171|3.11.3,800-171r3|03.04.06b.,800-171r3|03.11.02,800-53|CM-7b.,800-53|RA-5,800-53r5|CM-7b.,800-53r5|RA-5,CN-L3|7.1.3.5(c),CN-L3|7.1.3.7(d),CN-L3|8.1.4.4(b),CSCv7|9.2,CSCv7|9.3,CSF|DE.CM-8,CSF|DE.DP-4,CSF|DE.DP-5,CSF|ID.RA-1,CSF|PR.IP-1,CSF|PR.IP-12,CSF|PR.PT-3,CSF|RS.CO-3,CSF|RS.MI-3,CSF2.0|GV.SC-10,CSF2.0|ID.IM-01,CSF2.0|ID.IM-02,CSF2.0|ID.IM-03,CSF2.0|ID.RA-01,CSF2.0|ID.RA-08,CSF2.0|PR.PS-01,GDPR|32.1.b,GDPR|32.1.d,HIPAA|164.306(a)(1),ISO-27001-2022|A.8.8,ISO/IEC-27001|A.12.6.1,ITSG-33|CM-7a.,ITSG-33|RA-5,LEVEL|2A,NESA|M1.2.2,NESA|M5.4.1,NESA|T7.7.1,NIAv2|SS13b,NIAv2|SS14a,NIAv2|SS14c,PCI-DSSv3.2.1|2.2.2,PCI-DSSv3.2.1|6.1,PCI-DSSv4.0|2.2.4,PCI-DSSv4.0|6.3,PCI-DSSv4.0|6.3.1,QCSC-v1|3.2,QCSC-v1|5.2.1,QCSC-v1|5.2.2,QCSC-v1|5.2.3,QCSC-v1|8.2.1,QCSC-v1|10.2.1,QCSC-v1|11.2,SWIFT-CSCv1|2.3,SWIFT-CSCv1|2.7"
+      see_also    : "https://workbench.cisecurity.org/benchmarks/25733"
+      value_type  : POLICY_DWORD
+      value_data  : "0"
+      reg_key     : "HKLM\Software\Microsoft\Windows\CurrentVersion\Policies\Explorer"
+      reg_item    : "AllowOnlineTips"
+      reg_option  : CAN_NOT_BE_NULL
+    </custom_item>
+
+    <custom_item>
+      type        : REGISTRY_SETTING
+      description : "18.5.10 Ensure 'MSS: (TcpMaxDataRetransmissions) How many times unacknowledged data is retransmitted' is set to 'Enabled: 3'"
+      info        : "This setting controls the number of times that TCP retransmits an individual data segment (non-connect segment) before the connection is aborted. The retransmission time-out is doubled with each successive retransmission on a connection. It is reset when responses resume. The base time-out value is dynamically determined by the measured round-trip time on the connection.
+
+The recommended state for this setting is: Enabled: 3.
+
+A threat actor could exhaust a target computer's resources if it never sent any acknowledgment messages for data that was transmitted by the target computer."
+      solution    : "To establish the recommended configuration via GP, set the following UI path to Enabled: 3 :
+
+Computer Configuration\Policies\Administrative Templates\MSS (Legacy)\MSS:(TcpMaxDataRetransmissions) How many times unacknowledged data is retransmitted
+
+Note: This Group Policy path does not exist by default. An additional Group Policy template ( MSS-legacy.admx/adml ) is required - it is available from this TechNet blog post: The MSS settings - Microsoft Security Guidance blog https://blogs.technet.microsoft.com/secguide/2016/10/02/the-mss-settings/
+
+Impact:
+
+TCP starts a retransmission timer when each outbound segment is passed to the IP. If no acknowledgment is received for the data in a given segment before the timer expires, then the segment is retransmitted up to three times."
+      reference   : "800-171|3.1.16,800-171|3.1.17,800-171|3.4.1,800-171|3.4.2,800-171|3.4.6,800-171|3.4.7,800-171r3|03.01.16,800-171r3|03.04.01,800-171r3|03.04.02,800-171r3|03.04.06,800-53|AC-18,800-53|AC-18(1),800-53|AC-18(3),800-53|CM-2,800-53|CM-6,800-53|CM-7,800-53|CM-7(1),800-53|CM-9,800-53r5|AC-18,800-53r5|AC-18(1),800-53r5|AC-18(3),800-53r5|CM-2,800-53r5|CM-6,800-53r5|CM-7,800-53r5|CM-7(1),800-53r5|CM-9,CSCv7|9.2,CSCv8|4.2,CSF|DE.AE-1,CSF|PR.DS-7,CSF|PR.IP-1,CSF|PR.PT-3,CSF|PR.PT-4,CSF2.0|DE.CM-09,CSF2.0|ID.AM-08,CSF2.0|PR.AA-05,CSF2.0|PR.PS-01,GDPR|32.1.b,HIPAA|164.306(a)(1),HIPAA|164.312(a)(1),ISO-27001-2022|A.5.2,ISO-27001-2022|A.5.14,ISO-27001-2022|A.8.9,ISO-27001-2022|A.8.20,ITSG-33|AC-18,ITSG-33|AC-18(1),ITSG-33|AC-18(3),ITSG-33|CM-2,ITSG-33|CM-6,ITSG-33|CM-7,ITSG-33|CM-7(1),ITSG-33|CM-9,LEVEL|2A,NESA|T1.2.1,NESA|T1.2.2,NESA|T3.2.5,NESA|T5.4.2,NESA|T7.5.1,NESA|T7.5.3,NESA|T7.6.1,NESA|T7.6.2,NESA|T7.6.3,NIAv2|NS33,NIAv2|NS34,NIAv2|NS38,NIAv2|SS15a,NIAv2|SS16,PCI-DSSv3.2.1|2.2.2,QCSC-v1|3.2,QCSC-v1|5.2.1,QCSC-v1|5.2.2,SWIFT-CSCv1|2.3"
+      see_also    : "https://workbench.cisecurity.org/benchmarks/25733"
+      value_type  : POLICY_DWORD
+      value_data  : "3"
+      reg_key     : "HKLM\System\CurrentControlSet\Services\Tcpip\Parameters"
+      reg_item    : "tcpmaxdataretransmissions"
+      reg_option  : CAN_NOT_BE_NULL
+    </custom_item>
+
+    <custom_item>
+      type        : REGISTRY_SETTING
+      description : "18.5.5 Ensure 'MSS: (KeepAliveTime) How often keep-alive packets are sent in milliseconds' is set to 'Enabled: 300,000 or 5 minutes'"
+      info        : "This value controls how often TCP attempts to verify that an idle connection is still intact by sending a keep-alive packet. If the remote computer is still reachable, it acknowledges the keep-alive packet.
+
+The recommended state for this setting is: Enabled: 300,000 or 5 minutes.
+
+A threat actor who is able to connect to network applications could establish numerous connections to cause a DoS condition."
+      solution    : "To establish the recommended configuration via GP, set the following UI path to Enabled: 300,000 or 5 minutes :
+
+Computer Configuration\Policies\Administrative Templates\MSS (Legacy)\MSS: (KeepAliveTime) How often keep-alive packets are sent in milliseconds
+
+Note: This Group Policy path does not exist by default. An additional Group Policy template ( MSS-legacy.admx/adml ) is required - it is available from this TechNet blog post: The MSS settings - Microsoft Security Guidance blog https://blogs.technet.microsoft.com/secguide/2016/10/02/the-mss-settings/
+
+Impact:
+
+Keep-alive packets are not sent by default by Windows. However, some applications may configure the TCP stack flag that requests keep-alive packets. For such configurations, you can lower this value from the default setting of two hours to five minutes to disconnect inactive sessions more quickly."
+      reference   : "800-171|3.4.1,800-171|3.4.2,800-171|3.4.6,800-171|3.4.7,800-171|3.13.1,800-171|3.13.2,800-171r3|03.04.01,800-171r3|03.04.02,800-171r3|03.04.06,800-171r3|03.16.01,800-53|CM-2,800-53|CM-6,800-53|CM-7,800-53|CM-7(1),800-53|CM-9,800-53|SA-3,800-53|SA-8,800-53|SA-10,800-53r5|CM-1,800-53r5|CM-2,800-53r5|CM-6,800-53r5|CM-7,800-53r5|CM-7(1),800-53r5|CM-9,800-53r5|SA-3,800-53r5|SA-8,800-53r5|SA-10,CSCv8|4.1,CSF|DE.AE-1,CSF|PR.DS-7,CSF|PR.IP-1,CSF|PR.IP-2,CSF|PR.IP-3,CSF|PR.PT-3,CSF2.0|DE.CM-09,CSF2.0|ID.AM-08,CSF2.0|ID.IM-01,CSF2.0|ID.IM-02,CSF2.0|ID.IM-03,CSF2.0|ID.RA-09,CSF2.0|PR.DS-10,CSF2.0|PR.IR-03,CSF2.0|PR.PS-01,CSF2.0|PR.PS-06,GDPR|32.1.b,HIPAA|164.306(a)(1),ISO-27001-2022|A.5.2,ISO-27001-2022|A.5.8,ISO-27001-2022|A.8.9,ISO-27001-2022|A.8.25,ISO-27001-2022|A.8.26,ISO-27001-2022|A.8.27,ISO-27001-2022|A.8.28,ISO-27001-2022|A.8.30,ISO-27001-2022|A.8.31,ISO-27001-2022|A.8.32,ITSG-33|CM-2,ITSG-33|CM-6,ITSG-33|CM-7,ITSG-33|CM-7(1),ITSG-33|CM-9,ITSG-33|SA-3,ITSG-33|SA-8,ITSG-33|SA-8a.,ITSG-33|SA-10,LEVEL|2A,NESA|T1.2.1,NESA|T1.2.2,NESA|T3.2.5,NESA|T3.4.1,NESA|T4.5.3,NESA|T4.5.4,NESA|T7.2.1,NESA|T7.5.1,NESA|T7.5.3,NESA|T7.6.1,NESA|T7.6.2,NESA|T7.6.3,NESA|T7.6.5,NIAv2|SS3,NIAv2|SS15a,NIAv2|SS16,NIAv2|VL2,PCI-DSSv3.2.1|2.2.2,QCSC-v1|3.2,QCSC-v1|4.2,QCSC-v1|5.2.1,QCSC-v1|5.2.2,SWIFT-CSCv1|2.3"
+      see_also    : "https://workbench.cisecurity.org/benchmarks/25733"
+      value_type  : POLICY_DWORD
+      value_data  : "[MIN..300000]"
+      reg_key     : "HKLM\System\CurrentControlSet\Services\Tcpip\Parameters"
+      reg_item    : "KeepAliveTime"
+      reg_option  : CAN_NOT_BE_NULL
+    </custom_item>
+
+    <custom_item>
+      type        : REGISTRY_SETTING
+      description : "18.5.7 Ensure 'MSS: (PerformRouterDiscovery) Allow IRDP to detect and configure Default Gateway addresses' is set to 'Disabled'"
+      info        : "This setting is used to enable or disable the Internet Router Discovery Protocol (IRDP), which allows the system to detect and configure default gateway addresses automatically as described in RFC 1256 on a per-interface basis.
+
+The recommended state for this setting is: Disabled.
+
+A threat actor who has gained control of a computer on the same network segment could configure a computer on the network to impersonate a router. Other computers with IRDP enabled would then attempt to route their traffic through the already compromised computer."
+      solution    : "To establish the recommended configuration via GP, set the following UI path to Disabled :
+
+Computer Configuration\Policies\Administrative Templates\MSS (Legacy)\MSS: (PerformRouterDiscovery) Allow IRDP to detect and configure Default Gateway addresses
+
+Note: This Group Policy path does not exist by default. An additional Group Policy template ( MSS-legacy.admx/adml ) is required - it is available from this TechNet blog post: The MSS settings - Microsoft Security Guidance blog https://blogs.technet.microsoft.com/secguide/2016/10/02/the-mss-settings/
+
+Impact:
+
+Windows will not automatically detect and configure default gateway addresses on the computer."
+      reference   : "800-171|3.4.2,800-171|3.4.6,800-171|3.4.7,800-171r3|03.04.02,800-171r3|03.04.06,800-53|CM-6,800-53|CM-7,800-53r5|CM-6,800-53r5|CM-7,CSCv7|9.2,CSCv8|4.8,CSF|PR.IP-1,CSF|PR.PT-3,CSF2.0|DE.CM-09,CSF2.0|PR.PS-01,GDPR|32.1.b,HIPAA|164.306(a)(1),ISO-27001-2022|A.8.9,ITSG-33|CM-6,ITSG-33|CM-7,LEVEL|2A,NIAv2|SS15a,PCI-DSSv3.2.1|2.2.2,SWIFT-CSCv1|2.3"
+      see_also    : "https://workbench.cisecurity.org/benchmarks/25733"
+      value_type  : POLICY_DWORD
+      value_data  : "0"
+      reg_key     : "HKLM\System\CurrentControlSet\Services\Tcpip\Parameters"
+      reg_item    : "PerformRouterDiscovery"
+      reg_option  : CAN_NOT_BE_NULL
+    </custom_item>
+
+    <custom_item>
+      type        : REGISTRY_SETTING
+      description : "18.5.9 Ensure 'MSS: (TcpMaxDataRetransmissions IPv6) How many times unacknowledged data is retransmitted' is set to 'Enabled: 3'"
+      info        : "This setting controls the number of times that TCP retransmits an individual data segment (non-connect segment) before the connection is aborted. The retransmission time-out is doubled with each successive retransmission on a connection. It is reset when responses resume. The base time-out value is dynamically determined by the measured round-trip time on the connection.
+
+The recommended state for this setting is: Enabled: 3.
+
+A threat actor could exhaust a target computer's resources if it never sent any acknowledgment messages for data that was transmitted by the target computer."
+      solution    : "To establish the recommended configuration via GP, set the following UI path to Enabled: 3 :
+
+Computer Configuration\Policies\Administrative Templates\MSS (Legacy)\MSS:(TcpMaxDataRetransmissions IPv6) How many times unacknowledged data is retransmitted
+
+Note: This Group Policy path does not exist by default. An additional Group Policy template ( MSS-legacy.admx/adml ) is required - it is available from this TechNet blog post: The MSS settings - Microsoft Security Guidance blog https://blogs.technet.microsoft.com/secguide/2016/10/02/the-mss-settings/
+
+Impact:
+
+TCP starts a retransmission timer when each outbound segment is passed to the IP. If no acknowledgment is received for the data in a given segment before the timer expires, then the segment is retransmitted up to three times."
+      reference   : "800-171|3.1.16,800-171|3.1.17,800-171|3.4.1,800-171|3.4.2,800-171|3.4.6,800-171|3.4.7,800-171r3|03.01.16,800-171r3|03.04.01,800-171r3|03.04.02,800-171r3|03.04.06,800-53|AC-18,800-53|AC-18(1),800-53|AC-18(3),800-53|CM-2,800-53|CM-6,800-53|CM-7,800-53|CM-7(1),800-53|CM-9,800-53r5|AC-18,800-53r5|AC-18(1),800-53r5|AC-18(3),800-53r5|CM-2,800-53r5|CM-6,800-53r5|CM-7,800-53r5|CM-7(1),800-53r5|CM-9,CSCv7|11.1,CSCv8|4.2,CSF|DE.AE-1,CSF|PR.DS-7,CSF|PR.IP-1,CSF|PR.PT-3,CSF|PR.PT-4,CSF2.0|DE.CM-09,CSF2.0|ID.AM-08,CSF2.0|PR.AA-05,CSF2.0|PR.PS-01,GDPR|32.1.b,HIPAA|164.306(a)(1),HIPAA|164.312(a)(1),ISO-27001-2022|A.5.2,ISO-27001-2022|A.5.14,ISO-27001-2022|A.8.9,ISO-27001-2022|A.8.20,ITSG-33|AC-18,ITSG-33|AC-18(1),ITSG-33|AC-18(3),ITSG-33|CM-2,ITSG-33|CM-6,ITSG-33|CM-7,ITSG-33|CM-7(1),ITSG-33|CM-9,LEVEL|2A,NESA|T1.2.1,NESA|T1.2.2,NESA|T3.2.5,NESA|T5.4.2,NESA|T7.5.1,NESA|T7.5.3,NESA|T7.6.1,NESA|T7.6.2,NESA|T7.6.3,NIAv2|NS33,NIAv2|NS34,NIAv2|NS38,NIAv2|SS15a,NIAv2|SS16,PCI-DSSv3.2.1|2.2.2,QCSC-v1|3.2,QCSC-v1|5.2.1,QCSC-v1|5.2.2,SWIFT-CSCv1|2.3"
+      see_also    : "https://workbench.cisecurity.org/benchmarks/25733"
+      value_type  : POLICY_DWORD
+      value_data  : "3"
+      reg_key     : "HKLM\System\CurrentControlSet\Services\TCPIP6\Parameters"
+      reg_item    : "tcpmaxdataretransmissions"
+      reg_option  : CAN_NOT_BE_NULL
+    </custom_item>
+
+    <custom_item>
+      type        : REGISTRY_SETTING
+      description : "18.6.10.2 Ensure 'Turn off Microsoft Peer-to-Peer Networking Services' is set to 'Enabled'"
+      info        : "The Peer Name Resolution Protocol (PNRP) allows for distributed resolution of a name to an IPv6 address and port number. The protocol operates in the context of clouds . A cloud is a set of peer computers that can communicate with each other by using the same IPv6 scope.
+
+Peer-to-Peer protocols allow for applications in the areas of RTC, collaboration, content distribution and distributed processing.
+
+The recommended state for this setting is: Enabled.
+
+This setting enhances the security of the environment and reduces the overall risk exposure related to peer-to-peer networking."
+      solution    : "To establish the recommended configuration via GP, set the following UI path to Enabled :
+
+Computer Configuration\Policies\Administrative Templates\Network\Microsoft Peer-to-Peer Networking Services\Turn off Microsoft Peer-to-Peer Networking Services
+
+Note: This Group Policy path is provided by the Group Policy template P2P-pnrp.admx/adml that is included with all versions of the Microsoft Windows Administrative Templates.
+
+Impact:
+
+Microsoft Peer-to-Peer Networking Services are turned off in their entirety, and all applications dependent on them will stop working."
+      reference   : "800-171|3.4.2,800-171|3.4.6,800-171|3.4.7,800-171r3|03.04.02,800-171r3|03.04.06,800-53|CM-6,800-53|CM-7,800-53r5|CM-6,800-53r5|CM-7,CSCv7|9.2,CSCv8|4.8,CSF|PR.IP-1,CSF|PR.PT-3,CSF2.0|DE.CM-09,CSF2.0|PR.PS-01,GDPR|32.1.b,HIPAA|164.306(a)(1),ISO-27001-2022|A.8.9,ITSG-33|CM-6,ITSG-33|CM-7,LEVEL|2A,NIAv2|SS15a,PCI-DSSv3.2.1|2.2.2,SWIFT-CSCv1|2.3"
+      see_also    : "https://workbench.cisecurity.org/benchmarks/25733"
+      value_type  : POLICY_DWORD
+      value_data  : "1"
+      reg_key     : "HKLM\Software\Policies\Microsoft\Peernet"
+      reg_item    : "Disabled"
+      reg_option  : CAN_NOT_BE_NULL
+    </custom_item>
+
+    <custom_item>
+      type        : REGISTRY_SETTING
+      description : "18.6.19.2.1 Disable IPv6 (Ensure TCPIP6 Parameter 'DisabledComponents' is set to '0xff (255)')"
+      info        : "Internet Protocol version 6 (IPv6) is a set of protocols that computers use to exchange information over the Internet and over home and business networks. IPv6 allows for many more IP addresses to be assigned than IPv4 did. Older networking, hosts and operating systems may not support IPv6 natively.
+
+The recommended state for this setting is: DisabledComponents - 0xff (255).
+
+Since the vast majority of private enterprise managed networks have no need to utilize IPv6 (because they have access to private IPv4 addressing), disabling IPv6 components removes a possible attack surface that is also harder to monitor the traffic on. As a result, we recommend configuring IPv6 to a Disabled state when it is not needed.
+
+Configuring this recommendation to the CIS suggested state mitigates CVE-2024-38063 https://msrc.microsoft.com/update-guide/en-US/vulnerability/CVE-2024-38063, a TCP/IP Remote Code Execution Vulnerability."
+      solution    : 'To establish the recommended configuration, set the following Registry value to 0xff (255) (DWORD) :
+
+HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Services\\TCPIP6\\Parameters:DisabledComponents
+
+Note: This change does not take effect until the computer has been restarted.
+
+Note #2: Although Microsoft does not provide ADMX/ADML templates to configure this registry value, custom templates ( Configure-IPv6-Components-KB929852.ADMX/ADML ) are provided in the CIS Benchmark Build Kit to facilitate its configuration. Be aware though that simply turning off (not configured) the group policy setting with the template will not \'undo\' the change once applied. Instead, the opposite setting must be applied to change the registry value to the opposite state.
+
+Impact:
+
+Connectivity to other systems using IPv6 will no longer operate, and software that depends on IPv6 will cease to function. Examples of Microsoft applications that may use IPv6 include: Remote Assistance, HomeGroup, DirectAccess, Windows Mail.
+
+This registry change is documented in Microsoft Knowledge Base article 929852: How to disable IPv6 or its components in Windows https://support.microsoft.com/en-us/kb/929852.
+
+Note: This registry change does not take effect until the next reboot.'
+      reference   : "800-171|3.4.2,800-171|3.4.6,800-171|3.4.7,800-171r3|03.04.02,800-171r3|03.04.06,800-53|CM-6,800-53|CM-7,800-53r5|CM-6,800-53r5|CM-7,CSCv7|9.2,CSCv8|4.8,CSF|PR.IP-1,CSF|PR.PT-3,CSF2.0|DE.CM-09,CSF2.0|PR.PS-01,GDPR|32.1.b,HIPAA|164.306(a)(1),ISO-27001-2022|A.8.9,ITSG-33|CM-6,ITSG-33|CM-7,LEVEL|2A,NIAv2|SS15a,PCI-DSSv3.2.1|2.2.2,SWIFT-CSCv1|2.3"
+      see_also    : "https://workbench.cisecurity.org/benchmarks/25733"
+      value_type  : POLICY_DWORD
+      value_data  : "255"
+      reg_key     : "HKLM\System\CurrentControlSet\Services\TCPIP6\Parameters"
+      reg_item    : "DisabledComponents"
+      reg_option  : CAN_NOT_BE_NULL
+    </custom_item>
+
+    <if>
+      <condition auto:"FAILED" type:"AND">
+        <custom_item>
+          type        : REGISTRY_SETTING
+          description : "EnableRegistrars"
+          value_type  : POLICY_DWORD
+          value_data  : "0"
+          reg_key     : "HKLM\Software\Policies\Microsoft\Windows\WCN\Registrars"
+          reg_item    : "EnableRegistrars"
+          reg_option  : CAN_NOT_BE_NULL
+        </custom_item>
+
+        <custom_item>
+          type        : REGISTRY_SETTING
+          description : "DisableInBand802DOT11Registrar"
+          value_type  : POLICY_DWORD
+          value_data  : "0"
+          reg_key     : "HKLM\Software\Policies\Microsoft\Windows\WCN\Registrars"
+          reg_item    : "DisableInBand802DOT11Registrar"
+          reg_option  : CAN_NOT_BE_NULL
+        </custom_item>
+
+        <custom_item>
+          type        : REGISTRY_SETTING
+          description : "DisableFlashConfigRegistrar"
+          value_type  : POLICY_DWORD
+          value_data  : "0"
+          reg_key     : "HKLM\Software\Policies\Microsoft\Windows\WCN\Registrars"
+          reg_item    : "DisableFlashConfigRegistrar"
+          reg_option  : CAN_NOT_BE_NULL
+        </custom_item>
+
+        <custom_item>
+          type        : REGISTRY_SETTING
+          description : "DisableUPnPRegistrar"
+          value_type  : POLICY_DWORD
+          value_data  : "0"
+          reg_key     : "HKLM\Software\Policies\Microsoft\Windows\WCN\Registrars"
+          reg_item    : "DisableUPnPRegistrar"
+          reg_option  : CAN_NOT_BE_NULL
+        </custom_item>
+
+        <custom_item>
+          type        : REGISTRY_SETTING
+          description : "DisableWPDRegistrar"
+          value_type  : POLICY_DWORD
+          value_data  : "0"
+          reg_key     : "HKLM\Software\Policies\Microsoft\Windows\WCN\Registrars"
+          reg_item    : "DisableWPDRegistrar"
+          reg_option  : CAN_NOT_BE_NULL
+        </custom_item>
+      </condition>
+
+      <then>
+        <report type:"PASSED">
+          description : "18.6.20.1 Ensure 'Configuration of wireless settings using Windows Connect Now' is set to 'Disabled'"
+          info        : "This policy setting allows the configuration of wireless settings using Windows Connect Now (WCN). The WCN Registrar enables the discovery and configuration of devices over Ethernet (UPnP) over in-band 802.11 Wi-Fi through the Windows Portable Device API (WPD) and via USB Flash drives. Additional options are available to allow discovery and configuration over a specific medium.
+
+The recommended state for this setting is: Disabled.
+
+This setting enhances the security of the environment and reduces the overall risk exposure related to user configuration of wireless settings. Additionally, according to Microsoft, Windows Connect Now was created as a solution for home networking and small businesses and is not intended for enterprise scenarios."
+          solution    : "To establish the recommended configuration via GP, set the following UI path to Disabled :
+
+Computer Configuration\Policies\Administrative Templates\Network\Windows Connect Now\Configuration of wireless settings using Windows Connect Now
+
+Note: This Group Policy path is provided by the Group Policy template WindowsConnectNow.admx/adml that is included with all versions of the Microsoft Windows Administrative Templates.
+
+Impact:
+
+WCN operations are disabled over all media."
+          reference   : "800-171|3.4.2,800-171|3.4.6,800-171|3.4.7,800-171r3|03.04.02,800-171r3|03.04.06,800-53|CM-6,800-53|CM-7,800-53r5|CM-6,800-53r5|CM-7,CSCv7|15.4,CSCv7|15.5,CSCv8|4.8,CSF|PR.IP-1,CSF|PR.PT-3,CSF2.0|DE.CM-09,CSF2.0|PR.PS-01,GDPR|32.1.b,HIPAA|164.306(a)(1),ISO-27001-2022|A.8.9,ITSG-33|CM-6,ITSG-33|CM-7,LEVEL|2A,NIAv2|SS15a,PCI-DSSv3.2.1|2.2.2,SWIFT-CSCv1|2.3"
+          see_also    : "https://workbench.cisecurity.org/benchmarks/25733"
+          show_output : YES
+        </report>
+      </then>
+    </if>
+
+    <custom_item>
+      type        : REGISTRY_SETTING
+      description : "18.6.20.2 Ensure 'Prohibit access of the Windows Connect Now wizards' is set to 'Enabled'"
+      info        : "This policy setting prohibits access to Windows Connect Now (WCN) wizards.
+
+The recommended state for this setting is: Enabled.
+
+Allowing standard users to access the Windows Connect Now wizard increases the risk and attack surface. Additionally, according to Microsoft, Windows Connect Now was created as a solution for home networking and small businesses and is not intended for enterprise scenarios."
+      solution    : 'To establish the recommended configuration via GP, set the following UI path to Enabled :
+
+Computer Configuration\\Policies\\Administrative Templates\\Network\\Windows Connect Now\\Prohibit access of the Windows Connect Now wizards
+
+Note: This Group Policy path may not exist by default. It is provided by the Group Policy template WindowsConnectNow.admx/adml that is included with the Microsoft Windows 8.0 & Server 2012 (non-R2) Administrative Templates (or newer).
+
+Impact:
+
+The WCN wizards are turned off and users have no access to any of the wizard tasks. All the configuration related tasks including \'Set up a wireless router or access point\' and \'Add a wireless device\' are disabled.'
+      reference   : "800-171|3.4.2,800-171|3.4.6,800-171|3.4.7,800-171r3|03.04.02,800-171r3|03.04.06,800-53|CM-6,800-53|CM-7,800-53r5|CM-6,800-53r5|CM-7,CSCv7|9.2,CSCv8|4.8,CSF|PR.IP-1,CSF|PR.PT-3,CSF2.0|DE.CM-09,CSF2.0|PR.PS-01,GDPR|32.1.b,HIPAA|164.306(a)(1),ISO-27001-2022|A.8.9,ITSG-33|CM-6,ITSG-33|CM-7,LEVEL|2A,NIAv2|SS15a,PCI-DSSv3.2.1|2.2.2,SWIFT-CSCv1|2.3"
+      see_also    : "https://workbench.cisecurity.org/benchmarks/25733"
+      value_type  : POLICY_DWORD
+      value_data  : "1"
+      reg_key     : "HKLM\Software\Policies\Microsoft\Windows\WCN\UI"
+      reg_item    : "DisableWcnUi"
+      reg_option  : CAN_NOT_BE_NULL
+    </custom_item>
+
+    <custom_item>
+      type        : REGISTRY_SETTING
+      description : "18.6.4.3 Ensure 'Turn off default IPv6 DNS Servers' is set to 'Enabled'"
+      info        : "This policy setting controls whether the DNS client will use the default IPv6 DNS server addresses provided by Windows.
+
+The recommended state for this setting is: Enabled.
+
+Since the vast majority of private enterprise managed networks have no need to utilize IPv6 (because they have access to private IPv4 addressing), disabling the use of IPv6 DNS server addresses removes a possible attack surface that is also harder to monitor the traffic on.
+
+It is not recommended to use DNS servers that are controlled by an external entity without input from the organization's IT department."
+      solution    : "To establish the recommended configuration via GP, set the following UI path to Enabled :
+
+Computer Configuration\Policies\Administrative Templates\Network\DNS Client\Turn off default IPv6 DNS Servers
+
+Note: This Group Policy path is provided by the Group Policy template DnsClient.admx/adml that is included with the Microsoft Windows 11 Release 24H2 Administrative Templates (or newer).
+
+Impact:
+
+Default IPv6 DNS server addresses will not be utilized by Windows."
+      reference   : "800-171|3.4.2,800-171|3.4.6,800-171|3.4.7,800-171r3|03.04.02,800-171r3|03.04.06,800-53|CM-6,800-53|CM-7,800-53r5|CM-6,800-53r5|CM-7,CSCv7|9.2,CSCv8|4.8,CSF|PR.IP-1,CSF|PR.PT-3,CSF2.0|DE.CM-09,CSF2.0|PR.PS-01,GDPR|32.1.b,HIPAA|164.306(a)(1),ISO-27001-2022|A.8.9,ITSG-33|CM-6,ITSG-33|CM-7,LEVEL|2A,NIAv2|SS15a,PCI-DSSv3.2.1|2.2.2,SWIFT-CSCv1|2.3"
+      see_also    : "https://workbench.cisecurity.org/benchmarks/25733"
+      value_type  : POLICY_DWORD
+      value_data  : "1"
+      reg_key     : "HKLM\Software\Policies\Microsoft\Windows NT\DNSClient"
+      reg_item    : "DisableIPv6DefaultDnsServers"
+      reg_option  : CAN_NOT_BE_NULL
+    </custom_item>
+
+    <custom_item>
+      type        : REGISTRY_SETTING
+      description : "18.6.5.1 Ensure 'Enable Font Providers' is set to 'Disabled'"
+      info        : "This policy setting determines whether Windows is allowed to download fonts and font catalog data from an online font provider.
+
+The recommended state for this setting is: Disabled.
+
+In an enterprise managed environment the IT department should be managing the changes to the system configuration, to ensure all changes are tested and approved."
+      solution    : "To establish the recommended configuration via GP, set the following UI path to Disabled :
+
+Computer Configuration\Policies\Administrative Templates\Network\Fonts\Enable Font Providers
+
+Note: This Group Policy path may not exist by default. It is provided by the Group Policy template GroupPolicy.admx/adml that is included with the Microsoft Windows 10 Release 1607 & Server 2016 Administrative Templates (or newer).
+
+Impact:
+
+Windows will not connect to an online font provider and will only enumerate locally-installed fonts."
+      reference   : "800-171|3.4.6,800-171|3.4.7,800-171r3|03.04.06b.,800-53|CM-7b.,800-53r5|SR-11,CN-L3|7.1.3.5(c),CN-L3|7.1.3.7(d),CN-L3|8.1.4.4(b),CSCv7|18.4,CSCv8|16.5,CSF|PR.IP-1,CSF|PR.PT-3,CSF2.0|PR.PS-01,GDPR|32.1.b,HIPAA|164.306(a)(1),ITSG-33|CM-7a.,LEVEL|2A,NIAv2|SS13b,NIAv2|SS14a,NIAv2|SS14c,PCI-DSSv3.2.1|2.2.2,PCI-DSSv4.0|2.2.4,QCSC-v1|3.2,SWIFT-CSCv1|2.3"
+      see_also    : "https://workbench.cisecurity.org/benchmarks/25733"
+      value_type  : POLICY_DWORD
+      value_data  : "0"
+      reg_key     : "HKLM\SOFTWARE\Policies\Microsoft\Windows\System"
+      reg_item    : "EnableFontProviders"
+      reg_option  : CAN_NOT_BE_NULL
+    </custom_item>
+
+    <if>
+      <condition auto:"FAILED" type:"AND">
+        <custom_item>
+          type        : REGISTRY_SETTING
+          description : "Ensure 'AllowLLTDIOOnPublicNet' is 'Windows: Registry Value' to '0'"
+          value_type  : POLICY_DWORD
+          value_data  : "0"
+          reg_key     : "HKLM\Software\Policies\Microsoft\Windows\LLTD"
+          reg_item    : "AllowLLTDIOOnPublicNet"
+          reg_option  : CAN_NOT_BE_NULL
+        </custom_item>
+
+        <custom_item>
+          type        : REGISTRY_SETTING
+          description : "Ensure 'EnableLLTDIO' is 'Windows: Registry Value' to '0'"
+          value_type  : POLICY_DWORD
+          value_data  : "0"
+          reg_key     : "HKLM\Software\Policies\Microsoft\Windows\LLTD"
+          reg_item    : "EnableLLTDIO"
+          reg_option  : CAN_NOT_BE_NULL
+        </custom_item>
+
+        <custom_item>
+          type        : REGISTRY_SETTING
+          description : "Ensure 'AllowLLTDIOOndomain' is 'Windows: Registry Value' to '0'"
+          value_type  : POLICY_DWORD
+          value_data  : "0"
+          reg_key     : "HKLM\Software\Policies\Microsoft\Windows\LLTD"
+          reg_item    : "AllowLLTDIOOndomain"
+          reg_option  : CAN_NOT_BE_NULL
+        </custom_item>
+
+        <custom_item>
+          type        : REGISTRY_SETTING
+          description : "Ensure 'ProhibitLLTDIOOnPrivateNet' is 'Windows: Registry Value' to '0'"
+          value_type  : POLICY_DWORD
+          value_data  : "0"
+          reg_key     : "HKLM\Software\Policies\Microsoft\Windows\LLTD"
+          reg_item    : "ProhibitLLTDIOOnPrivateNet"
+          reg_option  : CAN_NOT_BE_NULL
+        </custom_item>
+      </condition>
+
+      <then>
+        <report type:"PASSED">
+          description : "18.6.9.1 Ensure 'Turn on Mapper I/O (LLTDIO) driver' is set to 'Disabled'"
+          info        : "This policy setting changes the operational behavior of the Mapper I/O network protocol driver.
+
+LLTDIO allows a computer to discover the topology of a network it's connected to. It also allows a computer to initiate Quality-of-Service requests such as bandwidth estimation and network health analysis.
+
+The recommended state for this setting is: Disabled.
+
+To help protect from potentially discovering and connecting to unauthorized devices, this setting should be disabled to prevent responding to network traffic for network topology discovery."
+          solution    : "To establish the recommended configuration via GP, set the following UI path to Disabled :
+
+Computer Configuration\Policies\Administrative Templates\Network\Link-Layer Topology Discovery\Turn on Mapper I/O (LLTDIO) driver
+
+Note: This Group Policy path is provided by the Group Policy template LinkLayerTopologyDiscovery.admx/adml that is included with all versions of the Microsoft Windows Administrative Templates.
+
+Impact:
+
+Some real-time applications could have issues with short network disconnections. For more information visit: Network disconnection after configuring the LLTDIO and RSPNDR group policy objects - Windows Server | Microsoft Learn https://learn.microsoft.com/en-us/troubleshoot/windows-server/group-policy/network-disconnection-after-configuring-lltdio-rspndr-gpos."
+          reference   : "800-171|3.4.2,800-171r3|03.04.02,800-53|CM-6,800-53r5|CM-6,CSCv7|5.1,CSF|PR.IP-1,CSF2.0|DE.CM-09,CSF2.0|PR.PS-01,GDPR|32.1.b,HIPAA|164.306(a)(1),ISO-27001-2022|A.8.9,ITSG-33|CM-6,LEVEL|2A,SWIFT-CSCv1|2.3"
+          see_also    : "https://workbench.cisecurity.org/benchmarks/25733"
+          show_output : YES
+        </report>
+      </then>
+    </if>
+
+    <if>
+      <condition auto:"FAILED" type:"AND">
+        <custom_item>
+          type        : REGISTRY_SETTING
+          description : "Ensure 'AllowRspndrOnPublicNet' is 'Windows: Registry Value' to '0'"
+          value_type  : POLICY_DWORD
+          value_data  : "0"
+          reg_key     : "HKLM\Software\Policies\Microsoft\Windows\LLTD"
+          reg_item    : "AllowRspndrOnPublicNet"
+          reg_option  : CAN_NOT_BE_NULL
+        </custom_item>
+
+        <custom_item>
+          type        : REGISTRY_SETTING
+          description : "Ensure 'AllowRspndrOndomain' is 'Windows: Registry Value' to '0'"
+          value_type  : POLICY_DWORD
+          value_data  : "0"
+          reg_key     : "HKLM\Software\Policies\Microsoft\Windows\LLTD"
+          reg_item    : "AllowRspndrOndomain"
+          reg_option  : CAN_NOT_BE_NULL
+        </custom_item>
+
+        <custom_item>
+          type        : REGISTRY_SETTING
+          description : "Ensure 'ProhibitRspndrOnPrivateNet' is 'Windows: Registry Value' to '0'"
+          value_type  : POLICY_DWORD
+          value_data  : "0"
+          reg_key     : "HKLM\Software\Policies\Microsoft\Windows\LLTD"
+          reg_item    : "ProhibitRspndrOnPrivateNet"
+          reg_option  : CAN_NOT_BE_NULL
+        </custom_item>
+
+        <custom_item>
+          type        : REGISTRY_SETTING
+          description : "Ensure 'EnableRspndr' is 'Windows: Registry Value' to '0'"
+          value_type  : POLICY_DWORD
+          value_data  : "0"
+          reg_key     : "HKLM\Software\Policies\Microsoft\Windows\LLTD"
+          reg_item    : "EnableRspndr"
+          reg_option  : CAN_NOT_BE_NULL
+        </custom_item>
+      </condition>
+
+      <then>
+        <report type:"PASSED">
+          description : "18.6.9.2 Ensure 'Turn on Responder (RSPNDR) driver' is set to 'Disabled'"
+          info        : "This policy setting changes the operational behavior of the Responder network protocol driver.
+
+The Responder allows a computer to participate in Link Layer Topology Discovery requests so that it can be discovered and located on the network. It also allows a computer to participate in Quality-of-Service activities such as bandwidth estimation and network health analysis.
+
+The recommended state for this setting is: Disabled.
+
+To help protect from potentially discovering and connecting to unauthorized devices, this setting should be disabled to prevent responding to network traffic for network topology discovery."
+          solution    : "To establish the recommended configuration via GP, set the following UI path to Disabled :
+
+Computer Configuration\Policies\Administrative Templates\Network\Link-Layer Topology Discovery\Turn on Responder (RSPNDR) driver
+
+Note: This Group Policy path is provided by the Group Policy template LinkLayerTopologyDiscovery.admx/adml that is included with all versions of the Microsoft Windows Administrative Templates.
+
+Impact:
+
+Some real-time applications could have issues with short network disconnections. For more information visit: Network disconnection after configuring the LLTDIO and RSPNDR group policy objects - Windows Server | Microsoft Learn https://learn.microsoft.com/en-us/troubleshoot/windows-server/group-policy/network-disconnection-after-configuring-lltdio-rspndr-gpos."
+          reference   : "800-171|3.4.2,800-171r3|03.04.02,800-53|CM-6,800-53r5|CM-6,CSCv7|5.1,CSF|PR.IP-1,CSF2.0|DE.CM-09,CSF2.0|PR.PS-01,GDPR|32.1.b,HIPAA|164.306(a)(1),ISO-27001-2022|A.8.9,ITSG-33|CM-6,LEVEL|2A,SWIFT-CSCv1|2.3"
+          see_also    : "https://workbench.cisecurity.org/benchmarks/25733"
+          show_output : YES
+        </report>
+      </then>
+    </if>
+
+    <custom_item>
+      type        : REGISTRY_SETTING
+      description : "18.8.1.1 Ensure 'Turn off notifications network usage' is set to 'Enabled'"
+      info        : "This policy setting blocks applications from using the network to send notifications to update tiles, tile badges, toast, or raw notifications. This policy setting turns off the connection between Windows and the Windows Push Notification Service (WNS). This policy setting also stops applications from being able to poll application services to update tiles.
+
+The recommended state for this setting is: Enabled.
+
+Windows Push Notification Services (WNS) is a mechanism to receive third-party notifications and updates from the cloud/Internet. In a high security environment, external systems, especially those hosted outside the organization, should be prevented from having an impact on the secure workstations."
+      solution    : "To establish the recommended configuration via GP, set the following UI path to Enabled :
+
+Computer Configuration\Policies\Administrative Templates\Start Menu and Taskbar\Turn off notifications network usage
+
+Note: This Group Policy path may not exist by default. It is provided by the Group Policy template WPN.admx/adml that is included with the Microsoft Windows 10 Release 1607 & Server 2016 Administrative Templates (or newer).
+
+Impact:
+
+Applications and system features will not be able receive notifications from the network from WNS or via notification polling APIs."
+      reference   : "800-171|3.4.6,800-171|3.4.7,800-171r3|03.04.06b.,800-53|CM-7b.,800-53r5|CM-7b.,CN-L3|7.1.3.5(c),CN-L3|7.1.3.7(d),CN-L3|8.1.4.4(b),CSCv7|9.2,CSF|PR.IP-1,CSF|PR.PT-3,CSF2.0|PR.PS-01,GDPR|32.1.b,HIPAA|164.306(a)(1),ITSG-33|CM-7a.,LEVEL|2A,NIAv2|SS13b,NIAv2|SS14a,NIAv2|SS14c,PCI-DSSv3.2.1|2.2.2,PCI-DSSv4.0|2.2.4,QCSC-v1|3.2,SWIFT-CSCv1|2.3"
+      see_also    : "https://workbench.cisecurity.org/benchmarks/25733"
+      value_type  : POLICY_DWORD
+      value_data  : "1"
+      reg_key     : "HKLM\Software\Policies\Microsoft\Windows\CurrentVersion\PushNotifications"
+      reg_item    : "NoCloudApplicationNotification"
+      reg_option  : CAN_NOT_BE_NULL
+    </custom_item>
+
+    <custom_item>
+      type        : REGISTRY_SETTING
+      description : '18.9.20.1.10 Ensure \'Turn off the \'Publish to Web\' task for files and folders\' is set to \'Enabled\''
+      info        : "This policy setting specifies whether the tasks Publish this file to the Web, Publish this folder to the Web, and Publish the selected items to the Web are available from File and Folder Tasks in Windows folders.
+
+The recommended state for this setting is: Enabled.
+
+Users may publish confidential or sensitive information to a public service outside of the control of the organization."
+      solution    : 'To establish the recommended configuration via GP, set the following UI path to Enabled :
+
+Computer Configuration\\Policies\\Administrative Templates\\System\\Internet Communication Management\\Internet Communication settings\\Turn off the \'Publish to Web\' task for files and folders
+
+Note: This Group Policy path is provided by the Group Policy template ICM.admx/adml that is included with all versions of the Microsoft Windows Administrative Templates.
+
+Impact:
+
+The \'Publish to Web\' task is removed from File and Folder tasks in Windows folders.'
+      reference   : "800-171|3.4.2,800-171|3.4.6,800-171|3.4.7,800-171r3|03.04.02,800-171r3|03.04.06,800-53|CM-6,800-53|CM-7,800-53r5|CM-6,800-53r5|CM-7,CSCv7|9.2,CSCv8|4.8,CSF|PR.IP-1,CSF|PR.PT-3,CSF2.0|DE.CM-09,CSF2.0|PR.PS-01,GDPR|32.1.b,HIPAA|164.306(a)(1),ISO-27001-2022|A.8.9,ITSG-33|CM-6,ITSG-33|CM-7,LEVEL|2A,NIAv2|SS15a,PCI-DSSv3.2.1|2.2.2,SWIFT-CSCv1|2.3"
+      see_also    : "https://workbench.cisecurity.org/benchmarks/25733"
+      value_type  : POLICY_DWORD
+      value_data  : "1"
+      reg_key     : "HKLM\Software\Microsoft\Windows\CurrentVersion\Policies\Explorer"
+      reg_item    : "NoPublishingWizard"
+      reg_option  : CAN_NOT_BE_NULL
+    </custom_item>
+
+    <custom_item>
+      type        : REGISTRY_SETTING
+      description : "18.9.20.1.11 Ensure 'Turn off the Windows Messenger Customer Experience Improvement Program' is set to 'Enabled'"
+      info        : "This policy setting specifies whether Windows Messenger can collect anonymous information about how the Windows Messenger software and service is used. Microsoft uses information collected through the Customer Experience Improvement Program to detect software flaws so that they can be corrected more quickly, enabling this setting will reduce the amount of data Microsoft is able to gather for this purpose.
+
+The recommended state for this setting is: Enabled.
+
+Large enterprise managed environments may not want to have information collected by Microsoft from managed client computers."
+      solution    : "To establish the recommended configuration via GP, set the following UI path to Enabled :
+
+Computer Configuration\Policies\Administrative Templates\System\Internet Communication Management\Internet Communication settings\Turn off the Windows Messenger Customer Experience Improvement Program
+
+Note: This Group Policy path is provided by the Group Policy template ICM.admx/adml that is included with all versions of the Microsoft Windows Administrative Templates.
+
+Impact:
+
+Windows Messenger will not collect usage information, and the user settings to enable the collection of usage information will not be shown."
+      reference   : "800-171|3.4.2,800-171|3.4.6,800-171|3.4.7,800-171r3|03.04.02,800-171r3|03.04.06,800-53|CM-6,800-53|CM-7,800-53r5|CM-6,800-53r5|CM-7,CSCv7|9.2,CSCv8|4.8,CSF|PR.IP-1,CSF|PR.PT-3,CSF2.0|DE.CM-09,CSF2.0|PR.PS-01,GDPR|32.1.b,HIPAA|164.306(a)(1),ISO-27001-2022|A.8.9,ITSG-33|CM-6,ITSG-33|CM-7,LEVEL|2A,NIAv2|SS15a,PCI-DSSv3.2.1|2.2.2,SWIFT-CSCv1|2.3"
+      see_also    : "https://workbench.cisecurity.org/benchmarks/25733"
+      value_type  : POLICY_DWORD
+      value_data  : "2"
+      reg_key     : "HKLM\Software\Policies\Microsoft\Messenger\Client"
+      reg_item    : "CEIP"
+      reg_option  : CAN_NOT_BE_NULL
+    </custom_item>
+
+    <custom_item>
+      type        : REGISTRY_SETTING
+      description : "18.9.20.1.12 Ensure 'Turn off Windows Customer Experience Improvement Program' is set to 'Enabled'"
+      info        : "This policy setting specifies whether the Windows Customer Experience Improvement Program can collect anonymous information about how Windows is used.
+
+Microsoft uses information collected through the Windows Customer Experience Improvement Program to improve features that are most used and to detect flaws so that they can be corrected more quickly. Enabling this setting will reduce the amount of data Microsoft is able to gather for this purpose. The recommended state for this setting is: Enabled.
+
+Large enterprise managed environments may not want to have information collected by Microsoft from managed client computers."
+      solution    : "To establish the recommended configuration via GP, set the following UI path to Enabled :
+
+Computer Configuration\Policies\Administrative Templates\System\Internet Communication Management\Internet Communication settings\Turn off Windows Customer Experience Improvement Program
+
+Note: This Group Policy path is provided by the Group Policy template ICM.admx/adml that is included with all versions of the Microsoft Windows Administrative Templates.
+
+Impact:
+
+All users are opted out of the Windows Customer Experience Improvement Program."
+      reference   : "800-171|3.4.2,800-171|3.4.6,800-171|3.4.7,800-171r3|03.04.02,800-171r3|03.04.06,800-53|CM-6,800-53|CM-7,800-53r5|CM-6,800-53r5|CM-7,CSCv7|9.2,CSCv8|4.8,CSF|PR.IP-1,CSF|PR.PT-3,CSF2.0|DE.CM-09,CSF2.0|PR.PS-01,GDPR|32.1.b,HIPAA|164.306(a)(1),ISO-27001-2022|A.8.9,ITSG-33|CM-6,ITSG-33|CM-7,LEVEL|2A,NIAv2|SS15a,PCI-DSSv3.2.1|2.2.2,SWIFT-CSCv1|2.3"
+      see_also    : "https://workbench.cisecurity.org/benchmarks/25733"
+      value_type  : POLICY_DWORD
+      value_data  : "0"
+      reg_key     : "HKLM\Software\Policies\Microsoft\SQMClient\Windows"
+      reg_item    : "CEIPEnable"
+      reg_option  : CAN_NOT_BE_NULL
+    </custom_item>
+
+    <if>
+      <condition auto:"FAILED" type:"AND">
+        <custom_item>
+          type        : REGISTRY_SETTING
+          description : "Disabled"
+          value_type  : POLICY_DWORD
+          value_data  : "1"
+          reg_key     : "HKLM\Software\Policies\Microsoft\Windows\Windows Error Reporting"
+          reg_item    : "Disabled"
+          reg_option  : CAN_NOT_BE_NULL
+        </custom_item>
+
+        <custom_item>
+          type        : REGISTRY_SETTING
+          description : "DoReport"
+          value_type  : POLICY_DWORD
+          value_data  : "0"
+          reg_key     : "HKLM\SOFTWARE\Policies\Microsoft\PCHealth\ErrorReporting"
+          reg_item    : "DoReport"
+          reg_option  : CAN_NOT_BE_NULL
+        </custom_item>
+      </condition>
+
+      <then>
+        <report type:"PASSED">
+          description : "18.9.20.1.13 Ensure 'Turn off Windows Error Reporting' is set to 'Enabled'"
+          info        : "This policy setting controls whether or not errors are reported to Microsoft.
+
+Error Reporting is used to report information about a system or application that has failed or has stopped responding and is used to improve the quality of the product.
+
+The recommended state for this setting is: Enabled.
+
+If a Windows Error occurs in a secure, enterprise managed environment, the error should be reported directly to IT staff for troubleshooting and remediation. There is no benefit to the corporation to report these errors directly to Microsoft, and there is some risk of unknowingly exposing sensitive data as part of the error."
+          solution    : "To establish the recommended configuration via GP, set the following UI path to Enabled :
+
+Computer Configuration\Policies\Administrative Templates\System\Internet Communication Management\Internet Communication settings\Turn off Windows Error Reporting
+
+Note: This Group Policy path is provided by the Group Policy template ICM.admx/adml that is included with all versions of the Microsoft Windows Administrative Templates.
+
+Impact:
+
+Users are not given the option to report errors to Microsoft."
+          reference   : "800-171|3.4.2,800-171|3.4.6,800-171|3.4.7,800-171r3|03.04.02,800-171r3|03.04.06,800-53|CM-6,800-53|CM-7,800-53r5|CM-6,800-53r5|CM-7,CSCv7|9.2,CSCv8|4.8,CSF|PR.IP-1,CSF|PR.PT-3,CSF2.0|DE.CM-09,CSF2.0|PR.PS-01,GDPR|32.1.b,HIPAA|164.306(a)(1),ISO-27001-2022|A.8.9,ITSG-33|CM-6,ITSG-33|CM-7,LEVEL|2A,NIAv2|SS15a,PCI-DSSv3.2.1|2.2.2,SWIFT-CSCv1|2.3"
+          see_also    : "https://workbench.cisecurity.org/benchmarks/25733"
+          show_output : YES
+        </report>
+      </then>
+    </if>
+
+    <custom_item>
+      type        : REGISTRY_SETTING
+      description : "18.9.20.1.2 Ensure 'Turn off handwriting personalization data sharing' is set to 'Enabled'"
+      info        : "This setting turns off data sharing from the handwriting recognition personalization tool.
+
+The handwriting recognition personalization tool enables Tablet PC users to adapt handwriting recognition to their own writing style by providing writing samples. The tool can optionally share user writing samples with Microsoft to improve handwriting recognition in future versions of Windows. The tool generates reports and transmits them to Microsoft over a secure connection.
+
+The recommended state for this setting is: Enabled.
+
+A person's handwriting is Personally Identifiable Information (PII), especially when it comes to your signature. As such, it is unacceptable in many environments to automatically upload PII to a website without explicit approval by the user."
+      solution    : "To establish the recommended configuration via GP, set the following UI path to Enabled:
+
+Computer Configuration\Policies\Administrative Templates\System\Internet Communication Management\Internet Communication settings\Turn off handwriting personalization data sharing
+
+Note: This Group Policy path may not exist by default. It is provided by the Group Policy template ShapeCollector.admx/adml that is included with the Microsoft Windows 7 & Server 2008 R2 Administrative Templates (or newer).
+
+Impact:
+
+Tablet PC users cannot choose to share writing samples from the handwriting recognition personalization tool with Microsoft."
+      reference   : "800-171|3.4.6,800-171|3.4.7,800-171r3|03.04.06b.,800-53|CM-7b.,800-53r5|CM-7b.,CN-L3|7.1.3.5(c),CN-L3|7.1.3.7(d),CN-L3|8.1.4.4(b),CSCv7|9.2,CSF|PR.IP-1,CSF|PR.PT-3,CSF2.0|PR.PS-01,GDPR|32.1.b,HIPAA|164.306(a)(1),ITSG-33|CM-7a.,LEVEL|2A,NIAv2|SS13b,NIAv2|SS14a,NIAv2|SS14c,PCI-DSSv3.2.1|2.2.2,PCI-DSSv4.0|2.2.4,QCSC-v1|3.2,SWIFT-CSCv1|2.3"
+      see_also    : "https://workbench.cisecurity.org/benchmarks/25733"
+      value_type  : POLICY_DWORD
+      value_data  : "1"
+      reg_key     : "HKLM\Software\Policies\Microsoft\Windows\TabletPC"
+      reg_item    : "PreventHandwritingDataSharing"
+      reg_option  : CAN_NOT_BE_NULL
+    </custom_item>
+
+    <custom_item>
+      type        : REGISTRY_SETTING
+      description : "18.9.20.1.3 Ensure 'Turn off handwriting recognition error reporting' is set to 'Enabled'"
+      info        : "Turns off the handwriting recognition error reporting tool.
+
+The handwriting recognition error reporting tool enables users to report errors encountered in Tablet PC Input Panel. The tool generates error reports and transmits them to Microsoft over a secure connection. Microsoft uses these error reports to improve handwriting recognition in future versions of Windows.
+
+The recommended state for this setting is: Enabled.
+
+A person's handwriting is Personally Identifiable Information (PII), especially when it comes to your signature. As such, it is unacceptable in many environments to automatically upload PII to a website without explicit approval by the user."
+      solution    : "To establish the recommended configuration via GP, set the following UI path to Enabled :
+
+Computer Configuration\Policies\Administrative Templates\System\Internet Communication Management\Internet Communication settings\Turn off handwriting recognition error reporting
+
+Note: This Group Policy path is provided by the Group Policy template InkWatson.admx/adml that is included with all versions of the Microsoft Windows Administrative Templates.
+
+Impact:
+
+Users cannot start the handwriting recognition error reporting tool or send error reports to Microsoft."
+      reference   : "800-171|3.4.2,800-171|3.4.6,800-171|3.4.7,800-171r3|03.04.02,800-171r3|03.04.06,800-53|CM-6,800-53|CM-7,800-53r5|CM-6,800-53r5|CM-7,CSCv7|9.2,CSCv8|4.8,CSF|PR.IP-1,CSF|PR.PT-3,CSF2.0|DE.CM-09,CSF2.0|PR.PS-01,GDPR|32.1.b,HIPAA|164.306(a)(1),ISO-27001-2022|A.8.9,ITSG-33|CM-6,ITSG-33|CM-7,LEVEL|2A,NIAv2|SS15a,PCI-DSSv3.2.1|2.2.2,SWIFT-CSCv1|2.3"
+      see_also    : "https://workbench.cisecurity.org/benchmarks/25733"
+      value_type  : POLICY_DWORD
+      value_data  : "1"
+      reg_key     : "HKLM\Software\Policies\Microsoft\Windows\HandwritingErrorReports"
+      reg_item    : "PreventHandwritingErrorReports"
+      reg_option  : CAN_NOT_BE_NULL
+    </custom_item>
+
+    <custom_item>
+      type        : REGISTRY_SETTING
+      description : "18.9.20.1.4 Ensure 'Turn off Internet Connection Wizard if URL connection is referring to Microsoft.com' is set to 'Enabled'"
+      info        : "This policy setting specifies whether the Internet Connection Wizard can connect to Microsoft to download a list of Internet Service Providers (ISPs).
+
+The recommended state for this setting is: Enabled.
+
+In an enterprise managed environment we want to lower the risk of a user unknowingly exposing sensitive data."
+      solution    : 'To establish the recommended configuration via GP, set the following UI path to Enabled :
+
+Computer Configuration\\Policies\\Administrative Templates\\System\\Internet Communication Management\\Internet Communication settings\\Turn off Internet Connection Wizard if URL connection is referring to Microsoft.com
+
+Note: This Group Policy path is provided by the Group Policy template ICM.admx/adml that is included with all versions of the Microsoft Windows Administrative Templates.
+
+Impact:
+
+The \'Choose a list of Internet Service Providers\' path in the Internet Connection Wizard causes the wizard to exit. This prevents users from retrieving the list of ISPs, which resides on Microsoft servers.'
+      reference   : "800-171|3.4.2,800-171|3.4.6,800-171|3.4.7,800-171r3|03.04.02,800-171r3|03.04.06,800-53|CM-6,800-53|CM-7,800-53r5|CM-6,800-53r5|CM-7,CSCv7|9.2,CSCv8|4.8,CSF|PR.IP-1,CSF|PR.PT-3,CSF2.0|DE.CM-09,CSF2.0|PR.PS-01,GDPR|32.1.b,HIPAA|164.306(a)(1),ISO-27001-2022|A.8.9,ITSG-33|CM-6,ITSG-33|CM-7,LEVEL|2A,NIAv2|SS15a,PCI-DSSv3.2.1|2.2.2,SWIFT-CSCv1|2.3"
+      see_also    : "https://workbench.cisecurity.org/benchmarks/25733"
+      value_type  : POLICY_DWORD
+      value_data  : "1"
+      reg_key     : "HKLM\Software\Policies\Microsoft\Windows\Internet Connection Wizard"
+      reg_item    : "ExitOnMSICW"
+      reg_option  : CAN_NOT_BE_NULL
+    </custom_item>
+
+    <custom_item>
+      type        : REGISTRY_SETTING
+      description : "18.9.20.1.6 Ensure 'Turn off printing over HTTP' is set to 'Enabled'"
+      info        : "This policy setting allows you to disable the client computer's ability to print over HTTP, which allows the computer to print to printers on the intranet as well as the Internet.
+
+The recommended state for this setting is: Enabled.
+
+Note: This control affects printing over both HTTP and HTTPS.
+
+Information that is transmitted over HTTP through this capability is not protected and can be intercepted by threat actors. For this reason, it is not often used in enterprise managed environments."
+      solution    : "To establish the recommended configuration via GP, set the following UI path to Enabled :
+
+Computer Configuration\Policies\Administrative Templates\System\Internet Communication Management\Internet Communication settings\Turn off printing over HTTP
+
+Note: This Group Policy path is provided by the Group Policy template ICM.admx/adml that is included with all versions of the Microsoft Windows Administrative Templates.
+
+Impact:
+
+The client computer will not be able to print to Internet printers over HTTP or HTTPS.
+
+Note: This policy setting affects the client side of Internet printing only. Regardless of how it is configured, a computer could act as an Internet Printing server and make its shared printers available through HTTP."
+      reference   : "800-171|3.4.2,800-171|3.4.6,800-171|3.4.7,800-171r3|03.04.02,800-171r3|03.04.06,800-53|CM-6,800-53|CM-7,800-53r5|CM-6,800-53r5|CM-7,CSCv7|13.3,CSCv8|4.8,CSF|PR.IP-1,CSF|PR.PT-3,CSF2.0|DE.CM-09,CSF2.0|PR.PS-01,GDPR|32.1.b,HIPAA|164.306(a)(1),ISO-27001-2022|A.8.9,ITSG-33|CM-6,ITSG-33|CM-7,LEVEL|2A,NIAv2|SS15a,PCI-DSSv3.2.1|2.2.2,SWIFT-CSCv1|2.3"
+      see_also    : "https://workbench.cisecurity.org/benchmarks/25733"
+      value_type  : POLICY_DWORD
+      value_data  : "1"
+      reg_key     : "HKLM\Software\Policies\Microsoft\Windows NT\Printers"
+      reg_item    : "DisableHTTPPrinting"
+      reg_option  : CAN_NOT_BE_NULL
+    </custom_item>
+
+    <custom_item>
+      type        : REGISTRY_SETTING
+      description : "18.9.20.1.7 Ensure 'Turn off Registration if URL connection is referring to Microsoft.com' is set to 'Enabled'"
+      info        : "This policy setting specifies whether the Windows Registration Wizard connects to Microsoft.com for online registration.
+
+The recommended state for this setting is: Enabled.
+
+Users in an enterprise managed environment should not be registering their own copies of Windows, providing their own PII in the process."
+      solution    : "To establish the recommended configuration via GP, set the following UI path to Enabled :
+
+Computer Configuration\Policies\Administrative Templates\System\Internet Communication Management\Internet Communication settings\Turn off Registration if URL connection is referring to Microsoft.com
+
+Note: This Group Policy path is provided by the Group Policy template ICM.admx/adml that is included with all versions of the Microsoft Windows Administrative Templates.
+
+Impact:
+
+Users are blocked from connecting to Microsoft.com for online registration and they cannot register their copy of Windows online."
+      reference   : "800-171|3.4.2,800-171|3.4.6,800-171|3.4.7,800-171r3|03.04.02,800-171r3|03.04.06,800-53|CM-6,800-53|CM-7,800-53r5|CM-6,800-53r5|CM-7,CSCv7|9.2,CSCv8|4.8,CSF|PR.IP-1,CSF|PR.PT-3,CSF2.0|DE.CM-09,CSF2.0|PR.PS-01,GDPR|32.1.b,HIPAA|164.306(a)(1),ISO-27001-2022|A.8.9,ITSG-33|CM-6,ITSG-33|CM-7,LEVEL|2A,NIAv2|SS15a,PCI-DSSv3.2.1|2.2.2,SWIFT-CSCv1|2.3"
+      see_also    : "https://workbench.cisecurity.org/benchmarks/25733"
+      value_type  : POLICY_DWORD
+      value_data  : "1"
+      reg_key     : "HKLM\Software\Policies\Microsoft\Windows\Registration Wizard Control"
+      reg_item    : "NoRegistration"
+      reg_option  : CAN_NOT_BE_NULL
+    </custom_item>
+
+    <custom_item>
+      type        : REGISTRY_SETTING
+      description : "18.9.20.1.8 Ensure 'Turn off Search Companion content file updates' is set to 'Enabled'"
+      info        : "This policy setting specifies whether Search Companion should automatically download content updates during local and Internet searches.
+
+The recommended state for this setting is: Enabled.
+
+There is a small risk that users will unknowingly reveal sensitive information because of the topics they are searching for. This risk is very low because even if this setting is enabled users still must submit search queries to the desired search engine in order to perform searches."
+      solution    : "To establish the recommended configuration via GP, set the following UI path to Enabled :
+
+Computer Configuration\Policies\Administrative Templates\System\Internet Communication Management\Internet Communication settings\Turn off Search Companion content file updates
+
+Note: This Group Policy path is provided by the Group Policy template ICM.admx/adml that is included with all versions of the Microsoft Windows Administrative Templates.
+
+Impact:
+
+Search Companion does not download content updates during searches.
+
+Note: Internet searches will still send the search text and information about the search to Microsoft and the chosen search provider. If you select Classic Search, the Search Companion feature will be unavailable. You can select Classic Search by clicking Start, Search, Change Preferences, and then Change Internet Search Behavior."
+      reference   : "800-171|3.4.2,800-171|3.4.6,800-171|3.4.7,800-171r3|03.04.02,800-171r3|03.04.06,800-53|CM-6,800-53|CM-7,800-53r5|CM-6,800-53r5|CM-7,CSCv7|9.2,CSCv8|4.8,CSF|PR.IP-1,CSF|PR.PT-3,CSF2.0|DE.CM-09,CSF2.0|PR.PS-01,GDPR|32.1.b,HIPAA|164.306(a)(1),ISO-27001-2022|A.8.9,ITSG-33|CM-6,ITSG-33|CM-7,LEVEL|2A,NIAv2|SS15a,PCI-DSSv3.2.1|2.2.2,SWIFT-CSCv1|2.3"
+      see_also    : "https://workbench.cisecurity.org/benchmarks/25733"
+      value_type  : POLICY_DWORD
+      value_data  : "1"
+      reg_key     : "HKLM\Software\Policies\Microsoft\SearchCompanion"
+      reg_item    : "DisableContentFileUpdates"
+      reg_option  : CAN_NOT_BE_NULL
+    </custom_item>
+
+    <custom_item>
+      type        : REGISTRY_SETTING
+      description : '18.9.20.1.9 Ensure \'Turn off the \'Order Prints\' picture task\' is set to \'Enabled\''
+      info        : 'This policy setting specifies whether the \'Order Prints Online\' task is available from Picture Tasks in Windows folders.
+
+The Order Prints Online Wizard is used to download a list of providers and allow users to order prints online.
+
+The recommended state for this setting is: Enabled.
+
+In an enterprise managed environment we want to lower the risk of a user unknowingly exposing sensitive data.'
+      solution    : 'To establish the recommended configuration via GP, set the following UI path to Enabled :
+
+Computer Configuration\\Policies\\Administrative Templates\\System\\Internet Communication Management\\Internet Communication settings\\Turn off the \'Order Prints\' picture task
+
+Note: This Group Policy path is provided by the Group Policy template ICM.admx/adml that is included with all versions of the Microsoft Windows Administrative Templates.
+
+Impact:
+
+The task \'Order Prints Online\' is removed from Picture Tasks in File Explorer folders.'
+      reference   : "800-171|3.4.2,800-171|3.4.6,800-171|3.4.7,800-171r3|03.04.02,800-171r3|03.04.06,800-53|CM-6,800-53|CM-7,800-53r5|CM-6,800-53r5|CM-7,CSCv7|9.2,CSCv8|4.8,CSF|PR.IP-1,CSF|PR.PT-3,CSF2.0|DE.CM-09,CSF2.0|PR.PS-01,GDPR|32.1.b,HIPAA|164.306(a)(1),ISO-27001-2022|A.8.9,ITSG-33|CM-6,ITSG-33|CM-7,LEVEL|2A,NIAv2|SS15a,PCI-DSSv3.2.1|2.2.2,SWIFT-CSCv1|2.3"
+      see_also    : "https://workbench.cisecurity.org/benchmarks/25733"
+      value_type  : POLICY_DWORD
+      value_data  : "1"
+      reg_key     : "HKLM\Software\Microsoft\Windows\CurrentVersion\Policies\Explorer"
+      reg_item    : "NoOnlinePrintsWizard"
+      reg_option  : CAN_NOT_BE_NULL
+    </custom_item>
+
+    <if>
+      <condition auto:"FAILED" type:"AND">
+        <custom_item>
+          type        : REGISTRY_SETTING
+          description : "Ensure 'DevicePKInitBehavior' is 'Windows: Registry Value' to '0'"
+          value_type  : POLICY_DWORD
+          value_data  : "0"
+          reg_key     : "HKLM\Software\Microsoft\Windows\CurrentVersion\Policies\System\kerberos\parameters"
+          reg_item    : "DevicePKInitBehavior"
+          reg_option  : CAN_NOT_BE_NULL
+        </custom_item>
+
+        <custom_item>
+          type        : REGISTRY_SETTING
+          description : "Ensure 'DevicePKInitEnabled' is 'Windows: Registry Value' to '1'"
+          value_type  : POLICY_DWORD
+          value_data  : "1"
+          reg_key     : "HKLM\Software\Microsoft\Windows\CurrentVersion\Policies\System\kerberos\parameters"
+          reg_item    : "DevicePKInitEnabled"
+          reg_option  : CAN_NOT_BE_NULL
+        </custom_item>
+      </condition>
+
+      <then>
+        <report type:"PASSED">
+          description : "18.9.23.1 Ensure 'Support device authentication using certificate' is set to 'Enabled: Automatic'"
+          info        : "This policy setting allows you to set support for Kerberos to attempt authentication using the certificate for the device to the domain.
+
+Support for device authentication using certificate will require connectivity to a DC in the device account domain which supports certificate authentication for computer accounts.
+
+The recommended state for this setting is: Enabled: Automatic.
+
+Having stronger device authentication with the use of certificates is strongly encouraged over standard username and password authentication. Having this set to Automatic will allow certificate based authentication to be used whenever possible."
+          solution    : "To establish the recommended configuration via GP, set the following UI path to Enabled: Automatic :
+
+Computer Configuration\Policies\Administrative Templates\System\Kerberos\Support device authentication using certificate
+
+Note: This Group Policy path may not exist by default. It is provided by the Group Policy template Kerberos.admx/adml that is included with the Microsoft Windows 10 RTM (Release 1507) Administrative Templates (or newer).
+
+Impact:
+
+None - this is the default behavior."
+          reference   : "800-171r3|03.05.02,HIPAA|164.306(a)(1),800-53|IA-3(1),QCSC-v1|13.2,800-53r5|IA-3(1),HIPAA|164.312(a)(2)(i),CSF|PR.AC-1,NESA|T5.4.3,CSF2.0|PR.AA-01,HIPAA|164.312(d),CSF2.0|PR.AA-03,TBA-FIISB|27.1,GDPR|32.1.b,ITSG-33|IA-3(1)"
+          see_also    : "https://workbench.cisecurity.org/benchmarks/25733"
+          show_output : YES
+        </report>
+      </then>
+    </if>
+
+    <custom_item>
+      type        : REGISTRY_SETTING
+      description : "18.9.28.1 Ensure 'Disallow copying of user input methods to the system account for sign-in' is set to 'Enabled'"
+      info        : "This policy prevents automatic copying of user input methods to the system account for use on the sign-in screen. The user is restricted to the set of input methods that are enabled in the system account.
+
+The recommended state for this setting is: Enabled.
+
+This is a way to increase the security of the system account."
+      solution    : "To establish the recommended configuration via GP, set the following UI path to Enabled :
+
+Computer Configuration\Policies\Administrative Templates\System\Locale Services\Disallow copying of user input methods to the system account for sign-in
+
+Note: This Group Policy path may not exist by default. It is provided by the Group Policy template Globalization.admx/adml that is included with the Microsoft Windows 8.0 & Server 2012 (non-R2) Administrative Templates (or newer).
+
+Impact:
+
+Users will have input methods enabled for the system account on the sign-in page."
+      reference   : "800-171|3.4.2,800-171r3|03.04.02a.,800-53|CM-6b.,800-53r5|CM-6b.,CN-L3|8.1.10.6(d),CSF|PR.IP-1,CSF2.0|DE.CM-09,CSF2.0|PR.PS-01,GDPR|32.1.b,HIPAA|164.306(a)(1),ISO-27001-2022|A.8.9,ITSG-33|CM-6b.,LEVEL|2A,NESA|T3.2.1,SWIFT-CSCv1|2.3"
+      see_also    : "https://workbench.cisecurity.org/benchmarks/25733"
+      value_type  : POLICY_DWORD
+      value_data  : "1"
+      reg_key     : "HKLM\Software\Policies\Microsoft\Control Panel\International"
+      reg_item    : "BlockUserInputMethodsForSignIn"
+      reg_option  : CAN_NOT_BE_NULL
+    </custom_item>
+
+    <custom_item>
+      type        : REGISTRY_SETTING
+      description : "18.9.33.1 Ensure 'Allow Clipboard synchronization across devices' is set to 'Disabled'"
+      info        : "This policy setting determines whether Clipboard contents can be synchronized across devices.
+
+The recommended state for this setting is: Disabled.
+
+Due to privacy concerns, clipboard data should stay local to the system and not synced across devices."
+      solution    : "To establish the recommended configuration via GP, set the following UI path to Disabled :
+
+Computer Configuration\Policies\Administrative Templates\System\OS Policies\Allow Clipboard synchronization across devices
+
+Note: This Group Policy path is provided by the Group Policy template OSPolicy.admx/adml that is included with the Microsoft Windows 10 Release 1809 & Server 2019 Administrative Templates (or newer).
+
+Impact:
+
+If you disable this policy setting, Clipboard contents cannot be shared to other devices."
+      reference   : "800-171|3.4.2,800-171|3.4.6,800-171|3.4.7,800-171r3|03.04.02,800-171r3|03.04.06,800-53|CM-6,800-53|CM-7,800-53r5|CM-6,800-53r5|CM-7,CSCv8|4.8,CSF|PR.IP-1,CSF|PR.PT-3,CSF2.0|DE.CM-09,CSF2.0|PR.PS-01,GDPR|32.1.b,HIPAA|164.306(a)(1),ISO-27001-2022|A.8.9,ITSG-33|CM-6,ITSG-33|CM-7,LEVEL|2A,NIAv2|SS15a,PCI-DSSv3.2.1|2.2.2,SWIFT-CSCv1|2.3"
+      see_also    : "https://workbench.cisecurity.org/benchmarks/25733"
+      value_type  : POLICY_DWORD
+      value_data  : "0"
+      reg_key     : "HKLM\Software\Policies\Microsoft\Windows\System"
+      reg_item    : "AllowCrossDeviceClipboard"
+      reg_option  : CAN_NOT_BE_NULL
+    </custom_item>
+
+    <custom_item>
+      type        : REGISTRY_SETTING
+      description : "18.9.33.2 Ensure 'Allow upload of User Activities' is set to 'Disabled'"
+      info        : "This policy setting determines whether published User Activities can be uploaded to the cloud.
+
+The recommended state for this setting is: Disabled.
+
+In high-security environments, data must never be shared with third-parties without explicit consent, as it may contain sensitive information."
+      solution    : "To establish the recommended configuration via GP, set the following UI path to Disabled :
+
+Computer Configuration\Policies\Administrative Templates\System\OS Policies\Allow upload of User Activities
+
+Note: This Group Policy path may not exist by default. It is provided by the Group Policy template OSPolicy.admx/adml that is included with the Microsoft Windows 10 Release 1803 Administrative Templates (or newer).
+
+Impact:
+
+Activities of type User Activity are not allowed to be uploaded to the cloud. The Timeline feature will not function across devices."
+      reference   : "800-171|3.4.6,800-171|3.4.7,800-171r3|03.04.06b.,800-53|CM-7b.,800-53r5|CM-7b.,CN-L3|7.1.3.5(c),CN-L3|7.1.3.7(d),CN-L3|8.1.4.4(b),CSCv7|9.2,CSF|PR.IP-1,CSF|PR.PT-3,CSF2.0|PR.PS-01,GDPR|32.1.b,HIPAA|164.306(a)(1),ITSG-33|CM-7a.,LEVEL|2A,NIAv2|SS13b,NIAv2|SS14a,NIAv2|SS14c,PCI-DSSv3.2.1|2.2.2,PCI-DSSv4.0|2.2.4,QCSC-v1|3.2,SWIFT-CSCv1|2.3"
+      see_also    : "https://workbench.cisecurity.org/benchmarks/25733"
+      value_type  : POLICY_DWORD
+      value_data  : "0"
+      reg_key     : "HKLM\Software\Policies\Microsoft\Windows\System"
+      reg_item    : "UploadUserActivities"
+      reg_option  : CAN_NOT_BE_NULL
+    </custom_item>
+
+    <custom_item>
+      type        : REGISTRY_SETTING
+      description : "18.9.35.6.1 Ensure 'Allow network connectivity during connected-standby (on battery)' is set to 'Disabled'"
+      info        : "This policy setting allows you to control the network connectivity state in standby on modern standby-capable systems.
+
+The recommended state for this setting is: Disabled.
+
+Disabling this setting ensures that the computer will not be accessible to threat actors over a WLAN network while left unattended, on battery and in a sleep state."
+      solution    : "To establish the recommended configuration via GP, set the following UI path to Disabled :
+
+Computer Configuration\Policies\Administrative Templates\System\Power Management\Sleep Settings\Allow network connectivity during connected-standby (on battery)
+
+Note: This Group Policy path may not exist by default. It is provided by the Group Policy template Power.admx/adml that is included with the Microsoft Windows 10 Release 1607 & Server 2016 Administrative Templates (or newer).
+
+Impact:
+
+Network connectivity in standby (while on battery) is not guaranteed. This connectivity restriction currently only applies to WLAN networks only, but is subject to change (according to Microsoft)."
+      reference   : "800-171|3.4.6,800-171|3.4.7,800-171r3|03.04.06b.,800-53|CM-7b.,800-53r5|CM-7b.,CN-L3|7.1.3.5(c),CN-L3|7.1.3.7(d),CN-L3|8.1.4.4(b),CSCv7|9.2,CSF|PR.IP-1,CSF|PR.PT-3,CSF2.0|PR.PS-01,GDPR|32.1.b,HIPAA|164.306(a)(1),ITSG-33|CM-7a.,LEVEL|2A,NIAv2|SS13b,NIAv2|SS14a,NIAv2|SS14c,PCI-DSSv3.2.1|2.2.2,PCI-DSSv4.0|2.2.4,QCSC-v1|3.2,SWIFT-CSCv1|2.3"
+      see_also    : "https://workbench.cisecurity.org/benchmarks/25733"
+      value_type  : POLICY_DWORD
+      value_data  : "0"
+      reg_key     : "HKLM\Software\Policies\Microsoft\Power\PowerSettings\f15576e8-98b7-4186-b944-eafa664402d9"
+      reg_item    : "DCSettingIndex"
+      reg_option  : CAN_NOT_BE_NULL
+    </custom_item>
+
+    <custom_item>
+      type        : REGISTRY_SETTING
+      description : "18.9.35.6.2 Ensure 'Allow network connectivity during connected-standby (plugged in)' is set to 'Disabled'"
+      info        : "This policy setting allows you to control the network connectivity state in standby on modern standby-capable systems.
+
+The recommended state for this setting is: Disabled.
+
+Disabling this setting ensures that the computer will not be accessible to threat actors over a WLAN network while left unattended, plugged in and in a sleep state."
+      solution    : "To establish the recommended configuration via GP, set the following UI path to Disabled :
+
+Computer Configuration\Policies\Administrative Templates\System\Power Management\Sleep Settings\Allow network connectivity during connected-standby (plugged in)
+
+Note: This Group Policy path may not exist by default. It is provided by the Group Policy template Power.admx/adml that is included with the Microsoft Windows 10 Release 1607 & Server 2016 Administrative Templates (or newer).
+
+Impact:
+
+Network connectivity in standby (while plugged in) is not guaranteed. This connectivity restriction currently only applies to WLAN networks only, but is subject to change (according to Microsoft)."
+      reference   : "800-171|3.4.6,800-171|3.4.7,800-171r3|03.04.06b.,800-53|CM-7b.,800-53r5|CM-7b.,CN-L3|7.1.3.5(c),CN-L3|7.1.3.7(d),CN-L3|8.1.4.4(b),CSCv7|9.2,CSF|PR.IP-1,CSF|PR.PT-3,CSF2.0|PR.PS-01,GDPR|32.1.b,HIPAA|164.306(a)(1),ITSG-33|CM-7a.,LEVEL|2A,NIAv2|SS13b,NIAv2|SS14a,NIAv2|SS14c,PCI-DSSv3.2.1|2.2.2,PCI-DSSv4.0|2.2.4,QCSC-v1|3.2,SWIFT-CSCv1|2.3"
+      see_also    : "https://workbench.cisecurity.org/benchmarks/25733"
+      value_type  : POLICY_DWORD
+      value_data  : "0"
+      reg_key     : "HKLM\Software\Policies\Microsoft\Power\PowerSettings\f15576e8-98b7-4186-b944-eafa664402d9"
+      reg_item    : "ACSettingIndex"
+      reg_option  : CAN_NOT_BE_NULL
+    </custom_item>
+
+    <custom_item>
+      type        : REGISTRY_SETTING
+      description : "18.9.49.11.1 Ensure 'Enable/Disable PerfTrack' is set to 'Disabled'"
+      info        : "This policy setting specifies whether to enable or disable tracking of responsiveness events.
+
+The recommended state for this setting is: Disabled.
+
+When enabled the aggregated data of a given event will be transmitted to Microsoft. The option exists to restrict this feature for a specific user, set the consent level, and designate specific programs for which error reports could be sent. However, centrally restricting the ability to execute PerfTrack to limit the potential for unauthorized or undesired usage, data leakage, or unintentional communications is highly recommended."
+      solution    : "To establish the recommended configuration via GP, set the following UI path to Disabled:
+
+Computer Configuration\Policies\Administrative Templates\System\Troubleshooting and Diagnostics\Windows Performance PerfTrack\Enable/Disable PerfTrack
+
+Note: This Group Policy path may not exist by default. It is provided by the Group Policy template PerformancePerftrack.admx/adml that is included with the Microsoft Windows 7 & Server 2008 R2 Administrative Templates (or newer).
+
+Impact:
+
+Responsiveness events are not processed."
+      reference   : "800-171|3.4.2,800-171|3.4.6,800-171|3.4.7,800-171r3|03.04.02,800-171r3|03.04.06,800-53|CM-6,800-53|CM-7,800-53r5|CM-6,800-53r5|CM-7,CSCv7|9.2,CSCv8|4.8,CSF|PR.IP-1,CSF|PR.PT-3,CSF2.0|DE.CM-09,CSF2.0|PR.PS-01,GDPR|32.1.b,HIPAA|164.306(a)(1),ISO-27001-2022|A.8.9,ITSG-33|CM-6,ITSG-33|CM-7,LEVEL|2A,NIAv2|SS15a,PCI-DSSv3.2.1|2.2.2,SWIFT-CSCv1|2.3"
+      see_also    : "https://workbench.cisecurity.org/benchmarks/25733"
+      value_type  : POLICY_DWORD
+      value_data  : "0"
+      reg_key     : "HKLM\Software\Policies\Microsoft\Windows\WDI\{9c5a40da-b965-4fc3-8781-88dd50a6299d}"
+      reg_item    : "ScenarioExecutionEnabled"
+      reg_option  : CAN_NOT_BE_NULL
+    </custom_item>
+
+    <custom_item>
+      type        : REGISTRY_SETTING
+      description : "18.9.49.5.1 Ensure 'Microsoft Support Diagnostic Tool: Turn on MSDT interactive communication with support provider' is set to 'Disabled'"
+      info        : "This policy setting configures Microsoft Support Diagnostic Tool (MSDT) interactive communication with the support provider. MSDT gathers diagnostic data for analysis by support professionals.
+
+The recommended state for this setting is: Disabled.
+
+In high-security environments, data must never be shared with third-parties without explicit consent, as it may contain sensitive information."
+      solution    : "To establish the recommended configuration via GP, set the following UI path to Disabled :
+
+Computer Configuration\Policies\Administrative Templates\System\Troubleshooting and Diagnostics\Microsoft Support Diagnostic Tool\Microsoft Support Diagnostic Tool: Turn on MSDT interactive communication with support provider
+
+Note: This Group Policy path may not exist by default. It is provided by the Group Policy template MSDT.admx/adml that is included with the Microsoft Windows 8.0 & Server 2012 (non-R2) Administrative Templates (or newer).
+
+Impact:
+
+MSDT cannot run in support mode, and no data can be collected or sent to the support provider."
+      reference   : "800-171|3.4.2,800-171|3.4.6,800-171|3.4.7,800-171r3|03.04.02,800-171r3|03.04.06,800-53|CM-6,800-53|CM-7,800-53r5|CM-6,800-53r5|CM-7,CSCv7|9.2,CSCv8|4.8,CSF|PR.IP-1,CSF|PR.PT-3,CSF2.0|DE.CM-09,CSF2.0|PR.PS-01,GDPR|32.1.b,HIPAA|164.306(a)(1),ISO-27001-2022|A.8.9,ITSG-33|CM-6,ITSG-33|CM-7,LEVEL|2A,NIAv2|SS15a,PCI-DSSv3.2.1|2.2.2,SWIFT-CSCv1|2.3"
+      see_also    : "https://workbench.cisecurity.org/benchmarks/25733"
+      value_type  : POLICY_DWORD
+      value_data  : "0"
+      reg_key     : "HKLM\Software\Policies\Microsoft\Windows\ScriptedDiagnosticsProvider\Policy"
+      reg_item    : "DisableQueryRemoteServer"
+      reg_option  : CAN_NOT_BE_NULL
+    </custom_item>
+
+    <custom_item>
+      type        : REGISTRY_SETTING
+      description : "18.9.51.1 Ensure 'Turn off the advertising ID' is set to 'Enabled'"
+      info        : "This policy setting turns off the advertising ID, preventing apps from using the ID for experiences across apps.
+
+The recommended state for this setting is: Enabled.
+
+In high-security environments, data must never be shared with third-parties without explicit consent, as it may contain sensitive information. In addition, tracking user activity for advertising purposes, even anonymously, could be a privacy concern."
+      solution    : "To establish the recommended configuration via GP, set the following UI path to Enabled :
+
+Computer Configuration\Policies\Administrative Templates\System\User Profiles\Turn off the advertising ID
+
+Note: This Group Policy path may not exist by default. It is provided by the Group Policy template UserProfiles.admx/adml that is included with the Microsoft Windows 8.1 & Server 2012 R2 Administrative Templates (or newer).
+
+Impact:
+
+The advertising ID is turned off. Apps can't use the ID for experiences across apps."
+      reference   : "800-171|3.4.6,800-171|3.4.7,800-171r3|03.04.06b.,800-53|CM-7b.,800-53r5|CM-7b.,CN-L3|7.1.3.5(c),CN-L3|7.1.3.7(d),CN-L3|8.1.4.4(b),CSCv7|9.2,CSF|PR.IP-1,CSF|PR.PT-3,CSF2.0|PR.PS-01,GDPR|32.1.b,HIPAA|164.306(a)(1),ITSG-33|CM-7a.,LEVEL|2A,NIAv2|SS13b,NIAv2|SS14a,NIAv2|SS14c,PCI-DSSv3.2.1|2.2.2,PCI-DSSv4.0|2.2.4,QCSC-v1|3.2,SWIFT-CSCv1|2.3"
+      see_also    : "https://workbench.cisecurity.org/benchmarks/25733"
+      value_type  : POLICY_DWORD
+      value_data  : "1"
+      reg_key     : "HKLM\Software\Policies\Microsoft\Windows\AdvertisingInfo"
+      reg_item    : "DisabledByGroupPolicy"
+      reg_option  : CAN_NOT_BE_NULL
+    </custom_item>
+
+    <custom_item>
+      type                  : REGISTRY_SETTING
+      description           : "19.6.6.1.1 Ensure 'Turn off Help Experience Improvement Program' is set to 'Enabled'"
+      info                  : "This policy setting specifies whether users can participate in the Help Experience Improvement program. The Help Experience Improvement program collects information about how customers use Windows Help so that Microsoft can improve it.
+
+The recommended state for this setting is: Enabled.
+
+Large enterprise managed environments may not want to have information collected by Microsoft from managed client computers."
+      solution              : "To establish the recommended configuration via GP, set the following UI path to Enabled:
+
+User Configuration\Policies\Administrative Templates\System\Internet Communication Management\Internet Communication Settings\Turn off Help Experience Improvement Program
+
+Note: This Group Policy path is provided by the Group Policy template HelpAndSupport.admx/adml that is included with all versions of the Microsoft Windows Administrative Templates.
+
+Impact:
+
+Users cannot participate in the Help Experience Improvement program."
+      reference             : "800-171|3.4.2,800-171|3.4.6,800-171|3.4.7,800-171r3|03.04.02,800-171r3|03.04.06,800-53|CM-6,800-53|CM-7,800-53r5|CM-6,800-53r5|CM-7,CSCv7|9.2,CSCv8|4.8,CSF|PR.IP-1,CSF|PR.PT-3,CSF2.0|DE.CM-09,CSF2.0|PR.PS-01,GDPR|32.1.b,HIPAA|164.306(a)(1),ISO-27001-2022|A.8.9,ITSG-33|CM-6,ITSG-33|CM-7,LEVEL|2A,NIAv2|SS15a,PCI-DSSv3.2.1|2.2.2,SWIFT-CSCv1|2.3"
+      see_also              : "https://workbench.cisecurity.org/benchmarks/25733"
+      value_type            : POLICY_DWORD
+      value_data            : "1"
+      reg_key               : "HKU\Software\Policies\Microsoft\Assistance\Client\1.0"
+      reg_item              : "NoImplicitFeedback"
+      reg_option            : CAN_NOT_BE_NULL
+      reg_include_hku_users : "S-1-5-21-*"
+    </custom_item>
+
+    <custom_item>
+      type                  : REGISTRY_SETTING
+      description           : "19.7.46.2.1 Ensure 'Prevent Codec Download' is set to 'Enabled'"
+      info                  : "This setting controls whether Windows Media Player is allowed to download additional codecs for decoding media files it does not already understand.
+
+The recommended state for this setting is: Enabled.
+
+This has some potential for risk if a malicious data file is opened in Media Player that requires an additional codec to be installed. If a special codec is required for a necessary job function, then that codec should first be tested to ensure it is legitimate, and it should be supplied by the IT department in the organization."
+      solution              : "To establish the recommended configuration via GP, set the following UI path to Enabled:
+
+User Configuration\Policies\Administrative Templates\Windows Components\Windows Media Player\Playback\Prevent Codec Download
+
+Note: This Group Policy path is provided by the Group Policy template WindowsMediaPlayer.admx/adml that is included with all versions of the Microsoft Windows Administrative Templates.
+
+Impact:
+
+Windows Media Player is prevented from automatically downloading codecs to your computer. In addition, the Download codecs automatically check box on the Player tab in the Player is not available."
+      reference             : "800-171|3.4.2,800-171r3|03.04.02,800-53|CM-6,800-53r5|CM-6,CSCv7|5.1,CSF|PR.IP-1,CSF2.0|DE.CM-09,CSF2.0|PR.PS-01,GDPR|32.1.b,HIPAA|164.306(a)(1),ISO-27001-2022|A.8.9,ITSG-33|CM-6,LEVEL|2A,SWIFT-CSCv1|2.3"
+      see_also              : "https://workbench.cisecurity.org/benchmarks/25733"
+      value_type            : POLICY_DWORD
+      value_data            : "1"
+      reg_key               : "HKU\Software\Policies\Microsoft\WindowsMediaPlayer"
+      reg_item              : "PreventCodecDownload"
+      reg_option            : CAN_NOT_BE_NULL
+      reg_include_hku_users : "S-1-5-21-*"
+    </custom_item>
+
+    <custom_item>
+      type                  : REGISTRY_SETTING
+      description           : "19.7.8.3 Ensure 'Do not use diagnostic data for tailored experiences' is set to 'Enabled'"
+      info                  : "This setting determines if Windows can use diagnostic data to provide tailored experiences to the user.
+
+The recommended state for this setting is: Enabled.
+
+Tracking, collection and utilization of personalized data is a privacy and security issue that is of concern to many organizations."
+      solution              : 'To establish the recommended configuration via GP, set the following UI path to Enabled :
+
+User Configuration\\Policies\\Administrative Templates\\Windows Components\\Cloud Content\\Do not use diagnostic data for tailored experiences
+
+Note: This Group Policy path may not exist by default. It is provided by the Group Policy template CloudContent.admx/adml that is included with the Microsoft Windows 10 Release 1703 Administrative Templates (or newer).
+
+Impact:
+
+Windows will not use diagnostic data from this device (this data may include browser, app and feature usage, depending on the \'Diagnostic and usage data\' setting value) to customize content shown on the lock screen, Windows tips, Microsoft consumer features and other related features. If these features are enabled, users will still see recommendations, tips and offers, but they may be less personalized.'
+      reference             : "800-171|3.4.6,800-171|3.4.7,800-171r3|03.04.06b.,800-53|CM-7b.,800-53r5|CM-7b.,CN-L3|7.1.3.5(c),CN-L3|7.1.3.7(d),CN-L3|8.1.4.4(b),CSCv7|9.2,CSF|PR.IP-1,CSF|PR.PT-3,CSF2.0|PR.PS-01,GDPR|32.1.b,HIPAA|164.306(a)(1),ITSG-33|CM-7a.,LEVEL|2A,NIAv2|SS13b,NIAv2|SS14a,NIAv2|SS14c,PCI-DSSv3.2.1|2.2.2,PCI-DSSv4.0|2.2.4,QCSC-v1|3.2,SWIFT-CSCv1|2.3"
+      see_also              : "https://workbench.cisecurity.org/benchmarks/25733"
+      value_type            : POLICY_DWORD
+      value_data            : "1"
+      reg_key               : "HKU\Software\Policies\Microsoft\Windows\CloudContent"
+      reg_item              : "DisableTailoredExperiencesWithDiagnosticData"
+      reg_option            : CAN_NOT_BE_NULL
+      reg_include_hku_users : "S-1-5-21-*"
+    </custom_item>
+
+    <custom_item>
+      type                  : REGISTRY_SETTING
+      description           : "19.7.8.4 Ensure 'Turn off all Windows spotlight features' is set to 'Enabled'"
+      info                  : "This policy setting lets you turn off all Windows Spotlight features at once.
+
+The recommended state for this setting is: Enabled.
+
+Note: Per Microsoft TechNet https://technet.microsoft.com/en-us/itpro/windows/manage/group-policies-for-enterprise-and-education-editions, this policy setting only applies to Windows 10 Enterprise and Windows 10 Education editions.
+
+Enabling this setting will help ensure your data is not shared with any third party. The Windows Spotlight feature collects data and uses that data to display suggested apps as well as images from the internet."
+      solution              : "To establish the recommended configuration via GP, set the following UI path to Enabled :
+
+User Configuration\Policies\Administrative Templates\Windows Components\Cloud Content\Turn off all Windows spotlight features
+
+Note: This Group Policy path may not exist by default. It is provided by the Group Policy template CloudContent.admx/adml that is included with the Microsoft Windows 10 Release 1607 & Server 2016 Administrative Templates (or newer).
+
+Impact:
+
+Windows Spotlight on lock screen, Windows tips, Microsoft consumer features and other related features will be turned off."
+      reference             : "800-171|3.4.2,800-171|3.4.6,800-171|3.4.7,800-171r3|03.04.02,800-171r3|03.04.06,800-53|CM-6,800-53|CM-7,800-53r5|CM-6,800-53r5|CM-7,CSCv7|9.2,CSCv8|4.8,CSF|PR.IP-1,CSF|PR.PT-3,CSF2.0|DE.CM-09,CSF2.0|PR.PS-01,GDPR|32.1.b,HIPAA|164.306(a)(1),ISO-27001-2022|A.8.9,ITSG-33|CM-6,ITSG-33|CM-7,LEVEL|2A,NIAv2|SS15a,PCI-DSSv3.2.1|2.2.2,SWIFT-CSCv1|2.3"
+      see_also              : "https://workbench.cisecurity.org/benchmarks/25733"
+      value_type            : POLICY_DWORD
+      value_data            : "1"
+      reg_key               : "HKU\Software\Policies\Microsoft\Windows\CloudContent"
+      reg_item              : "DisableWindowsSpotlightFeatures"
+      reg_option            : CAN_NOT_BE_NULL
+      reg_include_hku_users : "S-1-5-21-*"
+    </custom_item>
+
+    <custom_item>
+      type        : USER_RIGHTS_POLICY
+      description : "2.2.36 Ensure 'Log on as a batch job' is set to 'Administrators' (DC Only)"
+      info        : "This policy setting allows accounts to log on using the task scheduler service. Because the task scheduler is often used for administrative purposes, it may be needed in enterprise environments. However, its use should be restricted in high security environments to prevent misuse of system resources or to prevent threat actors from using the right to launch malicious code after gaining user level access to a computer.
+
+The recommended state for this setting is: Administrators.
+
+The Log on as a batch job user right presents a low-risk vulnerability. For most organizations, the default settings are sufficient."
+      solution    : "To establish the recommended configuration via GP, set the following UI path to Administrators :
+
+Computer Configuration\Windows Settings\Security Settings\Local Policies\User Rights Assignment\Log on as a batch job
+
+Impact:
+
+If you configure the Log on as a batch job setting through domain-based Group Policies, the computer will not be able to assign the user right to accounts that are used for scheduled jobs in the Task Scheduler. If you install optional components such as ASP.NET or IIS, you might need to assign this user right to additional accounts that are required by those components. For example, IIS requires assignment of this user right to the IIS_WPG group and the IUSR_ (ComputerName), ASPNET, and IWAM_ (ComputerName) accounts. If this user right is not assigned to this group and these accounts, IIS will be unable to run some COM objects that are necessary for proper functionality."
+      reference   : "800-171|3.1.1,800-171|3.1.5,800-171|3.3.8,800-171|3.3.9,800-171r3|03.01.01,800-171r3|03.01.02,800-171r3|03.01.05,800-171r3|03.01.05a.,800-171r3|03.01.05b.,800-171r3|03.03.08b.,800-53|AC-2,800-53|AC-3,800-53|AC-6,800-53|AC-6(1),800-53|AC-6(7),800-53|AU-9(4),800-53r5|AC-2,800-53r5|AC-5,800-53r5|AC-6,800-53r5|AC-6(1),800-53r5|AC-6(7),800-53r5|AU-9(4),CN-L3|7.1.3.2(b),CN-L3|7.1.3.2(d),CN-L3|7.1.3.2(g),CN-L3|8.1.4.2(d),CN-L3|8.1.4.2(f),CN-L3|8.1.4.3(d),CN-L3|8.1.4.11(b),CN-L3|8.1.10.2(c),CN-L3|8.1.10.6(a),CN-L3|8.5.3.1,CN-L3|8.5.4.1(a),CSCv8|6.8,CSF|DE.CM-1,CSF|DE.CM-3,CSF|PR.AC-1,CSF|PR.AC-4,CSF|PR.DS-5,CSF|PR.PT-1,CSF|PR.PT-3,CSF2.0|DE.CM-01,CSF2.0|DE.CM-03,CSF2.0|PR.AA-01,CSF2.0|PR.AA-05,CSF2.0|PR.DS-10,CSF2.0|PR.IR-01,GDPR|32.1.b,HIPAA|164.306(a)(1),HIPAA|164.312(a)(1),HIPAA|164.312(b),ISO-27001-2022|A.5.15,ISO-27001-2022|A.5.16,ISO-27001-2022|A.5.18,ISO-27001-2022|A.5.33,ISO-27001-2022|A.8.2,ISO-27001-2022|A.8.3,ISO-27001-2022|A.8.15,ISO-27001-2022|A.8.18,ISO-27001-2022|A.8.20,ISO/IEC-27001|A.9.2.1,ISO/IEC-27001|A.9.2.5,ISO/IEC-27001|A.9.4.1,ISO/IEC-27001|A.9.4.4,ISO/IEC-27001|A.9.4.5,ISO/IEC-27001|A.12.4.2,ITSG-33|AC-2,ITSG-33|AC-3,ITSG-33|AC-6,ITSG-33|AC-6(1),ITSG-33|AU-9(4),ITSG-33|AU-9(4)(a),ITSG-33|AU-9(4)(b),LEVEL|2A,NESA|M1.1.3,NESA|M1.2.2,NESA|M5.2.3,NESA|M5.5.2,NESA|T4.2.1,NESA|T5.1.1,NESA|T5.2.2,NESA|T5.4.1,NESA|T5.4.4,NESA|T5.4.5,NESA|T5.5.4,NESA|T5.6.1,NESA|T7.5.2,NESA|T7.5.3,NIAv2|AM1,NIAv2|AM3,NIAv2|AM23f,NIAv2|AM28,NIAv2|AM31,NIAv2|GS3,NIAv2|GS4,NIAv2|GS8c,NIAv2|NS5j,NIAv2|SM5,NIAv2|SM6,NIAv2|SS13c,NIAv2|SS14e,NIAv2|SS15c,NIAv2|SS29,NIAv2|VL3b,PCI-DSSv3.2.1|7.1.2,PCI-DSSv3.2.1|10.5,PCI-DSSv3.2.1|10.5.2,PCI-DSSv4.0|7.2.1,PCI-DSSv4.0|7.2.2,PCI-DSSv4.0|10.3.2,QCSC-v1|3.2,QCSC-v1|5.2.2,QCSC-v1|6.2,QCSC-v1|8.2.1,QCSC-v1|13.2,QCSC-v1|15.2,SWIFT-CSCv1|5.1,TBA-FIISB|31.1,TBA-FIISB|31.4.2,TBA-FIISB|31.4.3"
+      see_also    : "https://workbench.cisecurity.org/benchmarks/25733"
+      value_type  : USER_RIGHT
+      value_data  : "Administrators"
+      right_type  : SeBatchLogonRight
+    </custom_item>
+
+    <custom_item>
+      type        : REGISTRY_SETTING
+      description : "2.3.10.4 Ensure 'Network access: Do not allow storage of passwords and credentials for network authentication' is set to 'Enabled'"
+      info        : "This policy setting determines whether Credential Manager (formerly called Stored User Names and Passwords) saves passwords or credentials for later use when it gains domain authentication.
+
+The recommended state for this setting is: Enabled.
+
+Note: Changes to this setting will not take effect until Windows is restarted.
+
+Passwords that are cached can be accessed by the user when logged on to the computer. Although this information may sound obvious, a problem can arise if the user unknowingly executes hostile code that reads the passwords and forwards them to another, unauthorized user."
+      solution    : "To establish the recommended configuration via GP, set the following UI path to Enabled :
+
+Computer Configuration\Policies\Windows Settings\Security Settings\Local Policies\Security Options\Network access: Do not allow storage of passwords and credentials for network authentication
+
+Impact:
+
+Credential Manager will not store passwords and credentials on the computer. Users will be forced to enter passwords whenever they log on to their Passport account or other network resources that aren't accessible to their domain account. Testing has shown that clients running Windows Vista or Windows Server 2008 will be unable to connect to Distributed File System (DFS) shares in untrusted domains. Enabling this setting also makes it impossible to specify alternate credentials for scheduled tasks, this can cause a variety of problems. For example, some third-party backup products will no longer work. This policy setting should have no impact on users who access network resources that are configured to allow access with their Active Directory-based domain account."
+      reference   : "800-171|3.5.10,800-171r3|03.05.07c.,800-53|IA-5(1)(c),800-53r5|IA-5(1)(c),CSF|PR.AC-1,CSF2.0|PR.AA-01,CSF2.0|PR.AA-03,GDPR|32.1.b,HIPAA|164.306(a)(1),HIPAA|164.312(a)(2)(i),HIPAA|164.312(d),ISO-27001-2022|A.5.16,ISO-27001-2022|A.5.17,ITSG-33|IA-5(1)(c),LEVEL|2A,NESA|T5.2.3,NIAv2|CY6,QCSC-v1|5.2.2,QCSC-v1|13.2,SWIFT-CSCv1|4.1,TBA-FIISB|26.1"
+      see_also    : "https://workbench.cisecurity.org/benchmarks/25733"
+      value_type  : POLICY_DWORD
+      value_data  : "1"
+      reg_key     : "HKLM\System\CurrentControlSet\Control\Lsa"
+      reg_item    : "DisableDomainCreds"
+      reg_option  : CAN_NOT_BE_NULL
+    </custom_item>
+
+    <custom_item>
+      type        : REGISTRY_SETTING
+      description : "2.3.7.1 Ensure 'Interactive logon: Do not require CTRL+ALT+DEL' is set to 'Disabled'"
+      info        : "This policy setting determines whether users must press CTRL+ALT+DEL before they log on.
+
+The recommended state for this setting is: Disabled.
+
+If users are not required to press CTRL+ALT+DEL, they are susceptible to attacks that attempt to intercept their passwords. If CTRL+ALT+DEL is required before logon, user passwords are communicated by means of a trusted path.
+
+A threat actor could install a Trojan horse program that looks like the standard Windows logon dialog box and capture the user's password. The threat actor would then be able to log on to the compromised account with whatever level of privilege that user has."
+      solution    : "To establish the recommended configuration via GP, set the following UI path to Disabled :
+
+Computer Configuration\Policies\Windows Settings\Security Settings\Local Policies\Security Options\Interactive logon: Do not require CTRL+ALT+DEL
+
+Impact:
+
+Users must press CTRL+ALT+DEL before they log on to Windows unless they use a smart card for Windows logon. A smart card is a tamper-proof device that stores security information."
+      reference   : "800-171|3.1.8,800-171|3.1.18,800-171r3|03.01.08,800-171r3|03.01.18,800-53|AC-7,800-53|AC-19,800-53r5|AC-7,800-53r5|AC-19,CN-L3|8.1.4.1(b),CSCv8|4.10,CSF|PR.AC-3,CSF2.0|PR.AA-03,CSF2.0|PR.AA-05,GDPR|32.1.b,HIPAA|164.306(a)(1),ISO-27001-2022|A.5.14,ISO-27001-2022|A.7.9,ISO-27001-2022|A.8.1,ISO-27001-2022|A.8.5,ISO/IEC-27001|A.6.2.1,ITSG-33|AC-7,ITSG-33|AC-19,LEVEL|2A,NIAv2|AM24,QCSC-v1|3.2,QCSC-v1|5.2.2,QCSC-v1|13.2,TBA-FIISB|36.2.4,TBA-FIISB|45.1.2"
+      see_also    : "https://workbench.cisecurity.org/benchmarks/25733"
+      value_type  : POLICY_DWORD
+      value_data  : "0"
+      reg_key     : "HKLM\Software\Microsoft\Windows\CurrentVersion\Policies\System"
+      reg_item    : "DisableCAD"
+      reg_option  : CAN_NOT_BE_NULL
+    </custom_item>
+  </then>
+
+  <else>
+    <report type:"WARNING">
+      description : "CIS_Microsoft_Windows_Server_2022_v5.0.0_L2_DC.audit from CIS Microsoft Windows Server 2022 5.0.0"
+      info        : "NOTE: Nessus has not identified that the chosen audit applies to the target device."
+      see_also    : "https://workbench.cisecurity.org/benchmarks/25733"
+      show_output : YES
+    </report>
+  </else>
+</if>
+
+</group_policy>
+</check_type>

@@ -1,0 +1,1981 @@
+<!--
+  ============================================================================
+  MERGED XAML SOURCE — this is the file actually loaded by the app.
+  ============================================================================
+  Every window/dialog is a <Window> block below, each tagged with a stable
+  x:Name (MainWindow, SecurityEditWindow, AdmxEditWindow, ...). At runtime,
+  the PowerShell scripts (GpEdit.ps1 for MainWindow + the shared style, and
+  Import-XamlWindow in EditDialogs.ps1 for every dialog) parse this single
+  file once, then pull out the one <Window> node they need by that x:Name
+  and feed just that fragment to [System.Windows.Markup.XamlReader]::Load —
+  exactly as before when each window lived in its own file, just sourced
+  from one place instead of nine. The <ResourceDictionary> block (formerly
+  Styles/ModernStyle.xaml) is looked up the same way, by being the only
+  ResourceDictionary child of the root.
+
+  A single XML document can only have one root element, so everything is
+  wrapped in a dummy <MergedXamlReference> root — that wrapper itself is
+  never handed to XamlReader, only its children are.
+
+  The old per-window files (ColumnPickerWindow.xaml, AboutWindow.xaml,
+  BenchmarkWindow.xaml, PatchNoteWindow.xaml, ObjectTypesWindow.xaml,
+  LocationsWindow.xaml, SelectPrincipalsWindow.xaml, AdmxEditWindow.xaml,
+  SecurityEditWindow.xaml, MainWindow.xaml, Styles/ModernStyle.xaml) are no
+  longer read by any script. They were left on disk rather than deleted;
+  remove them once you've confirmed everything still works.
+  ============================================================================
+-->
+<MergedXamlReference xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!-- ==========================================================================
+       BLOCK: MainWindow.xaml
+       Main application window: menu bar (File / View / Help), a search bar,
+       a category TreeView on the left, and on the right either the patch-notes
+       panel (shown before any navigation) or the policy ListView + detail box
+       (shown once a category has been selected or a search run). No TabItem
+       is used in this window — the two right-hand panels are toggled via
+       Visibility from GpEdit.ps1, never shown together.
+       ========================================================================== -->
+  <Window x:Name="MainWindow" Title="Local Group Policy Editor (custom)" Height="1123" Width="1794"
+          WindowStartupLocation="CenterScreen"
+          Background="#F3F3F3" FontFamily="Segoe UI" FontSize="13">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- Top menu: File > Project/Action/Tools groups, View > columns/profile, Help > About/Patch note/Benchmark/Logs -->
+        <Menu Grid.Row="0" x:Name="MainMenu" Background="Transparent" BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="0,0,0,1">
+            <MenuItem x:Name="FileMenu" Header="File">
+                <MenuItem Header="Project" IsEnabled="False" FontWeight="Bold" />
+                <MenuItem x:Name="FileNewMenuItem" Header="New" />
+                <MenuItem x:Name="FileOpenMenuItem" Header="Open" />
+                <MenuItem x:Name="FileSaveMenuItem" Header="Save" IsEnabled="False" />
+                <Separator />
+                <MenuItem Header="Action" IsEnabled="False" FontWeight="Bold" />
+                <MenuItem x:Name="FileExportMenuItem" Header="Export" />
+                <MenuItem x:Name="FileImportMenuItem" Header="Import" />
+                <Separator />
+                <MenuItem Header="Tools" IsEnabled="False" FontWeight="Bold" />
+                <MenuItem x:Name="FileOptionsMenuItem" Header="Options" />
+                <MenuItem x:Name="FileExitMenuItem" Header="Exit" />
+            </MenuItem>
+            <MenuItem x:Name="ViewMenu" Header="View">
+                <MenuItem x:Name="ViewColumnsMenuItem" Header="Add/remove columns" />
+                <MenuItem x:Name="ViewProfileMenu" Header="Profile" />
+                <MenuItem x:Name="ViewRemoveCisFilterMenuItem" Header="Remove profile filter" />
+                <MenuItem x:Name="ViewOnlySetMenuItem" Header="Only Set" IsCheckable="True" />
+            </MenuItem>
+            <MenuItem x:Name="HelpMenu" Header="?">
+                <MenuItem x:Name="HelpAboutMenuItem" Header="About" />
+                <MenuItem x:Name="HelpPatchNoteMenuItem" Header="Patch note" />
+                <MenuItem x:Name="HelpBenchmarkMenuItem" Header="Benchmark" />
+                <MenuItem x:Name="HelpLogsMenuItem" Header="Logs" />
+            </MenuItem>
+        </Menu>
+
+        <!-- Barre de recherche : carte blanche arrondie + ombre douce. Deux Border
+             superposees plutot qu'une seule avec Effet : un Effet (DropShadowEffect)
+             force WPF a rasteriser tout le sous-arbre visuel avant affichage, ce qui
+             rend le texte a l'interieur visiblement flou. La Border du dessous ne
+             porte que l'ombre (rien dedans a flouter) ; celle du dessus porte le
+             vrai contenu sans Effet, donc rendu net. Meme motif partout ailleurs. -->
+        <Grid Grid.Row="1" Margin="10,8">
+            <Border CornerRadius="8" Background="{DynamicResource CardBackgroundBrush}"
+                    Effect="{DynamicResource SoftCardShadow}" />
+            <Border Padding="10" CornerRadius="8" Background="{DynamicResource CardBackgroundBrush}"
+                    BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBox x:Name="SearchBox" Grid.Column="0" VerticalContentAlignment="Center"
+                             Text="Search for a setting (name, description)..." Foreground="Gray" />
+                    <ComboBox x:Name="SearchFieldCombo" Grid.Column="1" Margin="6,0,0,0" Width="125" VerticalContentAlignment="Center" SelectedIndex="0">
+                        <ComboBoxItem x:Name="SearchFieldAnyItem" Content="Any" />
+                        <ComboBoxItem x:Name="SearchFieldNameItem" Content="Name" />
+                        <ComboBoxItem x:Name="SearchFieldDescriptionItem" Content="Description" />
+                        <ComboBoxItem x:Name="SearchFieldKeyItem" Content="Key" />
+                        <ComboBoxItem x:Name="SearchFieldCisNumberItem" Content="CIS Number" />
+                    </ComboBox>
+                    <Button x:Name="SearchButton" Grid.Column="2" Content="Search" Margin="6,0,0,0" />
+                    <Button x:Name="ClearSearchButton" Grid.Column="3" Content="Clear" Margin="6,0,0,0" />
+                </Grid>
+            </Border>
+        </Grid>
+
+        <!-- Contenu principal : arborescence + liste, chacun dans sa propre carte -->
+        <Grid Grid.Row="2" Margin="10,0,10,10">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="408" MinWidth="220" />
+                <ColumnDefinition Width="10" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <!-- Left card: category TreeView -->
+            <Grid Grid.Column="0">
+                <Border CornerRadius="8" Background="{DynamicResource CardBackgroundBrush}"
+                        Effect="{DynamicResource SoftCardShadow}" />
+                <Border Padding="4" CornerRadius="8" Background="{DynamicResource CardBackgroundBrush}"
+                        BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1">
+                    <TreeView x:Name="CategoryTree" />
+                </Border>
+            </Grid>
+
+            <GridSplitter Grid.Column="1" HorizontalAlignment="Center" Width="2" Background="#D1D1D1" />
+
+            <!-- Volet droit : soit les notes de version (avant toute selection/recherche),
+                 soit la liste + details normaux (des la premiere navigation), voir
+                 plan-gpedit-ui-enhancements.md §2. Les deux occupent la meme cellule ;
+                 GpEdit.ps1 bascule leur Visibility, jamais les deux visibles a la fois. -->
+            <Grid Grid.Column="2">
+              <Border CornerRadius="8" Background="{DynamicResource CardBackgroundBrush}"
+                      Effect="{DynamicResource SoftCardShadow}" />
+              <Border Padding="10" CornerRadius="8" Background="{DynamicResource CardBackgroundBrush}"
+                      BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1">
+                <Grid>
+                    <!-- Right panel, state A: patch notes, shown by default until the user navigates/searches -->
+                    <Grid x:Name="PatchNotesPanel" Visibility="Visible">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+                        <TextBlock x:Name="PatchNotesTitleLabel" Grid.Row="0" Margin="4,0,4,6" FontWeight="Bold"
+                                   Text="Release notes" />
+                        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                            <TextBlock x:Name="PatchNotesTextBlock" Margin="4" TextWrapping="Wrap" />
+                        </ScrollViewer>
+                    </Grid>
+
+                    <!-- Right panel, state B: policy list + detail box, shown once a category is selected or a search runs -->
+                    <Grid x:Name="MainContentGrid" Visibility="Collapsed">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <Border Grid.Row="0" Margin="0,0,0,6" Padding="8,6" CornerRadius="6"
+                                Background="{DynamicResource AccentLightBrush}">
+                            <TextBlock x:Name="CategoryPathLabel" FontWeight="Bold"
+                                       Text="Select a category in the tree" />
+                        </Border>
+
+                        <ListView x:Name="PolicyList" Grid.Row="1">
+                            <ListView.View>
+                                <GridView>
+                                    <GridViewColumn x:Name="ColumnName" Header="Name" Width="546">
+                                        <GridViewColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Text="{Binding IconGlyph}" FontFamily="Segoe MDL2 Assets" Foreground="#5A6B87" Margin="0,0,6,0" VerticalAlignment="Center" />
+                                                    <TextBlock Text="{Binding DisplayName}" VerticalAlignment="Center" />
+                                                </StackPanel>
+                                            </DataTemplate>
+                                        </GridViewColumn.CellTemplate>
+                                    </GridViewColumn>
+                                    <GridViewColumn x:Name="ColumnCategory" Header="Location" Width="0" DisplayMemberBinding="{Binding CategoryLabel}" />
+                                    <GridViewColumn x:Name="ColumnState" Header="State" Width="248" DisplayMemberBinding="{Binding StateLabel}" />
+                                    <GridViewColumn x:Name="ColumnCis" Header="CIS" Width="50" DisplayMemberBinding="{Binding CisLabel}" />
+                                    <GridViewColumn x:Name="ColumnScope" Header="Scope" Width="0" DisplayMemberBinding="{Binding ScopeLabel}" />
+                                    <GridViewColumn x:Name="ColumnRecommendedState" Header="CIS R. Value" Width="0" DisplayMemberBinding="{Binding RecommendedStateLabel}" />
+                                    <GridViewColumn x:Name="ColumnCisStates" Header="CIS R. States" Width="0" DisplayMemberBinding="{Binding CisStatesLabel}" />
+                                </GridView>
+                            </ListView.View>
+                        </ListView>
+
+                        <GroupBox x:Name="DetailGroupBox" Grid.Row="2" Margin="0,8,0,0" Background="#EAEAEA">
+                            <TextBox x:Name="DetailTextBox" IsReadOnly="True" TextWrapping="NoWrap" AcceptsReturn="True"
+                                     Background="Transparent" BorderThickness="0"
+                                     Height="150" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" />
+                        </GroupBox>
+                    </Grid>
+                </Grid>
+              </Border>
+            </Grid>
+        </Grid>
+
+        <!-- Status bar: status text, active profile/project, log file path, Save now button (project mode only) -->
+        <Border Grid.Row="3" Background="#F3F3F3" BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="0,1,0,0" Padding="12,6">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock x:Name="StatusLabel" Grid.Column="0" Text="Ready" VerticalAlignment="Center" />
+                <TextBlock x:Name="ActiveProfileLabel" Grid.Column="1" Text="" VerticalAlignment="Center" Margin="0,0,12,0" Foreground="#666666" />
+                <TextBlock x:Name="ActiveProjectLabel" Grid.Column="2" Text="" VerticalAlignment="Center" Margin="0,0,12,0" Foreground="#666666" />
+                <TextBlock x:Name="LogPathLabel" Grid.Column="3" Text="" VerticalAlignment="Center" Margin="0,0,12,0" Foreground="#666666" />
+                <Button x:Name="SaveNowButton" Grid.Column="4" Content="Save now" Visibility="Collapsed" />
+            </Grid>
+        </Border>
+
+        <!-- Busy overlay: shown while a long blocking operation runs on the
+             main window (e.g. File > Import applying secedit/registry.pol/
+             audit.csv) - spans every row (menu, tree/list, status bar
+             included) so the whole window reads as blocked, same pattern as
+             OptionsWindow's BusyOverlay (Add/Delete audit file). -->
+        <Grid x:Name="MainBusyOverlay" Grid.RowSpan="4" Background="#A0000000" Visibility="Collapsed">
+            <StackPanel Orientation="Vertical" HorizontalAlignment="Center" VerticalAlignment="Center">
+                <TextBlock Text="&#8987;" FontSize="72" Foreground="White" HorizontalAlignment="Center" />
+                <TextBlock x:Name="MainBusyOverlayLabel" Text="Please wait..." FontSize="16" Foreground="White" Margin="0,10,0,0" HorizontalAlignment="Center" />
+            </StackPanel>
+        </Grid>
+    </Grid>
+  </Window>
+
+  <!-- ==========================================================================
+       BLOCK: SecurityEditWindow.xaml
+       Edit dialog for secedit.inf-based settings (Security Options / CIS
+       benchmark items that come from the security template, not an ADMX
+       policy). Three tabs:
+         - "Paramètre" (Setting): the actual editable value — a checkbox to
+           enable/disable enforcement, plus a dynamically-built value editor
+           hosted in ValueEditorPanel (populated from PowerShell code).
+         - "Expliquer" (Explain): plain-text explanation of the setting.
+         - "CIS recommendation": read-only CIS benchmark metadata (hidden
+           unless the setting has CIS data) — description, value type, and a
+           DataGrid of per-profile (L1/L2, MS/DC) recommended values.
+       ========================================================================== -->
+  <Window x:Name="SecurityEditWindow" Title="Security Setting Properties" Height="658" Width="1017"
+          WindowStartupLocation="CenterOwner" ShowInTaskbar="False">
+    <Grid Margin="10">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" MinHeight="180" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <Grid Grid.Row="0" Margin="0,0,0,10">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBox x:Name="TitleLabel" Grid.Column="0" FontWeight="Bold" FontSize="14" TextWrapping="Wrap" Text="Setting name"
+                     IsReadOnly="True" Background="Transparent" BorderThickness="0" Padding="0" IsReadOnlyCaretVisible="False" VerticalAlignment="Center" />
+            <StackPanel x:Name="NameEditButtonsPanel" Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="8,0,0,0">
+                <Button x:Name="EditNameButton" Content="&#9998;" Width="26" Padding="0" ToolTip="Edit" />
+                <Button x:Name="SaveNameButton" Content="Save" Padding="8,2" Margin="4,0,0,0" Visibility="Collapsed" />
+                <Button x:Name="CancelNameButton" Content="Cancel" Padding="8,2" Margin="4,0,0,0" Visibility="Collapsed" />
+            </StackPanel>
+        </Grid>
+
+        <TabControl Grid.Row="1">
+            <!-- Tab 1: the editable setting itself (on/off + its value editor) -->
+            <TabItem x:Name="SettingTabItem" Header="Setting">
+                <Grid Margin="0,10,0,0">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" MinHeight="60" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <TextBlock x:Name="DescriptionLabel" Grid.Row="0" TextWrapping="Wrap" Foreground="#333333" Margin="0,0,0,10" Text="Description" />
+                    <CheckBox x:Name="IsConfiguredCheck" Grid.Row="1" Content="Define this policy setting" Margin="0,0,0,10" />
+
+                    <Grid Grid.Row="2">
+                        <Border CornerRadius="8" Background="{DynamicResource CardBackgroundBrush}"
+                                Effect="{DynamicResource SoftCardShadow}" />
+                        <Border Padding="10" CornerRadius="8" Background="{DynamicResource CardBackgroundBrush}"
+                                BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1">
+                            <StackPanel x:Name="ValueEditorPanel" />
+                        </Border>
+                    </Grid>
+
+                    <!-- Inline "Explain" group, Security Options only (see
+                         Show-SecurityEditDialog): collapsed by default, shown
+                         instead of ExplainTabItem below for that one category,
+                         matching how AdmxEditWindow shows its explanation
+                         directly on the Setting tab instead of a separate tab. -->
+                    <GroupBox x:Name="InlineExplainGroupBox" Grid.Row="3" Margin="0,10,0,0" Background="#EAEAEA" Visibility="Collapsed">
+                        <GroupBox.Header>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock x:Name="InlineExplainHeaderText" Text="Explain" VerticalAlignment="Center" />
+                                <Button x:Name="EditInlineExplainButton" Content="&#9998;" Width="20" Height="20" Padding="0" Margin="6,0,0,0" ToolTip="Edit" />
+                            </StackPanel>
+                        </GroupBox.Header>
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <StackPanel x:Name="InlineExplainEditButtonsPanel" Grid.Row="0" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,0,6">
+                                <Button x:Name="SaveInlineExplainButton" Content="Save" Padding="8,2" Margin="4,0,0,0" Visibility="Collapsed" />
+                                <Button x:Name="CancelInlineExplainButton" Content="Cancel" Padding="8,2" Margin="4,0,0,0" Visibility="Collapsed" />
+                            </StackPanel>
+                            <ScrollViewer x:Name="InlineExplainDisplayScroll" Grid.Row="1" Height="207" Padding="6" VerticalScrollBarVisibility="Auto">
+                                <TextBlock x:Name="InlineExplainTextBlock" FontSize="12" TextWrapping="Wrap" Text="" />
+                            </ScrollViewer>
+                            <TextBox x:Name="InlineExplainEditTextBox" Grid.Row="1" Height="207" FontSize="12" TextWrapping="Wrap" AcceptsReturn="True"
+                                     VerticalScrollBarVisibility="Auto" Visibility="Collapsed" />
+                        </Grid>
+                    </GroupBox>
+                </Grid>
+            </TabItem>
+
+            <!-- Tab 2: static explanation text for this setting (every category
+                 except Security Options, which shows it inline on the Setting
+                 tab instead - see InlineExplainGroupBox above). -->
+            <TabItem x:Name="ExplainTabItem">
+                <TabItem.Header>
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock x:Name="ExplainTabHeaderText" Text="Explain" VerticalAlignment="Center" />
+                        <Button x:Name="EditExplainButton" Content="&#9998;" Width="20" Height="20" Padding="0" Margin="6,0,0,0" ToolTip="Edit" />
+                    </StackPanel>
+                </TabItem.Header>
+                <Grid Margin="0,10,0,0">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <StackPanel x:Name="ExplainEditButtonsPanel" Grid.Row="0" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,0,6">
+                        <Button x:Name="SaveExplainButton" Content="Save" Padding="8,2" Margin="4,0,0,0" Visibility="Collapsed" />
+                        <Button x:Name="CancelExplainButton" Content="Cancel" Padding="8,2" Margin="4,0,0,0" Visibility="Collapsed" />
+                    </StackPanel>
+                    <ScrollViewer x:Name="ExplainDisplayScroll" Grid.Row="1" Background="#EAEAEA" Padding="6" VerticalScrollBarVisibility="Auto">
+                        <TextBlock x:Name="ExplainTextBlock" TextWrapping="Wrap" Text="" />
+                    </ScrollViewer>
+                    <TextBox x:Name="ExplainEditTextBox" Grid.Row="1" TextWrapping="Wrap" AcceptsReturn="True"
+                             VerticalScrollBarVisibility="Auto" Visibility="Collapsed" />
+                </Grid>
+            </TabItem>
+
+            <!-- Tab 3: CIS benchmark recommendation data (only shown when the setting maps to a CIS control) -->
+            <TabItem x:Name="CisTabItem" Header="CIS recommendation" Visibility="Collapsed">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="0,10,0,0">
+                    <StackPanel>
+                        <TextBlock x:Name="CisDescriptionHeaderLabel" Text="Description" FontWeight="SemiBold" Margin="0,0,0,3" />
+                        <TextBlock x:Name="CisDescriptionLabel" TextWrapping="Wrap" Margin="0,0,0,10" Text="" />
+
+                        <Grid Margin="0,0,0,3">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock x:Name="CisInfoHeaderLabel" Grid.Column="0" Text="Info" FontWeight="SemiBold" VerticalAlignment="Center" />
+                            <StackPanel x:Name="CisInfoEditButtonsPanel" Grid.Column="1" Orientation="Horizontal">
+                                <Button x:Name="EditCisInfoButton" Content="&#9998;" Width="26" Padding="0" ToolTip="Edit" />
+                                <Button x:Name="SaveCisInfoButton" Content="Save" Padding="8,2" Margin="4,0,0,0" Visibility="Collapsed" />
+                                <Button x:Name="CancelCisInfoButton" Content="Cancel" Padding="8,2" Margin="4,0,0,0" Visibility="Collapsed" />
+                            </StackPanel>
+                        </Grid>
+                        <Grid Margin="0,0,0,10">
+                            <Border CornerRadius="8" Background="{DynamicResource CardBackgroundBrush}"
+                                    Effect="{DynamicResource SoftCardShadow}" />
+                            <Border Padding="8" CornerRadius="8" Background="{DynamicResource CardBackgroundBrush}"
+                                    BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1">
+                                <Grid>
+                                    <RichTextBox x:Name="CisInfoRichTextBox" IsReadOnly="True" BorderThickness="0" Background="Transparent"
+                                                 VerticalScrollBarVisibility="Auto" IsDocumentEnabled="True" Height="140" />
+                                    <TextBox x:Name="CisInfoEditTextBox" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
+                                             Height="140" BorderThickness="0" Background="Transparent" Visibility="Collapsed" />
+                                </Grid>
+                            </Border>
+                        </Grid>
+
+                        <Grid Margin="0,0,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock x:Name="CisValueTypeHeaderLabel" Grid.Row="0" Grid.Column="0" Text="Value Type" FontWeight="SemiBold" Margin="0,0,10,0" />
+                            <TextBlock x:Name="CisValueTypeLabel" Grid.Row="0" Grid.Column="1" Text="" Margin="0,0,0,0" />
+                        </Grid>
+
+                        <TextBlock x:Name="CisProfilesHeaderLabel" Text="CIS recommendations by profile:" FontWeight="SemiBold" Margin="0,0,0,4" />
+                        <Grid>
+                            <Border CornerRadius="8" Background="{DynamicResource CardBackgroundBrush}"
+                                    Effect="{DynamicResource SoftCardShadow}" />
+                            <Border CornerRadius="8" Background="{DynamicResource CardBackgroundBrush}" BorderBrush="{DynamicResource CardBorderBrush}"
+                                    BorderThickness="1">
+                                <DataGrid x:Name="CisProfilesGrid" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False"
+                                          CanUserDeleteRows="False" CanUserReorderColumns="False" CanUserResizeRows="False"
+                                          HeadersVisibility="Column" GridLinesVisibility="Horizontal" Height="160" BorderThickness="0">
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn x:Name="CisProfilesBenchmarkColumn" Header="Benchmark" Binding="{Binding Benchmark}" Width="2*" />
+                                        <DataGridTextColumn x:Name="CisProfilesVersionColumn" Header="Version" Binding="{Binding Version}" Width="70" />
+                                        <DataGridTextColumn x:Name="CisProfilesProfileColumn" Header="Profile" Binding="{Binding Profile}" Width="50" />
+                                        <DataGridTextColumn x:Name="CisProfilesDcColumn" Header="DC" Binding="{Binding Dc}" Width="50" />
+                                        <DataGridTextColumn x:Name="CisProfilesMsColumn" Header="MS" Binding="{Binding Ms}" Width="50" />
+                                        <DataGridTextColumn x:Name="CisProfilesNumberColumn" Header="CIS Number" Binding="{Binding CisNumber}" Width="*" />
+                                        <DataGridTextColumn x:Name="CisProfilesValueColumn" Header="Value" Binding="{Binding ValueData}" Width="1.5*" />
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                            </Border>
+                        </Grid>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+        </TabControl>
+
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
+            <Button x:Name="OkButton" Content="OK" Width="90" Padding="4" Margin="0,0,8,0" IsDefault="True" />
+            <Button x:Name="CancelButton" Content="Cancel" Width="90" Padding="4" IsCancel="True" />
+        </StackPanel>
+    </Grid>
+  </Window>
+
+  <!-- ==========================================================================
+       BLOCK: AdmxEditWindow.xaml
+       Edit dialog for ADMX/ADML-based Administrative Templates policies
+       (the classic "Not Configured / Enabled / Disabled" policy dialog).
+       Two tabs:
+         - "Paramètre" (Setting): state radio buttons, a dynamic panel of
+           policy-specific elements (dropdowns, checkboxes, text fields — one
+           per ADMX <elements> entry, built at runtime into ElementsPanel), a
+           GridSplitter, and a read-only explanation box below.
+         - "CIS recommendation": same CIS metadata block as
+           SecurityEditWindow.xaml's CIS tab, plus two extra rows (Reg Key /
+           Reg Item) since ADMX policies map to a concrete registry path,
+           unlike secedit.inf settings.
+       ========================================================================== -->
+  <Window x:Name="AdmxEditWindow" Title="Setting Properties" Height="680" Width="760"
+          WindowStartupLocation="CenterOwner" ShowInTaskbar="False">
+    <Grid Margin="10">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" MinHeight="200" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <TextBlock x:Name="TitleLabel" Grid.Row="0" FontWeight="Bold" FontSize="14" TextWrapping="Wrap" Text="Setting name" Margin="0,0,0,4" />
+        <TextBlock x:Name="CategoryPathLabel" Grid.Row="1" Foreground="Gray" TextWrapping="Wrap" Text="Category path" Margin="0,0,0,10" />
+
+        <TabControl Grid.Row="2">
+            <!-- Tab 1: policy state (Not configured / Enabled / Disabled) + its dynamic elements + explanation -->
+            <TabItem x:Name="SettingTabItem" Header="Setting">
+                <Grid Margin="0,10,0,0">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" MinHeight="60" />
+                        <RowDefinition Height="6" />
+                        <RowDefinition Height="1.4*" MinHeight="90" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,10">
+                        <RadioButton x:Name="NotConfiguredRadio" GroupName="State" Content="Not Configured" Margin="0,0,20,0" IsChecked="True" />
+                        <RadioButton x:Name="EnabledRadio" GroupName="State" Content="Enabled" Margin="0,0,20,0" />
+                        <RadioButton x:Name="DisabledRadio" GroupName="State" Content="Disabled" />
+                    </StackPanel>
+
+                    <Grid Grid.Row="1">
+                        <Border CornerRadius="8" Background="{DynamicResource CardBackgroundBrush}"
+                                Effect="{DynamicResource SoftCardShadow}" />
+                        <Border Padding="8" CornerRadius="8" Background="{DynamicResource CardBackgroundBrush}"
+                                BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                <StackPanel x:Name="ElementsPanel" />
+                            </ScrollViewer>
+                        </Border>
+                    </Grid>
+
+                    <GridSplitter Grid.Row="2" Height="4" HorizontalAlignment="Stretch" VerticalAlignment="Center" Background="#D1D1D1" Cursor="SizeNS" />
+
+                    <GroupBox x:Name="ExplainGroupBox" Grid.Row="3" Header="Explain" Margin="0,4,0,0" Background="#EAEAEA">
+                        <ScrollViewer Padding="6" VerticalScrollBarVisibility="Auto">
+                            <TextBlock x:Name="ExplainTextBlock" TextWrapping="Wrap" Text="" />
+                        </ScrollViewer>
+                    </GroupBox>
+
+                    <TextBlock x:Name="SupportedOnLabel" Grid.Row="4" Foreground="Gray" Margin="0,6,0,0" TextWrapping="Wrap" Text="Supported on: " />
+                </Grid>
+            </TabItem>
+
+            <!-- Tab 2: CIS benchmark recommendation data, incl. registry path (only shown when the policy maps to a CIS control) -->
+            <TabItem x:Name="CisTabItem" Header="CIS recommendation" Visibility="Collapsed">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="0,10,0,0">
+                    <StackPanel>
+                        <TextBlock x:Name="CisDescriptionHeaderLabel" Text="Description" FontWeight="SemiBold" Margin="0,0,0,3" />
+                        <TextBlock x:Name="CisDescriptionLabel" TextWrapping="Wrap" Margin="0,0,0,10" Text="" />
+
+                        <TextBlock x:Name="CisInfoHeaderLabel" Text="Info" FontWeight="SemiBold" Margin="0,0,0,3" />
+                        <Grid Margin="0,0,0,10">
+                            <Border CornerRadius="8" Background="{DynamicResource CardBackgroundBrush}"
+                                    Effect="{DynamicResource SoftCardShadow}" />
+                            <Border Padding="8" CornerRadius="8" Background="{DynamicResource CardBackgroundBrush}"
+                                    BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1">
+                                <RichTextBox x:Name="CisInfoRichTextBox" IsReadOnly="True" BorderThickness="0" Background="Transparent"
+                                             VerticalScrollBarVisibility="Auto" IsDocumentEnabled="True" Height="140" />
+                            </Border>
+                        </Grid>
+
+                        <Grid Margin="0,0,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <TextBlock x:Name="CisValueTypeHeaderLabel" Grid.Row="0" Grid.Column="0" Text="Value Type" FontWeight="SemiBold" Margin="0,0,10,4" />
+                            <TextBlock x:Name="CisValueTypeLabel" Grid.Row="0" Grid.Column="1" Text="" Margin="0,0,0,4" />
+                            <TextBlock x:Name="CisRegKeyHeaderLabel" Grid.Row="1" Grid.Column="0" Text="Reg Key" FontWeight="SemiBold" Margin="0,0,10,4" />
+                            <TextBlock x:Name="CisRegKeyLabel" Grid.Row="1" Grid.Column="1" Text="" TextWrapping="Wrap" Margin="0,0,0,4" />
+                            <TextBlock x:Name="CisRegItemHeaderLabel" Grid.Row="2" Grid.Column="0" Text="Reg Item" FontWeight="SemiBold" Margin="0,0,10,0" />
+                            <TextBlock x:Name="CisRegItemLabel" Grid.Row="2" Grid.Column="1" Text="" TextWrapping="Wrap" Margin="0,0,0,0" />
+                        </Grid>
+
+                        <TextBlock x:Name="CisProfilesHeaderLabel" Text="CIS recommendations by profile:" FontWeight="SemiBold" Margin="0,0,0,4" />
+                        <Grid>
+                            <Border CornerRadius="8" Background="{DynamicResource CardBackgroundBrush}"
+                                    Effect="{DynamicResource SoftCardShadow}" />
+                            <Border CornerRadius="8" Background="{DynamicResource CardBackgroundBrush}" BorderBrush="{DynamicResource CardBorderBrush}"
+                                    BorderThickness="1">
+                                <DataGrid x:Name="CisProfilesGrid" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False"
+                                          CanUserDeleteRows="False" CanUserReorderColumns="False" CanUserResizeRows="False"
+                                          HeadersVisibility="Column" GridLinesVisibility="Horizontal" Height="160" BorderThickness="0">
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn x:Name="CisProfilesBenchmarkColumn" Header="Benchmark" Binding="{Binding Benchmark}" Width="2*" />
+                                        <DataGridTextColumn x:Name="CisProfilesVersionColumn" Header="Version" Binding="{Binding Version}" Width="70" />
+                                        <DataGridTextColumn x:Name="CisProfilesProfileColumn" Header="Profile" Binding="{Binding Profile}" Width="50" />
+                                        <DataGridTextColumn x:Name="CisProfilesDcColumn" Header="DC" Binding="{Binding Dc}" Width="50" />
+                                        <DataGridTextColumn x:Name="CisProfilesMsColumn" Header="MS" Binding="{Binding Ms}" Width="50" />
+                                        <DataGridTextColumn x:Name="CisProfilesNumberColumn" Header="CIS Number" Binding="{Binding CisNumber}" Width="*" />
+                                        <DataGridTextColumn x:Name="CisProfilesValueColumn" Header="Value" Binding="{Binding ValueData}" Width="1.5*" />
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                            </Border>
+                        </Grid>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+        </TabControl>
+
+        <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
+            <Button x:Name="OkButton" Content="OK" Width="90" Padding="4" Margin="0,0,8,0" IsDefault="True" />
+            <Button x:Name="CancelButton" Content="Cancel" Width="90" Padding="4" IsCancel="True" />
+        </StackPanel>
+    </Grid>
+  </Window>
+
+  <!-- ==========================================================================
+       BLOCK: SelectPrincipalsWindow.xaml
+       "Select Users or Groups" dialog (classic Windows object picker look).
+       Object-type field (opens ObjectTypesWindow), location field (opens
+       LocationsWindow), a free-text names box, and a "Check names" button
+       that resolves/validates the typed names. No TabItem — single form.
+       ========================================================================== -->
+  <Window x:Name="SelectPrincipalsWindow" Title="Select Users or Groups" Height="440" Width="460"
+          WindowStartupLocation="CenterOwner" ShowInTaskbar="False" ResizeMode="NoResize">
+    <Grid Margin="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <TextBlock x:Name="ObjectTypeIntroLabel" Grid.Row="0" Text="Select this object type:" Margin="0,0,0,4" />
+        <Grid Grid.Row="1" Margin="0,0,0,12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBox x:Name="ObjectTypeTextBox" Grid.Column="0" IsReadOnly="True" Padding="4,2" Margin="0,0,8,0" VerticalContentAlignment="Center" />
+            <Button x:Name="ObjectTypesButton" Grid.Column="1" Content="Object Types..." Padding="8,2" />
+        </Grid>
+
+        <TextBlock x:Name="LocationIntroLabel" Grid.Row="2" Text="From this location:" Margin="0,0,0,4" />
+        <Grid Grid.Row="3" Margin="0,0,0,12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBox x:Name="LocationTextBox" Grid.Column="0" IsReadOnly="True" Padding="4,2" Margin="0,0,8,0" VerticalContentAlignment="Center" />
+            <Button x:Name="LocationsButton" Grid.Column="1" Content="Locations..." Padding="8,2" />
+        </Grid>
+
+        <TextBlock x:Name="NamesIntroLabel" Grid.Row="4"
+                   Text="Enter the object names to select (separated by semicolons):"
+                   TextWrapping="Wrap" Margin="0,0,0,4" />
+        <TextBox x:Name="NamesTextBox" Grid.Row="5" AcceptsReturn="True" TextWrapping="Wrap"
+                 VerticalScrollBarVisibility="Auto" Padding="4" />
+
+        <StackPanel Grid.Row="6" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
+            <Button x:Name="CheckNamesButton" Content="Check Names" Padding="8,2" />
+        </StackPanel>
+
+        <StackPanel Grid.Row="7" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
+            <Button x:Name="OkButton" Content="OK" Width="80" Margin="0,0,8,0" Padding="6,4" IsDefault="True" />
+            <Button x:Name="CancelButton" Content="Cancel" Width="80" Padding="6,4" IsCancel="True" />
+        </StackPanel>
+    </Grid>
+  </Window>
+
+  <!-- ==========================================================================
+       BLOCK: ObjectTypesWindow.xaml
+       Small sub-dialog opened from SelectPrincipalsWindow's "Types d'objets..."
+       button — lets the user restrict the search to Users / Groups / built-in
+       (well-known) security principals via checkboxes. No TabItem.
+       ========================================================================== -->
+  <Window x:Name="ObjectTypesWindow" Title="Object Types" Height="260" Width="320"
+          WindowStartupLocation="CenterOwner" ShowInTaskbar="False" ResizeMode="NoResize">
+    <Grid Margin="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <TextBlock x:Name="ObjectTypesIntroLabel" Grid.Row="0" TextWrapping="Wrap"
+                   Text="Select the types of objects you want to find." Margin="0,0,0,10" />
+
+        <StackPanel Grid.Row="1">
+            <CheckBox x:Name="UserTypeCheck" Content="Users" Margin="0,0,0,8" />
+            <CheckBox x:Name="GroupTypeCheck" Content="Groups" Margin="0,0,0,8" />
+            <CheckBox x:Name="WellKnownTypeCheck" Content="Built-in security principals" Margin="0,0,0,8" />
+        </StackPanel>
+
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
+            <Button x:Name="OkButton" Content="OK" Width="80" Margin="0,0,8,0" Padding="6,4" IsDefault="True" />
+            <Button x:Name="CancelButton" Content="Cancel" Width="80" Padding="6,4" IsCancel="True" />
+        </StackPanel>
+    </Grid>
+  </Window>
+
+  <!-- ==========================================================================
+       BLOCK: LocationsWindow.xaml
+       Small sub-dialog opened from SelectPrincipalsWindow's "Emplacements..."
+       button — lets the user pick which location (e.g. local machine vs a
+       domain) the principal search should run against. No TabItem.
+       ========================================================================== -->
+  <Window x:Name="LocationsWindow" Title="Locations" Height="280" Width="320"
+          WindowStartupLocation="CenterOwner" ShowInTaskbar="False" ResizeMode="NoResize">
+    <Grid Margin="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <TextBlock x:Name="LocationsIntroLabel" Grid.Row="0" TextWrapping="Wrap"
+                   Text="Select the location from which to search." Margin="0,0,0,10" />
+
+        <ListBox x:Name="LocationsListBox" Grid.Row="1" />
+
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
+            <Button x:Name="OkButton" Content="OK" Width="80" Margin="0,0,8,0" Padding="6,4" IsDefault="True" />
+            <Button x:Name="CancelButton" Content="Cancel" Width="80" Padding="6,4" IsCancel="True" />
+        </StackPanel>
+    </Grid>
+  </Window>
+
+  <!-- ==========================================================================
+       BLOCK: ColumnPickerWindow.xaml
+       "Add/remove columns" dialog for the main policy ListView — dual
+       listbox (available vs displayed columns) with Add/Remove and
+       Move up/down/Reset controls. No TabItem.
+       ========================================================================== -->
+  <Window x:Name="ColumnPickerWindow" Title="Add/remove columns" Height="360" Width="480"
+          WindowStartupLocation="CenterOwner" ShowInTaskbar="False" ResizeMode="NoResize">
+    <Grid Margin="10">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <Grid Grid.Row="0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <StackPanel Grid.Column="0">
+                <TextBlock x:Name="AvailableLabel" Text="Available columns:" Margin="0,0,0,4" />
+                <ListBox x:Name="AvailableListBox" Height="220" />
+            </StackPanel>
+
+            <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="8,0,8,0">
+                <Button x:Name="AddButton" Content="Add -&gt;" Width="90" Margin="0,0,0,6" Padding="4" />
+                <Button x:Name="RemoveButton" Content="&lt;- Remove" Width="90" Padding="4" />
+            </StackPanel>
+
+            <StackPanel Grid.Column="2">
+                <TextBlock x:Name="DisplayedLabel" Text="Displayed columns:" Margin="0,0,0,4" />
+                <ListBox x:Name="DisplayedListBox" Height="220" />
+            </StackPanel>
+
+            <StackPanel Grid.Column="3" VerticalAlignment="Top" Margin="8,20,0,0">
+                <Button x:Name="MoveUpButton" Content="Move up" Width="110" Margin="0,0,0,6" Padding="4" />
+                <Button x:Name="MoveDownButton" Content="Move down" Width="110" Margin="0,0,0,6" Padding="4" />
+                <Button x:Name="ResetButton" Content="Default settings" Width="110" Padding="4" />
+            </StackPanel>
+        </Grid>
+
+        <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
+            <Button x:Name="OkButton" Content="OK" Width="80" Margin="0,0,8,0" Padding="6,4" IsDefault="True" />
+            <Button x:Name="CancelButton" Content="Cancel" Width="80" Padding="6,4" IsCancel="True" />
+        </StackPanel>
+    </Grid>
+  </Window>
+
+  <!-- ==========================================================================
+       BLOCK: ProfileSelectionWindow.xaml
+       "Affichage > Profil" dialog (replaces the old flat submenu): pick a
+       CIS benchmark from 3 tabs (Desktop/Servers/Domain Controller, one row
+       per benchmark+version+role - the level is NOT part of the row, it is
+       picked separately via the two L1/L2 radio buttons below the tabs,
+       since not every benchmark+role combination has both levels available
+       - the code enables/disables L1/L2 dynamically per the row currently
+       selected). OK is only enabled once a row + a valid level are chosen.
+       ========================================================================== -->
+  <Window x:Name="ProfileSelectionWindow" Title="CIS Profile Selection" Height="440" Width="440"
+          WindowStartupLocation="CenterOwner" ShowInTaskbar="False" ResizeMode="NoResize">
+    <Grid Margin="10">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <TabControl Grid.Row="0">
+            <TabItem x:Name="ProfileDesktopTabItem" Header="Desktop">
+                <ListBox x:Name="ProfileDesktopListBox" Margin="0,8,0,0" />
+            </TabItem>
+            <TabItem x:Name="ProfileServersTabItem" Header="Servers">
+                <ListBox x:Name="ProfileServersListBox" Margin="0,8,0,0" />
+            </TabItem>
+            <TabItem x:Name="ProfileDomainControllerTabItem" Header="Domain Controller">
+                <ListBox x:Name="ProfileDomainControllerListBox" Margin="0,8,0,0" />
+            </TabItem>
+        </TabControl>
+
+        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,10,0,0">
+            <TextBlock x:Name="ProfileLevelLabel" Text="Level:" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,10,0" />
+            <RadioButton x:Name="ProfileLevel1RadioButton" GroupName="ProfileLevel" Content="L1" VerticalAlignment="Center" Margin="0,0,16,0" />
+            <RadioButton x:Name="ProfileLevel2RadioButton" GroupName="ProfileLevel" Content="L2" VerticalAlignment="Center" />
+        </StackPanel>
+
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
+            <Button x:Name="OkButton" Content="OK" Width="90" Margin="0,0,8,0" Padding="4" IsDefault="True" />
+            <Button x:Name="CancelButton" Content="Cancel" Width="90" Padding="4" IsCancel="True" />
+        </StackPanel>
+    </Grid>
+  </Window>
+
+  <!-- ==========================================================================
+       BLOCK: NewGpoWindow.xaml
+       "Advanced > New Group Policy" first step: choose between Default
+       (copies DefaultData\int_default_grouppolicy\ into the new project, active) and CIS
+       prefill (disabled, future iteration). OK/Cancel.
+       ========================================================================== -->
+  <Window x:Name="NewGpoWindow" Title="New Group Policy" Height="220" Width="380"
+          WindowStartupLocation="CenterOwner" ShowInTaskbar="False" ResizeMode="NoResize">
+    <Grid Margin="14">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0">
+            <RadioButton x:Name="NewGpoDefaultRadioButton" GroupName="NewGpoOption" Content="Default" IsChecked="True" Margin="0,0,0,10" />
+            <RadioButton x:Name="NewGpoCisPrefillRadioButton" GroupName="NewGpoOption" Content="CIS prefill" IsEnabled="False" />
+        </StackPanel>
+
+        <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
+            <Button x:Name="OkButton" Content="OK" Width="90" Margin="0,0,8,0" Padding="4" IsDefault="True" />
+            <Button x:Name="CancelButton" Content="Cancel" Width="90" Padding="4" IsCancel="True" />
+        </StackPanel>
+    </Grid>
+  </Window>
+
+  <!-- ==========================================================================
+       BLOCK: UnsavedProjectCloseWindow.xaml
+       Shown when the main window is closed (X button or Alt+F4) while a
+       "New Group Policy" session is active and not yet saved - 3 choices:
+       Save (runs the normal Save-GpoProjectAs flow before closing),
+       Continue (close without saving - temp files are discarded), Cancel
+       (abort the close entirely, stay in the app).
+       ========================================================================== -->
+  <Window x:Name="UnsavedProjectCloseWindow" Title="Unsaved Group Policy Project" Height="180" Width="420"
+          WindowStartupLocation="CenterOwner" ShowInTaskbar="False" ResizeMode="NoResize">
+    <Grid Margin="14">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <TextBlock x:Name="UnsavedProjectCloseMessageLabel" Grid.Row="0" TextWrapping="Wrap" VerticalAlignment="Center"
+                   Text="This Group Policy project has not been saved. What do you want to do?" />
+
+        <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
+            <Button x:Name="SaveButton" Content="Save" Width="90" Margin="0,0,8,0" Padding="4" IsDefault="True" />
+            <Button x:Name="ContinueButton" Content="Continue" Width="90" Margin="0,0,8,0" Padding="4" />
+            <Button x:Name="CancelButton" Content="Cancel" Width="90" Padding="4" IsCancel="True" />
+        </StackPanel>
+    </Grid>
+  </Window>
+
+  <!-- ==========================================================================
+       BLOCK: ImportModeWindow.xaml
+       "File > Import" first step: choose between Standard (imports every
+       file in the export as-is, only flags Security Options settings that
+       would become Not Defined) and Granular (reviews every category's
+       changes/additions before applying). OK/Cancel.
+       ========================================================================== -->
+  <Window x:Name="ImportModeWindow" Title="Import Group Policy" Height="220" Width="380"
+          WindowStartupLocation="CenterOwner" ShowInTaskbar="False" ResizeMode="NoResize">
+    <Grid Margin="14">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0">
+            <RadioButton x:Name="ImportModeStandardRadioButton" GroupName="ImportMode" Content="Standard" IsChecked="True" Margin="0,0,0,10" />
+            <RadioButton x:Name="ImportModeGranularRadioButton" GroupName="ImportMode" Content="Granular" />
+        </StackPanel>
+
+        <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
+            <Button x:Name="OkButton" Content="Apply" Width="90" Margin="0,0,8,0" Padding="4" IsDefault="True" />
+            <Button x:Name="CancelButton" Content="Cancel" Width="90" Padding="4" IsCancel="True" />
+        </StackPanel>
+    </Grid>
+  </Window>
+
+  <!-- ==========================================================================
+       BLOCK: ImportConfirmationWindow.xaml
+       "File > Import" review step - shared by both Standard (Change tab
+       only, Security Options removals) and Granular (Change + Add tabs,
+       every category) modes. Change tab: checkbox per row plus a select-all
+       master checkbox, columns Name/Current State/Import State. Add tab
+       (hidden when empty, which covers Standard mode): read-only,
+       Name/State/Location. Apply/Cancel - Cancel aborts the WHOLE import,
+       not just this review step.
+       ========================================================================== -->
+  <Window x:Name="ImportConfirmationWindow" Title="Review Import" Height="620" Width="920"
+          WindowStartupLocation="CenterOwner" ShowInTaskbar="False">
+    <Grid Margin="14">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <TabControl x:Name="ImportTabsControl" Grid.Row="0">
+            <TabItem x:Name="ImportChangeTabItem" Header="Change">
+                <Grid Margin="0,8,0,0">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+
+                    <CheckBox x:Name="ImportChangeSelectAllCheckBox" Grid.Row="0" Content="Select all" IsChecked="True" Margin="0,0,0,8" />
+
+                    <DataGrid x:Name="ImportChangeGrid" Grid.Row="1" AutoGenerateColumns="False" CanUserAddRows="False"
+                              CanUserDeleteRows="False" CanUserReorderColumns="False" CanUserResizeRows="False"
+                              HeadersVisibility="Column" GridLinesVisibility="Horizontal" BorderThickness="0">
+                        <DataGrid.Columns>
+                            <DataGridCheckBoxColumn x:Name="ImportChangeSelectColumn" Header="" Binding="{Binding IsSelected, Mode=TwoWay}" Width="34" />
+                            <DataGridTextColumn x:Name="ImportChangeNameColumn" Header="Name" Binding="{Binding Name}" IsReadOnly="True" Width="2.4*" />
+                            <DataGridTextColumn x:Name="ImportChangeCurrentColumn" Header="Current State" Binding="{Binding CurrentState}" IsReadOnly="True" Width="*" />
+                            <DataGridTextColumn x:Name="ImportChangeImportColumn" Header="Import State" Binding="{Binding ImportState}" IsReadOnly="True" Width="*" />
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </Grid>
+            </TabItem>
+            <TabItem x:Name="ImportAddTabItem" Header="Add">
+                <DataGrid x:Name="ImportAddGrid" Margin="0,8,0,0" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False"
+                          CanUserDeleteRows="False" CanUserReorderColumns="False" CanUserResizeRows="False"
+                          HeadersVisibility="Column" GridLinesVisibility="Horizontal" BorderThickness="0">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn x:Name="ImportAddNameColumn" Header="Name" Binding="{Binding Name}" Width="2.4*" />
+                        <DataGridTextColumn x:Name="ImportAddStateColumn" Header="State" Binding="{Binding ImportState}" Width="*" />
+                        <DataGridTextColumn x:Name="ImportAddLocationColumn" Header="Location" Binding="{Binding Location}" Width="2*" />
+                    </DataGrid.Columns>
+                </DataGrid>
+            </TabItem>
+        </TabControl>
+
+        <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
+            <Button x:Name="OkButton" Content="Apply" Width="90" Margin="0,0,8,0" Padding="4" IsDefault="True" />
+            <Button x:Name="CancelButton" Content="Cancel" Width="90" Padding="4" IsCancel="True" />
+        </StackPanel>
+    </Grid>
+  </Window>
+
+  <!-- ==========================================================================
+       BLOCK: BenchmarkWindow.xaml
+       Read-only dialog (Help > Benchmark) listing the CIS benchmarks the
+       app's recommendations are sourced from. No TabItem.
+       ========================================================================== -->
+  <Window x:Name="BenchmarkWindow" Title="Benchmark" Height="420" Width="480"
+          WindowStartupLocation="CenterOwner" ShowInTaskbar="False">
+    <Grid Margin="14">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <TextBlock x:Name="BenchmarkIntroLabel" Grid.Row="0" TextWrapping="Wrap"
+                   Text="CIS benchmarks used for recommendations (see Audit file/):" Margin="0,0,0,8" />
+
+        <ListBox x:Name="BenchmarkListBox" Grid.Row="1" />
+
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
+            <Button x:Name="OkButton" Content="OK" Width="80" Padding="6,4" IsDefault="True" IsCancel="True" />
+        </StackPanel>
+    </Grid>
+  </Window>
+
+  <!-- ==========================================================================
+       BLOCK: PatchNoteWindow.xaml
+       Read-only dialog (Help > Patch note) showing the full changelog text.
+       No TabItem.
+       ========================================================================== -->
+  <Window x:Name="PatchNoteWindow" Title="Patch note" Height="520" Width="560"
+          WindowStartupLocation="CenterOwner" ShowInTaskbar="False">
+    <Grid Margin="14">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <TextBlock x:Name="PatchNoteTextBlock" TextWrapping="Wrap" />
+        </ScrollViewer>
+
+        <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
+            <Button x:Name="OkButton" Content="OK" Width="80" Padding="6,4" IsDefault="True" IsCancel="True" />
+        </StackPanel>
+    </Grid>
+  </Window>
+
+  <!-- ==========================================================================
+       BLOCK: AboutWindow.xaml
+       Read-only dialog (Help > About) showing app name/version and a
+       pointer to the Patch note dialog. No TabItem.
+       ========================================================================== -->
+  <Window x:Name="AboutWindow" Title="About" Height="200" Width="420"
+          WindowStartupLocation="CenterOwner" ShowInTaskbar="False" ResizeMode="NoResize">
+    <Grid Margin="14">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <TextBlock x:Name="AppNameLabel" Grid.Row="0" FontWeight="Bold" FontSize="15" TextWrapping="Wrap"
+                   Text="Local Group Policy Editor (custom)" Margin="0,0,0,8" />
+        <TextBlock x:Name="VersionLabel" Grid.Row="1" Text="Version: ..." Margin="0,0,0,8" />
+        <TextBlock x:Name="SeeChangelogLabel" Grid.Row="2" TextWrapping="Wrap" Foreground="Gray"
+                   Text="See ? &gt; Patch note for the full change history." VerticalAlignment="Top" />
+
+        <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
+            <Button x:Name="OkButton" Content="OK" Width="80" Padding="6,4" IsDefault="True" IsCancel="True" />
+        </StackPanel>
+    </Grid>
+  </Window>
+
+  <!-- ==========================================================================
+       BLOCK: OptionsDialog.ps1
+       File > Options: a sidebar (Path / File / Editor / Close) on the left,
+       swaps the content of the right pane between the 3 tab panels (Close
+       just closes the window). See Show-OptionsDialog in OptionsDialog.ps1.
+       ========================================================================== -->
+  <Window x:Name="OptionsWindow" Title="Options" Height="672" Width="1008"
+          WindowStartupLocation="CenterOwner" ShowInTaskbar="False" ResizeMode="NoResize">
+    <Grid Margin="12">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="110" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <!-- Sidebar: icon + label nav buttons on top, Close pinned bottom-left -->
+        <Grid Grid.Column="0" Margin="0,0,10,0">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <StackPanel Grid.Row="0">
+                <RadioButton x:Name="PathNavButton" GroupName="OptionsNav" Style="{DynamicResource SidebarNavButtonStyle}" IsChecked="True">
+                    <StackPanel Orientation="Vertical" HorizontalAlignment="Center">
+                        <TextBlock Text="&#128193;" FontSize="24" HorizontalAlignment="Center" />
+                        <TextBlock x:Name="OptionsNavPathLabel" Text="Path" HorizontalAlignment="Center" Margin="0,4,0,0" />
+                    </StackPanel>
+                </RadioButton>
+                <RadioButton x:Name="FileNavButton" GroupName="OptionsNav" Style="{DynamicResource SidebarNavButtonStyle}">
+                    <StackPanel Orientation="Vertical" HorizontalAlignment="Center">
+                        <TextBlock Text="&#128196;" FontSize="24" HorizontalAlignment="Center" />
+                        <TextBlock x:Name="OptionsNavFileLabel" Text="File" HorizontalAlignment="Center" Margin="0,4,0,0" />
+                    </StackPanel>
+                </RadioButton>
+                <RadioButton x:Name="EditorNavButton" GroupName="OptionsNav" Style="{DynamicResource SidebarNavButtonStyle}">
+                    <StackPanel Orientation="Vertical" HorizontalAlignment="Center">
+                        <TextBlock Text="&#128218;" FontSize="24" HorizontalAlignment="Center" />
+                        <TextBlock x:Name="OptionsNavEditorLabel" Text="Editor" HorizontalAlignment="Center" Margin="0,4,0,0" />
+                    </StackPanel>
+                </RadioButton>
+            </StackPanel>
+
+            <Button x:Name="CloseNavButton" Grid.Row="2" Content="Close" Padding="10,8" HorizontalAlignment="Left" />
+        </Grid>
+
+        <Grid x:Name="OptionsContentGrid" Grid.Column="1">
+
+            <!-- Path tab: 6 configurable default directories, grouped into
+                 Application preference (shared machine-wide defaults) and
+                 User preference (this user's working files), + Save. Each
+                 row's path TextBox is a fixed (reduced) width rather than
+                 filling the row, so a long path doesn't stretch the panel. -->
+            <Grid x:Name="PathPanel">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <GroupBox x:Name="AppPreferenceGroupBox" Grid.Row="0" Header="Application preference" Margin="0,0,0,10">
+                    <StackPanel Margin="4">
+                        <Grid Margin="0,0,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="140" />
+                                <ColumnDefinition Width="260" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock x:Name="PathTabLogLabel" Grid.Column="0" Text="Log path" VerticalAlignment="Center" />
+                            <TextBox x:Name="LogPathTextBox" Grid.Column="1" IsReadOnly="True" Padding="4,2" Margin="0,0,8,0" VerticalContentAlignment="Center" />
+                            <Button x:Name="LogPathBrowseButton" Grid.Column="2" Content="..." Width="30" Padding="0" Margin="0,0,4,0" />
+                            <Button x:Name="LogPathOpenButton" Grid.Column="3" Content="&#128194;" Width="30" Padding="0" Margin="0,0,4,0" ToolTip="Open in Explorer" />
+                            <Button x:Name="LogPathResetButton" Grid.Column="4" Content="Default" Padding="8,2" />
+                        </Grid>
+
+                        <Grid Margin="0,0,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="140" />
+                                <ColumnDefinition Width="260" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock x:Name="PathTabBackupLabel" Grid.Column="0" Text="Backup" VerticalAlignment="Center" />
+                            <TextBox x:Name="BackupPathTextBox" Grid.Column="1" IsReadOnly="True" Padding="4,2" Margin="0,0,8,0" VerticalContentAlignment="Center" />
+                            <Button x:Name="BackupPathBrowseButton" Grid.Column="2" Content="..." Width="30" Padding="0" Margin="0,0,4,0" />
+                            <Button x:Name="BackupPathOpenButton" Grid.Column="3" Content="&#128194;" Width="30" Padding="0" Margin="0,0,4,0" ToolTip="Open in Explorer" />
+                            <Button x:Name="BackupPathResetButton" Grid.Column="4" Content="Default" Padding="8,2" />
+                        </Grid>
+
+                        <Grid Margin="0,0,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="140" />
+                                <ColumnDefinition Width="260" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock x:Name="PathTabImportExportLabel" Grid.Column="0" Text="Import / Export" VerticalAlignment="Center" />
+                            <TextBox x:Name="ImportExportPathTextBox" Grid.Column="1" IsReadOnly="True" Padding="4,2" Margin="0,0,8,0" VerticalContentAlignment="Center" />
+                            <Button x:Name="ImportExportPathBrowseButton" Grid.Column="2" Content="..." Width="30" Padding="0" Margin="0,0,4,0" />
+                            <Button x:Name="ImportExportPathOpenButton" Grid.Column="3" Content="&#128194;" Width="30" Padding="0" Margin="0,0,4,0" ToolTip="Open in Explorer" />
+                            <Button x:Name="ImportExportPathResetButton" Grid.Column="4" Content="Default" Padding="8,2" />
+                        </Grid>
+
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="140" />
+                                <ColumnDefinition Width="260" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock x:Name="PathTabAuditLabel" Grid.Column="0" Text="Audit files" VerticalAlignment="Center" />
+                            <TextBox x:Name="AuditPathTextBox" Grid.Column="1" IsReadOnly="True" Padding="4,2" Margin="0,0,8,0" VerticalContentAlignment="Center" />
+                            <Button x:Name="AuditPathBrowseButton" Grid.Column="2" Content="..." Width="30" Padding="0" Margin="0,0,4,0" />
+                            <Button x:Name="AuditPathOpenButton" Grid.Column="3" Content="&#128194;" Width="30" Padding="0" Margin="0,0,4,0" ToolTip="Open in Explorer" />
+                            <Button x:Name="AuditPathResetButton" Grid.Column="4" Content="Default" Padding="8,2" />
+                        </Grid>
+                    </StackPanel>
+                </GroupBox>
+
+                <GroupBox x:Name="UserPreferenceGroupBox" Grid.Row="1" Header="User preference" Margin="0,0,0,10">
+                    <StackPanel Margin="4">
+                        <Grid Margin="0,0,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="140" />
+                                <ColumnDefinition Width="260" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock x:Name="PathTabTempLabel" Grid.Column="0" Text="Temporary files" VerticalAlignment="Center" />
+                            <TextBox x:Name="TempPathTextBox" Grid.Column="1" IsReadOnly="True" Padding="4,2" Margin="0,0,8,0" VerticalContentAlignment="Center" />
+                            <Button x:Name="TempPathBrowseButton" Grid.Column="2" Content="..." Width="30" Padding="0" Margin="0,0,4,0" />
+                            <Button x:Name="TempPathOpenButton" Grid.Column="3" Content="&#128194;" Width="30" Padding="0" Margin="0,0,4,0" ToolTip="Open in Explorer" />
+                            <Button x:Name="TempPathResetButton" Grid.Column="4" Content="Default" Padding="8,2" />
+                        </Grid>
+
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="140" />
+                                <ColumnDefinition Width="260" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock x:Name="PathTabIndexLabel" Grid.Column="0" Text="Generated indexes" VerticalAlignment="Center" />
+                            <TextBox x:Name="IndexPathTextBox" Grid.Column="1" IsReadOnly="True" Padding="4,2" Margin="0,0,8,0" VerticalContentAlignment="Center" />
+                            <Button x:Name="IndexPathBrowseButton" Grid.Column="2" Content="..." Width="30" Padding="0" Margin="0,0,4,0" />
+                            <Button x:Name="IndexPathOpenButton" Grid.Column="3" Content="&#128194;" Width="30" Padding="0" Margin="0,0,4,0" ToolTip="Open in Explorer" />
+                            <Button x:Name="IndexPathResetButton" Grid.Column="4" Content="Default" Padding="8,2" />
+                        </Grid>
+                    </StackPanel>
+                </GroupBox>
+
+                <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
+                    <Button x:Name="SavePathsButton" Content="Save" Width="90" Padding="6,4" />
+                </StackPanel>
+            </Grid>
+
+            <!-- File tab: audit files currently in use, Add / Delete -->
+            <Grid x:Name="FilePanel" Visibility="Collapsed">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <TextBlock x:Name="FileTabAuditListHeader" Grid.Row="0" Text="Audit files currently in use" Margin="0,0,0,8" />
+                <ListBox x:Name="AuditFilesListBox" Grid.Row="1" SelectionMode="Extended"
+                         Width="520" Height="280" HorizontalAlignment="Left" VerticalAlignment="Top" />
+
+                <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
+                    <Button x:Name="AddAuditFileButton" Content="Add" Width="80" Margin="0,0,8,0" Padding="6,4" />
+                    <Button x:Name="DeleteAuditFileButton" Content="Delete" Width="80" Padding="6,4" />
+                </StackPanel>
+            </Grid>
+
+            <!-- Editor tab: live catalog editing (Name / Explain / CIS recommendation) toggle -->
+            <StackPanel x:Name="EditorPanel" Visibility="Collapsed">
+                <TextBlock x:Name="EditorModeExplanationLabel" TextWrapping="Wrap" Margin="0,0,0,10"
+                           Text="When enabled, this lets you edit the Name, Explain and CIS recommendation of a setting directly from this app. These edits are local to this app only and are never reflected in the classic Windows Local Group Policy Editor." />
+                <CheckBox x:Name="EditorModeCheckBox" Content="Editor Mode" IsChecked="True" />
+            </StackPanel>
+        </Grid>
+
+        <!-- Busy overlay: shown while Build-CisIndex.ps1 runs (Add/Delete audit
+             file), spans both columns so the whole window (sidebar included)
+             reads as blocked, not just the right-hand panel. -->
+        <Grid x:Name="BusyOverlay" Grid.ColumnSpan="2" Background="#A0000000" Visibility="Collapsed">
+            <StackPanel Orientation="Vertical" HorizontalAlignment="Center" VerticalAlignment="Center">
+                <TextBlock Text="&#8987;" FontSize="72" Foreground="White" HorizontalAlignment="Center" />
+                <TextBlock x:Name="BusyOverlayLabel" Text="Please wait..." FontSize="16" Foreground="White" Margin="0,10,0,0" HorizontalAlignment="Center" />
+            </StackPanel>
+        </Grid>
+    </Grid>
+  </Window>
+
+  <!-- ==========================================================================
+       BLOCK: Styles/ModernStyle.xaml
+       Shared ResourceDictionary (loaded once in GpEdit.ps1) providing the
+       flat Windows 10/11-style look used by every window above: brushes,
+       the soft card-shadow effect, and control templates for Button,
+       TextBox, GroupBox, TreeView/TreeViewItem, ListView/GridView,
+       CheckBox, RadioButton, ComboBox, ListBox/ListBoxItem, DataGrid,
+       RichTextBox, ScrollBar, and — relevant here — TabItem/TabControl
+       (the flat card-style tab look every TabItem above renders with).
+       Contains no TabItem instances itself, only the style that shapes them.
+       ========================================================================== -->
+  <ResourceDictionary>
+
+    <!-- Palette plate façon Windows 10/11, sans bibliothèque externe. -->
+    <SolidColorBrush x:Key="CardBackgroundBrush" Color="#FFFFFF" />
+    <SolidColorBrush x:Key="CardBorderBrush" Color="#C7C7C7" />
+    <SolidColorBrush x:Key="HoverBrush" Color="#F0F0F0" />
+    <SolidColorBrush x:Key="PressedBrush" Color="#E5E5E5" />
+    <SolidColorBrush x:Key="ButtonBackgroundBrush" Color="#E5E5E5" />
+    <SolidColorBrush x:Key="ButtonHoverBrush" Color="#D8D8D8" />
+    <SolidColorBrush x:Key="ButtonPressedBrush" Color="#C9C9C9" />
+    <SolidColorBrush x:Key="AccentBrush" Color="#0067C0" />
+    <SolidColorBrush x:Key="AccentLightBrush" Color="#D9EBFA" />
+    <SolidColorBrush x:Key="TextPrimaryBrush" Color="#1A1A1A" />
+    <SolidColorBrush x:Key="DisabledBackgroundBrush" Color="#F3F3F3" />
+    <SolidColorBrush x:Key="DisabledForegroundBrush" Color="#A0A0A0" />
+
+    <!-- Ombre douce reutilisable pour les cartes (panneaux, GroupBox). -->
+    <DropShadowEffect x:Key="SoftCardShadow" Color="#000000" Opacity="0.10" BlurRadius="12" ShadowDepth="1" Direction="270" />
+
+    <!-- ===================== Button ===================== -->
+    <Style TargetType="Button">
+        <Setter Property="Background" Value="{StaticResource ButtonBackgroundBrush}" />
+        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource CardBorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Padding" Value="10,4" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="Bd" CornerRadius="4" Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                          Margin="{TemplateBinding Padding}" RecognizesAccessKey="True" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource ButtonHoverBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource ButtonPressedBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource DisabledBackgroundBrush}" />
+                            <Setter Property="Foreground" Value="{StaticResource DisabledForegroundBrush}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ===================== TextBox ===================== -->
+    <Style TargetType="TextBox">
+        <Setter Property="Background" Value="White" />
+        <Setter Property="BorderBrush" Value="{StaticResource CardBorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Padding" Value="6,4" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="TextBox">
+                    <Border x:Name="Bd" CornerRadius="4" Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}">
+                        <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsFocused" Value="True">
+                            <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource AccentBrush}" />
+                            <Setter TargetName="Bd" Property="BorderThickness" Value="2" />
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource DisabledBackgroundBrush}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ===================== GroupBox (carte plate, sans chrome natif) ===================== -->
+    <Style TargetType="GroupBox">
+        <Setter Property="Padding" Value="8" />
+        <Setter Property="Background" Value="{StaticResource CardBackgroundBrush}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="GroupBox">
+                    <DockPanel>
+                        <ContentPresenter DockPanel.Dock="Top" ContentSource="Header" Margin="0,0,0,4"
+                                          TextElement.FontWeight="SemiBold" TextElement.Foreground="{StaticResource TextPrimaryBrush}" />
+                        <!-- Effet sur une Border sans contenu (voir commentaire dans le
+                             ControlTemplate de TabControl plus bas) : evite de flouter le
+                             texte reel, qui vit dans la Border du dessus, sans Effet. Le
+                             fond suit {TemplateBinding Background} (pas la ressource
+                             directement) : permet a une instance precise (ex. DetailGroupBox
+                             dans MainWindow.xaml) de forcer un fond plus marque que le blanc
+                             par defaut, sans toucher aux autres GroupBox de l'appli. -->
+                        <Grid>
+                            <Border CornerRadius="8" Background="{StaticResource CardBackgroundBrush}"
+                                    Effect="{StaticResource SoftCardShadow}" />
+                            <Border CornerRadius="8" Background="{TemplateBinding Background}"
+                                    BorderBrush="{StaticResource CardBorderBrush}" BorderThickness="1"
+                                    Padding="{TemplateBinding Padding}">
+                                <ContentPresenter />
+                            </Border>
+                        </Grid>
+                    </DockPanel>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ===================== TreeView / TreeViewItem ===================== -->
+    <Style TargetType="TreeView">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Padding" Value="2" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="TreeView">
+                    <Border Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            SnapsToDevicePixels="True">
+                        <ScrollViewer Focusable="False" CanContentScroll="False"
+                                      Padding="{TemplateBinding Padding}"
+                                      HorizontalScrollBarVisibility="Disabled"
+                                      VerticalScrollBarVisibility="Auto">
+                            <ItemsPresenter />
+                        </ScrollViewer>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="TreeExpanderToggleStyle" TargetType="ToggleButton">
+        <Setter Property="Focusable" Value="False" />
+        <Setter Property="Width" Value="16" />
+        <Setter Property="Height" Value="16" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ToggleButton">
+                    <Border Background="Transparent" Width="16" Height="16">
+                        <Path x:Name="ExpandPath" Data="M 3 1 L 8 6 L 3 11 Z" Fill="#666666"
+                              HorizontalAlignment="Center" VerticalAlignment="Center">
+                            <Path.RenderTransform>
+                                <RotateTransform Angle="0" CenterX="4" CenterY="6" />
+                            </Path.RenderTransform>
+                        </Path>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="ExpandPath" Property="RenderTransform">
+                                <Setter.Value>
+                                    <RotateTransform Angle="90" CenterX="4" CenterY="6" />
+                                </Setter.Value>
+                            </Setter>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ===================== Options window sidebar nav button ===================== -->
+    <!-- RadioButton (sous-classe de ToggleButton) + GroupName partage : donne
+         l'exclusivite mutuelle nativement (Path/File/Editor), sans logique
+         manuelle. Templating flat façon icone, meme convention que le
+         glyphe crayon (&#9998;) deja utilise ailleurs (EditNameButton etc). -->
+    <Style x:Key="SidebarNavButtonStyle" TargetType="RadioButton">
+        <Setter Property="Padding" Value="8,12" />
+        <Setter Property="Margin" Value="0,0,0,4" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="HorizontalContentAlignment" Value="Center" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="RadioButton">
+                    <Border x:Name="Bd" CornerRadius="4" Background="Transparent" Padding="{TemplateBinding Padding}">
+                        <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="Center" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource HoverBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource AccentLightBrush}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style TargetType="TreeViewItem">
+        <Setter Property="Padding" Value="4,4" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="TreeViewItem">
+                    <StackPanel>
+                        <Border x:Name="Bd" CornerRadius="4" Background="{TemplateBinding Background}"
+                                Padding="{TemplateBinding Padding}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="16" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <ToggleButton x:Name="Expander" Grid.Column="0" Style="{StaticResource TreeExpanderToggleStyle}"
+                                              ClickMode="Press"
+                                              IsChecked="{Binding IsExpanded, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}" />
+                                <ContentPresenter Grid.Column="1" ContentSource="Header" HorizontalAlignment="Stretch" />
+                            </Grid>
+                        </Border>
+                        <ItemsPresenter x:Name="ItemsHost" Margin="16,0,0,0" />
+                    </StackPanel>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="HasItems" Value="False">
+                            <Setter TargetName="Expander" Property="Visibility" Value="Hidden" />
+                        </Trigger>
+                        <Trigger Property="IsExpanded" Value="False">
+                            <Setter TargetName="ItemsHost" Property="Visibility" Value="Collapsed" />
+                        </Trigger>
+                        <Trigger Property="IsMouseDirectlyOver" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource HoverBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource AccentLightBrush}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ===================== ListView / GridView ===================== -->
+    <Style TargetType="ListView">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+    </Style>
+
+    <Style TargetType="GridViewColumnHeader">
+        <Setter Property="Background" Value="{StaticResource ButtonBackgroundBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource CardBorderBrush}" />
+        <Setter Property="BorderThickness" Value="0,0,1,1" />
+        <Setter Property="Padding" Value="8,6" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="HorizontalContentAlignment" Value="Left" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="GridViewColumnHeader">
+                    <Grid>
+                        <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="4" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                              VerticalAlignment="Center" />
+                        </Border>
+                        <Thumb x:Name="PART_HeaderGripper" HorizontalAlignment="Right" Width="6"
+                               Margin="0,0,-3,0" Cursor="SizeWE">
+                            <Thumb.Template>
+                                <ControlTemplate TargetType="Thumb">
+                                    <Border Background="Transparent" />
+                                </ControlTemplate>
+                            </Thumb.Template>
+                        </Thumb>
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style TargetType="ListViewItem">
+        <Setter Property="Padding" Value="6,3" />
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ListViewItem">
+                    <Border x:Name="Bd" CornerRadius="4" Margin="0,1" Padding="{TemplateBinding Padding}"
+                            Background="{TemplateBinding Background}">
+                        <GridViewRowPresenter Content="{TemplateBinding Content}"
+                                              Columns="{Binding Path=View.Columns, RelativeSource={RelativeSource AncestorType=ListView}}" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource HoverBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource AccentLightBrush}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ===================== CheckBox ===================== -->
+    <Style TargetType="CheckBox">
+        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+        <Setter Property="Padding" Value="6,0,0,0" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="CheckBox">
+                    <StackPanel Orientation="Horizontal">
+                        <Border x:Name="Bd" Width="16" Height="16" CornerRadius="3" Background="White"
+                                BorderBrush="{StaticResource CardBorderBrush}" BorderThickness="1" VerticalAlignment="Center">
+                            <Path x:Name="CheckMark" Data="M 2 6 L 6 10 L 12 2" Stroke="White" StrokeThickness="2"
+                                  StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Visibility="Collapsed" />
+                        </Border>
+                        <ContentPresenter Margin="{TemplateBinding Padding}" VerticalAlignment="Center" />
+                    </StackPanel>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource AccentBrush}" />
+                            <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource AccentBrush}" />
+                            <Setter TargetName="CheckMark" Property="Visibility" Value="Visible" />
+                        </Trigger>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource AccentBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource DisabledBackgroundBrush}" />
+                            <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource CardBorderBrush}" />
+                            <Setter Property="Foreground" Value="{StaticResource DisabledForegroundBrush}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ===================== RadioButton ===================== -->
+    <Style TargetType="RadioButton">
+        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+        <Setter Property="Padding" Value="6,0,0,0" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="RadioButton">
+                    <StackPanel Orientation="Horizontal">
+                        <Grid Width="16" Height="16" VerticalAlignment="Center">
+                            <Ellipse x:Name="OuterCircle" Stroke="{StaticResource CardBorderBrush}" StrokeThickness="1" Fill="White" />
+                            <Ellipse x:Name="InnerDot" Width="8" Height="8" Fill="{StaticResource AccentBrush}" Visibility="Collapsed" />
+                        </Grid>
+                        <ContentPresenter Margin="{TemplateBinding Padding}" VerticalAlignment="Center" />
+                    </StackPanel>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="OuterCircle" Property="Stroke" Value="{StaticResource AccentBrush}" />
+                            <Setter TargetName="InnerDot" Property="Visibility" Value="Visible" />
+                        </Trigger>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="OuterCircle" Property="Stroke" Value="{StaticResource AccentBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="OuterCircle" Property="Stroke" Value="{StaticResource CardBorderBrush}" />
+                            <Setter TargetName="InnerDot" Property="Fill" Value="{StaticResource DisabledForegroundBrush}" />
+                            <Setter Property="Foreground" Value="{StaticResource DisabledForegroundBrush}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ===================== ComboBox ===================== -->
+    <Style x:Key="ModernComboBoxToggleStyle" TargetType="ToggleButton">
+        <Setter Property="Focusable" Value="False" />
+        <Setter Property="ClickMode" Value="Press" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ToggleButton">
+                    <Border Background="Transparent">
+                        <Path Data="M 0 0 L 8 8 L 16 0 Z" Fill="#666666" HorizontalAlignment="Right" Margin="0,0,10,0" />
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style TargetType="ComboBoxItem">
+        <Setter Property="Padding" Value="8,5" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ComboBoxItem">
+                    <Border x:Name="Bd" CornerRadius="4" Margin="2,1" Padding="{TemplateBinding Padding}" Background="{TemplateBinding Background}">
+                        <ContentPresenter />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsHighlighted" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource HoverBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource AccentLightBrush}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style TargetType="ComboBox">
+        <Setter Property="Background" Value="White" />
+        <Setter Property="BorderBrush" Value="{StaticResource CardBorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Padding" Value="8,4" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ComboBox">
+                    <Grid>
+                        <ToggleButton x:Name="ToggleBtn" Style="{StaticResource ModernComboBoxToggleStyle}" Panel.ZIndex="1"
+                                      IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}" />
+                        <Border x:Name="Bd" CornerRadius="4" Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}"
+                                IsHitTestVisible="False" />
+                        <ContentPresenter x:Name="ContentSite" IsHitTestVisible="False" Margin="{TemplateBinding Padding}"
+                                          VerticalAlignment="Center" HorizontalAlignment="Left"
+                                          Content="{TemplateBinding SelectionBoxItem}"
+                                          ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}" />
+                        <Popup x:Name="PART_Popup" Placement="Bottom" IsOpen="{TemplateBinding IsDropDownOpen}"
+                               AllowsTransparency="True" Focusable="False" PopupAnimation="Fade">
+                            <!-- Deux Border superposees (voir commentaire dans TabControl plus
+                                 haut) : celle avec l'Effet ne porte pas la liste, pour ne pas
+                                 flouter le texte des items. -->
+                            <Grid Margin="0,4,0,4"
+                                  MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}">
+                                <Border CornerRadius="6" Background="{StaticResource CardBackgroundBrush}"
+                                        Effect="{StaticResource SoftCardShadow}" />
+                                <Border CornerRadius="6" Background="{StaticResource CardBackgroundBrush}"
+                                        BorderBrush="{StaticResource CardBorderBrush}" BorderThickness="1">
+                                    <ScrollViewer MaxHeight="240" SnapsToDevicePixels="True">
+                                        <ItemsPresenter />
+                                    </ScrollViewer>
+                                </Border>
+                            </Grid>
+                        </Popup>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource AccentBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsDropDownOpen" Value="True">
+                            <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource AccentBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource DisabledBackgroundBrush}" />
+                            <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource CardBorderBrush}" />
+                            <Setter Property="Foreground" Value="{StaticResource DisabledForegroundBrush}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ===================== ListBox / ListBoxItem ===================== -->
+    <Style TargetType="ListBox">
+        <Setter Property="Background" Value="White" />
+        <Setter Property="BorderBrush" Value="{StaticResource CardBorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Padding" Value="2" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ListBox">
+                    <Border x:Name="Bd" CornerRadius="4" Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}">
+                        <ScrollViewer Padding="{TemplateBinding Padding}">
+                            <ItemsPresenter />
+                        </ScrollViewer>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource DisabledBackgroundBrush}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style TargetType="ListBoxItem">
+        <Setter Property="Padding" Value="6,4" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ListBoxItem">
+                    <Border x:Name="Bd" CornerRadius="4" Margin="1" Padding="{TemplateBinding Padding}" Background="{TemplateBinding Background}">
+                        <ContentPresenter />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource HoverBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource AccentLightBrush}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ===================== TabControl / TabItem =====================
+         Styles the TabItem headers (flat rounded-top tab look, selected tab
+         gets the card background + bold text) and the TabControl body
+         (rounded card below the tab strip). This is what makes every
+         TabItem in SecurityEditWindow.xaml / AdmxEditWindow.xaml look like
+         a flat "card" tab instead of the default Windows chrome. -->
+    <Style TargetType="TabItem">
+        <Setter Property="Padding" Value="12,6" />
+        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="TabItem">
+                    <Border x:Name="Bd" CornerRadius="6,6,0,0" Margin="0,0,2,0" Padding="{TemplateBinding Padding}"
+                            Background="Transparent" BorderBrush="{StaticResource CardBorderBrush}" BorderThickness="1,1,1,0">
+                        <ContentPresenter ContentSource="Header" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource CardBackgroundBrush}" />
+                            <Setter Property="FontWeight" Value="SemiBold" />
+                        </Trigger>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource HoverBrush}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style TargetType="TabControl">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="TabControl">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+                        <TabPanel Grid.Row="0" IsItemsHost="True" Background="Transparent" />
+                        <!-- Deux Border superposees plutot qu'une seule avec Effet : un Effet
+                             (DropShadowEffect) force WPF a rasteriser tout le sous-arbre visuel
+                             sur une surface intermediaire avant de le composer a l'ecran, ce qui
+                             rend le texte a l'interieur (ici le contenu de l'onglet) visiblement
+                             flou. La Border du dessous ne porte que l'effet (aucun texte dedans,
+                             donc rien a flouter) ; celle du dessus porte le vrai contenu sans
+                             Effet, donc rendu net. Meme motif reutilise pour toutes les "cartes"
+                             (voir MainWindow.xaml, AdmxEditWindow.xaml, GroupBox ci-dessous). -->
+                        <Grid Grid.Row="1">
+                            <Border CornerRadius="0,8,8,8" Background="{StaticResource CardBackgroundBrush}"
+                                    Effect="{StaticResource SoftCardShadow}" />
+                            <Border CornerRadius="0,8,8,8" Background="{StaticResource CardBackgroundBrush}"
+                                    BorderBrush="{StaticResource CardBorderBrush}" BorderThickness="1" Padding="10">
+                                <ContentPresenter ContentSource="SelectedContent" />
+                            </Border>
+                        </Grid>
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ===================== DataGrid ===================== -->
+    <Style TargetType="DataGrid">
+        <Setter Property="Background" Value="White" />
+        <Setter Property="BorderBrush" Value="{StaticResource CardBorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="RowBackground" Value="White" />
+        <Setter Property="AlternatingRowBackground" Value="#FAFAFA" />
+        <Setter Property="HorizontalGridLinesBrush" Value="#EDEDED" />
+        <Setter Property="VerticalGridLinesBrush" Value="#EDEDED" />
+        <Setter Property="RowHeaderWidth" Value="0" />
+    </Style>
+
+    <Style TargetType="DataGridColumnHeader">
+        <Setter Property="Background" Value="#F7F7F7" />
+        <Setter Property="BorderBrush" Value="{StaticResource CardBorderBrush}" />
+        <Setter Property="BorderThickness" Value="0,0,0,1" />
+        <Setter Property="Padding" Value="8,6" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="HorizontalContentAlignment" Value="Left" />
+    </Style>
+
+    <Style TargetType="DataGridRow">
+        <Setter Property="Background" Value="Transparent" />
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Background" Value="{StaticResource HoverBrush}" />
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <Style TargetType="DataGridCell">
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Padding" Value="8,4" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="DataGridCell">
+                    <Border Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}">
+                        <ContentPresenter VerticalAlignment="Center" />
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+        <Style.Triggers>
+            <Trigger Property="IsSelected" Value="True">
+                <Setter Property="Background" Value="{StaticResource AccentLightBrush}" />
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <!-- ===================== RichTextBox ===================== -->
+    <Style TargetType="RichTextBox">
+        <Setter Property="Background" Value="White" />
+        <Setter Property="BorderBrush" Value="{StaticResource CardBorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Padding" Value="6,4" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="RichTextBox">
+                    <Border CornerRadius="4" Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}">
+                        <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}" />
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ===================== Menu / MenuItem ===================== -->
+    <Style TargetType="Menu">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+    </Style>
+
+    <Style TargetType="MenuItem">
+        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+        <Setter Property="Padding" Value="10,6" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="MenuItem">
+                    <Grid SnapsToDevicePixels="True">
+                        <Border x:Name="Bd" CornerRadius="4" Background="{TemplateBinding Background}">
+                            <Grid Margin="{TemplateBinding Padding}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="18" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="18" />
+                                </Grid.ColumnDefinitions>
+                                <!-- Coche pour les items IsCheckable (choix de langue/profil actif). -->
+                                <Path x:Name="CheckMark" Grid.Column="0" Data="M 1 4 L 4 7 L 9 1" Stroke="{StaticResource AccentBrush}"
+                                      StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
+                                      VerticalAlignment="Center" Visibility="Collapsed" />
+                                <ContentPresenter x:Name="HeaderHost" Grid.Column="1" ContentSource="Header"
+                                                  RecognizesAccessKey="True" VerticalAlignment="Center" />
+                                <TextBlock x:Name="GestureText" Grid.Column="2" Text="{TemplateBinding InputGestureText}"
+                                           Margin="12,0,4,0" Foreground="#8A8A8A" VerticalAlignment="Center" />
+                                <!-- Fleche pour les sous-menus imbriques (ex. Affichage > Profil > MS/DC). -->
+                                <Path x:Name="SubmenuArrow" Grid.Column="3" Data="M 0 0 L 4 4 L 0 8 Z" Fill="#666666"
+                                      VerticalAlignment="Center" Margin="8,0,0,0" Visibility="Collapsed" />
+                            </Grid>
+                        </Border>
+                        <!-- Popup de sous-menu : meme motif deux-Border que ComboBox/TabControl plus
+                             haut, pour ne pas flouter le texte des items sous l'Effet. -->
+                        <Popup x:Name="PART_Popup" Placement="Bottom" AllowsTransparency="True" Focusable="False"
+                               PopupAnimation="Fade" IsOpen="{TemplateBinding IsSubmenuOpen}">
+                            <Grid Margin="0,2,4,4">
+                                <Border CornerRadius="6" Background="{StaticResource CardBackgroundBrush}" Effect="{StaticResource SoftCardShadow}" />
+                                <Border CornerRadius="6" Background="{StaticResource CardBackgroundBrush}"
+                                        BorderBrush="{StaticResource CardBorderBrush}" BorderThickness="1" Padding="3">
+                                    <ScrollViewer CanContentScroll="True">
+                                        <ItemsPresenter Grid.IsSharedSizeScope="True" KeyboardNavigation.DirectionalNavigation="Cycle" />
+                                    </ScrollViewer>
+                                </Border>
+                            </Grid>
+                        </Popup>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="Role" Value="TopLevelHeader">
+                            <Setter Property="Padding" Value="12,7" />
+                        </Trigger>
+                        <Trigger Property="Role" Value="SubmenuHeader">
+                            <Setter TargetName="SubmenuArrow" Property="Visibility" Value="Visible" />
+                            <Setter TargetName="PART_Popup" Property="Placement" Value="Right" />
+                        </Trigger>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="CheckMark" Property="Visibility" Value="Visible" />
+                        </Trigger>
+                        <Trigger Property="IsHighlighted" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource HoverBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsSubmenuOpen" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource PressedBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Foreground" Value="{StaticResource DisabledForegroundBrush}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ===================== ScrollBar (fin, plat) ===================== -->
+    <Style x:Key="ModernScrollBarThumbStyle" TargetType="Thumb">
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Thumb">
+                    <Border x:Name="ThumbBorder" Background="#C2C2C2" CornerRadius="3" />
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="ThumbBorder" Property="Background" Value="#A6A6A6" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="ModernScrollBarRepeatButtonStyle" TargetType="RepeatButton">
+        <Setter Property="IsTabStop" Value="False" />
+        <Setter Property="Focusable" Value="False" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="RepeatButton">
+                    <Border Background="Transparent" />
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style TargetType="ScrollBar">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="MinWidth" Value="10" />
+        <Setter Property="MinHeight" Value="10" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ScrollBar">
+                    <Grid Background="{TemplateBinding Background}">
+                        <Track x:Name="PART_Track" Focusable="False">
+                            <Track.DecreaseRepeatButton>
+                                <RepeatButton Style="{StaticResource ModernScrollBarRepeatButtonStyle}" Command="ScrollBar.PageUpCommand" />
+                            </Track.DecreaseRepeatButton>
+                            <Track.IncreaseRepeatButton>
+                                <RepeatButton Style="{StaticResource ModernScrollBarRepeatButtonStyle}" Command="ScrollBar.PageDownCommand" />
+                            </Track.IncreaseRepeatButton>
+                            <Track.Thumb>
+                                <Thumb Style="{StaticResource ModernScrollBarThumbStyle}" Margin="2" />
+                            </Track.Thumb>
+                        </Track>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="Orientation" Value="Vertical">
+                            <Setter TargetName="PART_Track" Property="IsDirectionReversed" Value="True" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+        <Style.Triggers>
+            <Trigger Property="Orientation" Value="Horizontal">
+                <Setter Property="Height" Value="10" />
+                <Setter Property="Width" Value="Auto" />
+            </Trigger>
+            <Trigger Property="Orientation" Value="Vertical">
+                <Setter Property="Width" Value="10" />
+                <Setter Property="Height" Value="Auto" />
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+  </ResourceDictionary>
+
+</MergedXamlReference>
