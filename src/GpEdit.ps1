@@ -20,7 +20,6 @@ param(
     [string]$GptIniPath        = 'C:\Windows\System32\GroupPolicy\GPT.ini',
     [string]$AuditCsvPath      = 'C:\Windows\System32\GroupPolicy\Machine\Microsoft\Windows NT\Audit\audit.csv',
     [string]$PolicyDefinitionsPath = (Join-Path $env:WinDir 'PolicyDefinitions'),
-    [string]$DataPath          = (Join-Path $PSScriptRoot '..\data'),
     [string]$BackupRoot        = (Join-Path $PSScriptRoot '..\Backups')
 )
 
@@ -142,7 +141,6 @@ $script:LastSearchQuery = ''
 # directly (can hold a stale, unrelated selection). $null = unrestricted.
 $script:SearchScopedNode = $null
 
-if (-not (Test-Path -LiteralPath $DataPath)) { New-Item -ItemType Directory -Path $DataPath -Force | Out-Null }
 if (-not (Test-Path -LiteralPath $script:AppSettings.paths.indexDir)) { New-Item -ItemType Directory -Path $script:AppSettings.paths.indexDir -Force | Out-Null }
 
 # Data_SecurityCatalog.json lives in the configurable indexDir, not the
@@ -208,6 +206,15 @@ $securityIndex = Get-Content -Raw -Encoding UTF8 $secPath | ConvertFrom-Json
 $auditIndexPath = Join-Path $script:AppSettings.paths.indexDir 'advanced-audit-index.json'
 & (Join-Path $PSScriptRoot 'Indexers\Build-AdvancedAuditIndex.ps1') -AuditCsvPath $AuditCsvPath -OutputPath $auditIndexPath
 $advancedAuditIndex = Get-Content -Raw -Encoding UTF8 $auditIndexPath | ConvertFrom-Json
+
+# cis-fallback-map.json lives alongside cis-index.json/cis-overrides.json in
+# indexDir, same self-heal-from-bundled-template pattern as
+# Data_SecurityCatalog.json above - seeded here so Build-CisIndex.ps1 (just
+# below) has it available on a first run.
+$cisFallbackMapPath = Join-Path $script:AppSettings.paths.indexDir 'cis-fallback-map.json'
+if (-not (Test-Path -LiteralPath $cisFallbackMapPath)) {
+    Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'DefaultData\Data_CisFallbackMap.json') -Destination $cisFallbackMapPath -Force
+}
 
 # CIS index: same cache-freshness pattern as the ADMX index - a fingerprint
 # of the Audit files folder triggers an automatic rebuild when .audit files
@@ -830,7 +837,7 @@ function Update-TreeVisibilityForCisFilter {
     }
 
     foreach ($setting in $script:securityIndex.settings) {
-        $cisRec = Get-CisRecommendationForSecuritySetting -CisIndex $script:CisIndex -Section $setting.section -Name $setting.name
+        $cisRec = Get-CisRecommendationForSecuritySetting -CisIndex $script:CisIndex -Section $setting.section -Name $setting.name -DisplayName $setting.displayName
         if (-not (Test-CisProfileFilterMatch -CisEntry $cisRec)) { continue }
         if ($script:TreeItemsBySecurityCategory.ContainsKey($setting.category)) {
             Add-TreeKeepVisible -KeepSet $keepVisible -Node $script:TreeItemsBySecurityCategory[$setting.category] -Ancestors $script:TreeAncestorsBySecurityCategory[$setting.category]
@@ -1845,7 +1852,7 @@ function Update-PolicyList {
         $categoryPathLabel.Text = ($ui.SecurityBreadcrumbPrefix -f $tag.Label)
         foreach ($setting in $script:securityIndex.settings) {
             if ($setting.category -ne $tag.SecurityCategory) { continue }
-            $cisRec = Get-CisRecommendationForSecuritySetting -CisIndex $script:CisIndex -Section $setting.section -Name $setting.name
+            $cisRec = Get-CisRecommendationForSecuritySetting -CisIndex $script:CisIndex -Section $setting.section -Name $setting.name -DisplayName $setting.displayName
             if (-not (Test-CisProfileFilterMatch -CisEntry $cisRec)) { continue }
             $cisRowLabels = Get-CisRowLabels -CisEntry $cisRec -Ui $ui
             $items.Add([pscustomobject]@{
@@ -1936,7 +1943,7 @@ function Update-PolicyList {
         foreach ($setting in $script:securityIndex.settings) {
             $catKey = $script:SecurityCategoryToUiKey[$setting.category]
             $catLabel = if ($catKey) { $ui[$catKey] } else { $setting.category }
-            $cisRec = Get-CisRecommendationForSecuritySetting -CisIndex $script:CisIndex -Section $setting.section -Name $setting.name
+            $cisRec = Get-CisRecommendationForSecuritySetting -CisIndex $script:CisIndex -Section $setting.section -Name $setting.name -DisplayName $setting.displayName
             if (-not (Test-CisProfileFilterMatch -CisEntry $cisRec)) { continue }
             $cisRowLabels = Get-CisRowLabels -CisEntry $cisRec -Ui $ui
             $items.Add([pscustomobject]@{
@@ -2294,7 +2301,7 @@ function Invoke-Search {
 
     if ((Test-KindFilterMatch -Kind 'Security') -and (Test-ScopeFilterMatch -Scope $null)) {
         foreach ($setting in $script:securityIndex.settings) {
-            $cisRec = Get-CisRecommendationForSecuritySetting -CisIndex $script:CisIndex -Section $setting.section -Name $setting.name
+            $cisRec = Get-CisRecommendationForSecuritySetting -CisIndex $script:CisIndex -Section $setting.section -Name $setting.name -DisplayName $setting.displayName
             if (-not (Test-SearchMatchSecurity -Field $searchField -Query $Query -Setting $setting -CisEntry $cisRec)) { continue }
             $catKey = $script:SecurityCategoryToUiKey[$setting.category]
             $catLabel = if ($catKey) { $ui[$catKey] } else { $setting.category }
@@ -2658,7 +2665,7 @@ function Open-SelectedPolicyEditor {
         $setting = $script:securityIndex.settings | Where-Object { $_.id -eq $selectedItem.PolicyId } | Select-Object -First 1
         if (-not $setting) { return }
 
-        $cisRec = Get-CisRecommendationForSecuritySetting -CisIndex $script:CisIndex -Section $setting.section -Name $setting.name
+        $cisRec = Get-CisRecommendationForSecuritySetting -CisIndex $script:CisIndex -Section $setting.section -Name $setting.name -DisplayName $setting.displayName
         $result = Show-SecurityEditDialog -Setting $setting -CisRecommendation $cisRec -Owner $window -ScriptRoot $PSScriptRoot -Ui $ui -DataPath $script:AppSettings.paths.indexDir
 
         if ($script:__secDialogCatalogEdited) {

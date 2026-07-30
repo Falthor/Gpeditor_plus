@@ -95,6 +95,65 @@ function Get-CisOverrides {
     }
 }
 
+# ---------------------------------------------------------------------------
+# Fallback CIS matching (cis-fallback-map.json) - second-chance lookup for
+# CIS entries whose .audit fields alone can't produce a match key/aren't
+# reachable from a given Security Options section (e.g. ANONYMOUS_SID_SETTING
+# / REG_CHECK entries with no reg_key, or a "System Access" setting with no
+# registry backing at all, like "Network access: Allow anonymous SID/Name
+# translation"). Keyed by normalized CIS title (not CIS number: the same
+# setting's number shifts between benchmark versions/profiles). Populated by
+# Build-CisIndex.ps1 (auto-resolved via SecurityCatalog/ADMX where possible),
+# editable by hand for cases neither source can resolve.
+# ---------------------------------------------------------------------------
+
+function Get-CisFallbackMapPath {
+    param([string]$DataPath)
+    return (Join-Path $DataPath 'cis-fallback-map.json')
+}
+
+function Test-CisFallbackMapEntry {
+    # An entry is only usable if it carries a valueType and either a
+    # complete (regKey, regItem) pair or an explicit "no registry backing"
+    # marker (regKey/regItem both $null, not just missing) - guards against
+    # a malformed manual edit (e.g. only regKey filled in) silently
+    # producing a broken byTitle entry.
+    param($Entry)
+
+    if ($null -eq $Entry) { return $false }
+    if ([string]::IsNullOrEmpty($Entry.valueType)) { return $false }
+    $hasRegKey = -not [string]::IsNullOrEmpty($Entry.regKey)
+    $hasRegItem = -not [string]::IsNullOrEmpty($Entry.regItem)
+    if ($hasRegKey -ne $hasRegItem) { return $false }
+    return $true
+}
+
+function Get-CisFallbackMap {
+    # Loads cis-fallback-map.json; missing/unreadable => no fallback entries
+    # (same tolerance as Get-CisOverrides/a missing cis-index.json). Entries
+    # failing Test-CisFallbackMapEntry are skipped individually with a
+    # warning rather than discarding the whole file.
+    param([string]$DataPath)
+    $path = Get-CisFallbackMapPath -DataPath $DataPath
+    if (-not (Test-Path -LiteralPath $path)) { return @{} }
+    try {
+        $raw = Get-Content -Raw -Encoding UTF8 -LiteralPath $path | ConvertFrom-Json
+        $result = @{}
+        foreach ($prop in $raw.PSObject.Properties) {
+            if (-not (Test-CisFallbackMapEntry -Entry $prop.Value)) {
+                Write-Warning "CIS fallback map entry ignored (malformed, title: '$($prop.Name)') in $path"
+                continue
+            }
+            $result[$prop.Name] = $prop.Value
+        }
+        return $result
+    }
+    catch {
+        Write-Warning "CIS fallback map unreadable ($path): $($_.Exception.Message) - ignored."
+        return @{}
+    }
+}
+
 function Set-CisOverride {
     <#
         Adds/replaces the "info" override of a CIS entry (identified by its
@@ -121,6 +180,59 @@ function Set-CisOverride {
     [System.IO.File]::WriteAllText($path, $json, (New-Object System.Text.UTF8Encoding($true)))
 }
 
+function ConvertTo-CisNormalizedTitle {
+    # Shared normalization for the byTitle fallback bucket: same casing/
+    # whitespace/"(L1)"/"(L2)" stripping as ConvertTo-CisNumberAndTitle
+    # (Build-CisIndex.ps1) applies to the title portion of "description",
+    # so a title built at index time and one built at runtime (from a
+    # SecurityCatalog DisplayName) collide on the same key.
+    param([string]$Title)
+
+    if ([string]::IsNullOrEmpty($Title)) { return $null }
+    $normalized = $Title -replace '^\(L\d\)\s*', ''
+    $normalized = ($normalized -replace '\s+', ' ').Trim().ToLowerInvariant()
+    if ([string]::IsNullOrEmpty($normalized)) { return $null }
+    return $normalized
+}
+
+function Get-CisSettingNameFromTitle {
+    # byTitle must be keyed by something the app actually has at runtime
+    # when the primary (Registry Values/Privilege Rights/password-lockout
+    # map) match misses: that's a bare SecurityCatalog/ADMX DisplayName
+    # (e.g. "Network access: Allow anonymous SID/Name translation"), never
+    # the full CIS sentence. Extracts the quoted setting name from a CIS
+    # title of the form "Ensure '<setting name>' is set to '<value>'"
+    # (optionally suffixed "(DC Only)"/"(MS Only)") - that quoted name is
+    # exactly the DisplayName in SecurityCatalog/ADMX. Falls back to the
+    # whole title for the rare CIS title that doesn't follow this pattern
+    # (then a byTitle match would need the runtime DisplayName to equal
+    # that whole title, which won't happen - effectively unreachable via
+    # the fallback map for such a title, same as no fallback at all).
+    param([string]$Title)
+
+    if ([string]::IsNullOrEmpty($Title)) { return $Title }
+    $m = [regex]::Match($Title, "^Ensure\s+'(?<name>.+?)'\s+is\s+set\s+to\s+")
+    if ($m.Success) { return $m.Groups['name'].Value }
+    return $Title
+}
+
+function Get-CisIndexBucket {
+    # Safe accessor for a bucket on the loaded CIS index (PSCustomObject
+    # from ConvertFrom-Json): plain dot access ($CisIndex.$BucketName)
+    # throws under Set-StrictMode -Version Latest (this file's mode) when
+    # the property is genuinely absent - which happens for any
+    # cis-index.json cached on disk from before a bucket was added (e.g.
+    # byTitle), since Import-CisIndex never regenerates it on its own (see
+    # its header comment) and the audit-files fingerprint that gates a
+    # rebuild doesn't change just because the app's bucket list did.
+    param($CisIndex, [string]$BucketName)
+
+    if ($null -eq $CisIndex) { return $null }
+    $prop = $CisIndex.PSObject.Properties[$BucketName]
+    if ($null -eq $prop) { return $null }
+    return $prop.Value
+}
+
 function Merge-CisOverrides {
     # Applies overrides ("info" field only) onto an already-loaded CIS
     # index (PSCustomObject, buckets -> key -> entry). Used by
@@ -129,7 +241,7 @@ function Merge-CisOverrides {
     param($CisIndex, [hashtable]$Overrides)
     if ($null -eq $CisIndex -or $null -eq $Overrides -or $Overrides.Count -eq 0) { return }
     foreach ($bucketName in $script:CisIndexBuckets) {
-        $bucketObj = $CisIndex.$bucketName
+        $bucketObj = Get-CisIndexBucket -CisIndex $CisIndex -BucketName $bucketName
         if ($null -eq $bucketObj) { continue }
         foreach ($prop in $bucketObj.PSObject.Properties) {
             $overrideKey = "$bucketName`::$($prop.Name)"
@@ -146,7 +258,7 @@ function Get-CisIndexEntry {
     param($CisIndex, [string]$Bucket, [string]$Key)
 
     if ($null -eq $CisIndex -or [string]::IsNullOrEmpty($Key)) { return $null }
-    $bucketObj = $CisIndex.$Bucket
+    $bucketObj = Get-CisIndexBucket -CisIndex $CisIndex -BucketName $Bucket
     if ($null -eq $bucketObj) { return $null }
     $prop = $bucketObj.PSObject.Properties[$Key]
     if ($null -eq $prop) { return $null }
@@ -168,10 +280,20 @@ function Get-CisRecommendationForSecuritySetting {
     # Security Settings: Password Policy / Account Lockout Policy (via the
     # manual mapping table) and User Rights Assignment (SecurityCatalog
     # name, e.g. SeBackupPrivilege, already matches the CIS right_type field as-is).
-    param($CisIndex, [string]$Section, [string]$Name)
+    #
+    # Each branch below is the authoritative match for its section (built
+    # from real .audit fields) and falls through - rather than returning
+    # immediately - on a miss, so a setting that isn't found there still
+    # gets a chance via the generic byTitle fallback at the end. That
+    # fallback is what covers a section with no primary match path at all
+    # (e.g. "System Access" settings with no registry backing, such as
+    # "Network access: Allow anonymous SID/Name translation") without
+    # requiring a dedicated branch per section - see cis-fallback-map.json.
+    param($CisIndex, [string]$Section, [string]$Name, [string]$DisplayName)
 
     if ($Section -eq 'Privilege Rights') {
-        return Get-CisIndexEntry -CisIndex $CisIndex -Bucket 'byUserRight' -Key $Name
+        $rec = Get-CisIndexEntry -CisIndex $CisIndex -Bucket 'byUserRight' -Key $Name
+        if ($rec) { return $rec }
     }
 
     if ($Section -eq 'Registry Values') {
@@ -180,15 +302,24 @@ function Get-CisRecommendationForSecuritySetting {
         # matching as Administrative Templates.
         $withoutHive = $Name -replace '^MACHINE\\', ''
         $lastSlash = $withoutHive.LastIndexOf('\')
-        if ($lastSlash -le 0) { return $null }
-        $registryPath = $withoutHive.Substring(0, $lastSlash)
-        $valueName = $withoutHive.Substring($lastSlash + 1)
-        return Get-CisRecommendationForRegistry -CisIndex $CisIndex -RegistryKey $registryPath -ValueName $valueName
+        if ($lastSlash -gt 0) {
+            $registryPath = $withoutHive.Substring(0, $lastSlash)
+            $valueName = $withoutHive.Substring($lastSlash + 1)
+            $rec = Get-CisRecommendationForRegistry -CisIndex $CisIndex -RegistryKey $registryPath -ValueName $valueName
+            if ($rec) { return $rec }
+        }
     }
 
     if ($script:CisPasswordLockoutKeyMap.ContainsKey($Name)) {
         $mapped = $script:CisPasswordLockoutKeyMap[$Name]
-        return Get-CisIndexEntry -CisIndex $CisIndex -Bucket $mapped.Bucket -Key $mapped.Key
+        $rec = Get-CisIndexEntry -CisIndex $CisIndex -Bucket $mapped.Bucket -Key $mapped.Key
+        if ($rec) { return $rec }
+    }
+
+    $normalizedTitle = ConvertTo-CisNormalizedTitle -Title $DisplayName
+    if ($normalizedTitle) {
+        $rec = Get-CisIndexEntry -CisIndex $CisIndex -Bucket 'byTitle' -Key $normalizedTitle
+        if ($rec) { return $rec }
     }
 
     return $null
@@ -210,7 +341,7 @@ function Get-CisRecommendationForAuditSubcategory {
 # single active profile chosen by the user.
 # ---------------------------------------------------------------------------
 
-$script:CisIndexBuckets = @('byRegistry', 'byPasswordPolicy', 'byLockoutPolicy', 'byUserRight', 'byAuditSubcategory')
+$script:CisIndexBuckets = @('byRegistry', 'byPasswordPolicy', 'byLockoutPolicy', 'byUserRight', 'byAuditSubcategory', 'byTitle')
 
 function Get-CisAllEntries {
     # All entries (unique controls) of the CIS index, across all buckets -
@@ -225,7 +356,7 @@ function Get-CisAllEntries {
     # elements (CisIndex missing/empty).
     if ($null -eq $CisIndex) { return , $entries }
     foreach ($bucketName in $script:CisIndexBuckets) {
-        $bucketObj = $CisIndex.$bucketName
+        $bucketObj = Get-CisIndexBucket -CisIndex $CisIndex -BucketName $bucketName
         if ($null -eq $bucketObj) { continue }
         foreach ($prop in $bucketObj.PSObject.Properties) {
             $entries.Add($prop.Value)

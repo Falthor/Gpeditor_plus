@@ -1,0 +1,10 @@
+{
+    "network access: allow anonymous sid/name translation": {
+        "source": "manual",
+        "regKey": null,
+        "regItem": null,
+        "valueType": "reg-boolean",
+        "valueMap": { "Disabled": 0, "Enabled": 1 },
+        "needsManualReview": false
+    }
+}

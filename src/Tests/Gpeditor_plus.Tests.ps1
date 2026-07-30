@@ -865,4 +865,44 @@ Describe 'CisCatalog' -Tag 'Integration' {
             Get-CisRecommendationValueForProfile -CisEntry $noLmHash -ActiveProfile $win11StandAlone -Ui $ui | Should -BeNullOrEmpty
         }
     }
+
+    Context 'byTitle fallback (ANONYMOUS_SID_SETTING via cis-fallback-map.json)' {
+
+        BeforeAll {
+            # Separate index build, isolated from the top-level $cisIndex
+            # fixture: this one seeds cis-fallback-map.json first (as
+            # GpEdit.ps1 does from DefaultData on first run) so the
+            # "Network access: Allow anonymous SID/Name translation"
+            # (2.3.10.1) entry - which carries no reg_key/reg_item at all
+            # in the .audit file - resolves into byTitle instead of being
+            # left needsManualReview.
+            $fallbackTestDir = Join-Path $TestDrive 'fallback-map-test'
+            New-Item -ItemType Directory -Path $fallbackTestDir -Force | Out-Null
+            Copy-Item -LiteralPath (Join-Path $SrcRoot 'DefaultData\Data_CisFallbackMap.json') -Destination (Join-Path $fallbackTestDir 'cis-fallback-map.json') -Force
+
+            $fallbackOutputPath = Join-Path $fallbackTestDir 'cis-index.json'
+            & (Join-Path $SrcRoot 'Indexers\Build-CisIndex.ps1') -AuditFilesPath $auditFilesPath -OutputPath $fallbackOutputPath | Out-Null
+            $script:cisIndexWithFallback = Import-CisIndex -Path $fallbackOutputPath
+        }
+
+        It 'resolves a System Access setting with no registry backing via DisplayName' {
+            $rec = Get-CisRecommendationForSecuritySetting -CisIndex $cisIndexWithFallback -Section 'System Access' -Name 'LSAAnonymousNameLookup' -DisplayName "Network access: Allow anonymous SID/Name translation"
+            $rec | Should -Not -BeNullOrEmpty
+            $rec.recommendedStateText | Should -Be 'Disabled'
+            (@($rec.profiles) | Where-Object { $_.cisNumber -eq '2.3.10.1' } | Select-Object -First 1).valueData | Should -Be 0
+        }
+
+        It 'still returns $null for a System Access setting with no match anywhere' {
+            Get-CisRecommendationForSecuritySetting -CisIndex $cisIndexWithFallback -Section 'System Access' -Name 'SomeUncatalogedSetting' -DisplayName 'Not a real setting' | Should -BeNullOrEmpty
+        }
+
+        It 'primary matches (Registry Values / Privilege Rights) still win over the byTitle fallback' {
+            # Get-CisRecommendationForSecuritySetting -Section 'Privilege Rights' -Name 'SeTrustedCredManAccessPrivilege' - already covered above without
+            # -DisplayName; passing a bogus DisplayName here must not change
+            # that a primary byUserRight match still wins.
+            $rec = Get-CisRecommendationForSecuritySetting -CisIndex $cisIndexWithFallback -Section 'Privilege Rights' -Name 'SeTrustedCredManAccessPrivilege' -DisplayName 'Unrelated title that would never match anything'
+            $rec | Should -Not -BeNullOrEmpty
+            Get-CisRecommendationStateText -CisEntry $rec | Should -Be 'No One'
+        }
+    }
 }

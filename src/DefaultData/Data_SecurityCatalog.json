@@ -109,13 +109,13 @@
                                          "DisplayName":  "Accounts: Rename guest account",
                                          "Explain":  "This security setting determines whether a different account name is associated with the security identifier (SID) for the account \"Guest.\" Renaming the well-known Guest account makes it slightly more difficult for unauthorized persons to guess this user name and password combination.\n\nDefault: Guest."
                                      },
-                                     {
-                                         "Key":  "LSAAnonymousNameLookup",
-                                         "ValueType":  "boolean",
-                                         "Description":  "Determines whether an anonymous user can request SID attributes for another user, or use a SID to obtain its corresponding user name.",
-                                         "DisplayName":  "Network access: Allow anonymous SID/Name translation",
-                                         "Explain":  "This security setting determines whether an anonymous user is allowed to request the security identifier (SID) attributes of another user, or the name corresponding to a known SID. It governs both SID-to-name and name-to-SID translation for unauthenticated network connections.\n\nWhen enabled, an anonymous user who knows the well-known SID of the built-in Administrators group can query a computer that has this setting enabled to recover the real account name of the built-in Administrator account—even if that account has been renamed—and then use that name to mount a brute-force password-guessing attack. When disabled, anonymous SID/name and name/SID translation requests are refused, closing off that reconnaissance path. Misconfiguring this setting is a common source of unexpected data-access problems, so changes should be tested before wide deployment.\n\nDefault : workstations and member servers: Disabled.\nDefault : domain controllers running Windows Server 2008 or later: Disabled.\nDefault : domain controllers running Windows Server 2003 R2 or earlier: Enabled."
-                                     }
+									 {
+										"Key":  "LSAAnonymousNameLookup",
+										"ValueType":  "boolean",
+										"Description":  "Determines whether an anonymous user can request SID attributes for another user, or use a SID to obtain its corresponding user name.",
+										"DisplayName":  "Network access: Allow anonymous SID/Name translation",
+										"Explain":  "This security setting determines whether an anonymous user is allowed to request the security identifier (SID) attributes of another user, or the name corresponding to a known SID. It governs both SID-to-name and name-to-SID translation for unauthenticated network connections.\n\nWhen enabled, an anonymous user who knows the well-known SID of the built-in Administrators group can query a computer that has this setting enabled to recover the real account name of the built-in Administrator account—even if that account has been renamed—and then use that name to mount a brute-force password-guessing attack. When disabled, anonymous SID/name and name/SID translation requests are refused, closing off that reconnaissance path. Misconfiguring this setting is a common source of unexpected data-access problems, so changes should be tested before wide deployment.\n\nDefault : workstations and member servers: Disabled.\nDefault : domain controllers running Windows Server 2008 or later: Disabled.\nDefault : domain controllers running Windows Server 2003 R2 or earlier: Enabled."
+								     }
                                  ],
     "SecurityOptionsRegistryCatalog":  [
                                            {
@@ -127,6 +127,7 @@
                                                "RegistryPath":  "System\\CurrentControlSet\\Control\\Lsa",
                                                "ValueName":  "LimitBlankPasswordUse"
                                            },
+	
                                            {
                                                "Key":  "SCENoApplyLegacyAuditPolicy",
                                                "ValueType":  "reg-boolean",

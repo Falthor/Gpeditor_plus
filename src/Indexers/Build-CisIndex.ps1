@@ -159,6 +159,19 @@ function Get-CisMatchKey {
             $normKey = ($RegKey -replace '^HKLM\\', '').ToLowerInvariant()
             return [ordered]@{ bucket = 'byRegistry'; key = "$normKey|$($RegItem.ToLowerInvariant())" }
         }
+        'REG_CHECK' {
+            # Same byRegistry match as REGISTRY_SETTING, but REG_CHECK names
+            # its fields the other way round: "value_data" carries the
+            # registry PATH and "key_item" the value NAME (caller passes
+            # them in as -RegKey/-RegItem already swapped accordingly - see
+            # Read-CisAuditFile). Confirmed against real .audit entries
+            # (e.g. 18.9.19.5/.7 "Turn off background refresh of Group
+            # Policy": value_data = "HKLM\...\Policies\System", key_item =
+            # "DisableBkGndGroupPolicy").
+            if (-not $RegKey -or -not $RegItem) { return $null }
+            $normKey = ($RegKey -replace '^HKLM\\', '').ToLowerInvariant()
+            return [ordered]@{ bucket = 'byRegistry'; key = "$normKey|$($RegItem.ToLowerInvariant())" }
+        }
         'PASSWORD_POLICY' {
             if (-not $PasswordPolicy) { return $null }
             return [ordered]@{ bucket = 'byPasswordPolicy'; key = $PasswordPolicy }
@@ -182,8 +195,43 @@ function Get-CisMatchKey {
 # ---------------------------------------------------------------------------
 # Processing of a single .audit file
 # ---------------------------------------------------------------------------
+function Add-CisTitleFallbackCandidate {
+    # Records a numbered CIS entry that couldn't get a primary match key
+    # (REG_CHECK missing value_data/key_item, or ANONYMOUS_SID_SETTING -
+    # which never carries a location field, see Get-CisMatchKey) so it can
+    # be resolved after all files are read, via cis-fallback-map.json - see
+    # Resolve-CisTitleFallbackCandidates below.
+    param(
+        [System.Collections.Generic.List[object]]$Candidates,
+        [string]$Title,
+        [string]$Info,
+        [string]$ValueType,
+        $Spec,
+        [string]$CisNumber
+    )
+    # Keyed by the extracted setting name (Get-CisSettingNameFromTitle), not
+    # the whole CIS sentence: at runtime the app only has a bare
+    # SecurityCatalog/ADMX DisplayName to look up with (see
+    # Get-CisRecommendationForSecuritySetting's byTitle fallback), never the
+    # full "Ensure '...' is set to '...'" phrasing.
+    $normalizedTitle = ConvertTo-CisNormalizedTitle -Title (Get-CisSettingNameFromTitle -Title $Title)
+    if (-not $normalizedTitle) { return }
+    # [pscustomobject], not a plain hashtable: Group-Object -Property below
+    # (Resolve-CisTitleFallbackCandidates) only resolves real object
+    # properties, not hashtable keys - a hashtable here would silently
+    # group everything under one empty-name bucket.
+    $Candidates.Add([pscustomobject]@{
+        NormalizedTitle = $normalizedTitle
+        Title     = $Title
+        Info      = $Info
+        ValueType = $ValueType
+        Spec      = $Spec
+        CisNumber = $CisNumber
+    })
+}
+
 function Read-CisAuditFile {
-    param([string]$Path, [System.Collections.IDictionary]$Index, [hashtable]$Counters)
+    param([string]$Path, [System.Collections.IDictionary]$Index, [hashtable]$Counters, [System.Collections.Generic.List[object]]$TitleFallbackCandidates)
 
     $text = Get-Content -Raw -LiteralPath $Path
     $spec = Get-CisSpec -Text $text
@@ -200,8 +248,18 @@ function Read-CisAuditFile {
         $numberAndTitle = ConvertTo-CisNumberAndTitle -Description $description
         if ($null -eq $numberAndTitle) { continue }
 
-        $regKey = Get-CisField -BlockText $body -FieldName 'reg_key'
-        $regItem = Get-CisField -BlockText $body -FieldName 'reg_item'
+        # REG_CHECK names its location fields the other way round from
+        # REGISTRY_SETTING: "value_data" is the registry path and
+        # "key_item" the value name (see Get-CisMatchKey's 'REG_CHECK'
+        # case) - read the right pair depending on type.
+        if ($type -eq 'REG_CHECK') {
+            $regKey = Get-CisField -BlockText $body -FieldName 'value_data'
+            $regItem = Get-CisField -BlockText $body -FieldName 'key_item'
+        }
+        else {
+            $regKey = Get-CisField -BlockText $body -FieldName 'reg_key'
+            $regItem = Get-CisField -BlockText $body -FieldName 'reg_item'
+        }
         $passwordPolicy = Get-CisField -BlockText $body -FieldName 'password_policy'
         $lockoutPolicy = Get-CisField -BlockText $body -FieldName 'lockout_policy'
         $rightType = Get-CisField -BlockText $body -FieldName 'right_type'
@@ -209,13 +267,25 @@ function Read-CisAuditFile {
 
         $matchKey = Get-CisMatchKey -Type $type -RegKey $regKey -RegItem $regItem -PasswordPolicy $passwordPolicy -LockoutPolicy $lockoutPolicy -RightType $rightType -AuditSubcategory $auditSubcategory
         if ($null -eq $matchKey) {
+            if ($type -eq 'REG_CHECK' -or $type -eq 'ANONYMOUS_SID_SETTING') {
+                # Deferred, not counted as Skipped yet - the title-fallback
+                # pass (after all files are read) may still resolve it via
+                # cis-fallback-map.json into the byTitle bucket; only what's
+                # still unresolved after that pass is counted as Skipped.
+                Add-CisTitleFallbackCandidate -Candidates $TitleFallbackCandidates -Title $numberAndTitle.title -Info (Get-CisField -BlockText $body -FieldName 'info') -ValueType (Get-CisField -BlockText $body -FieldName 'value_type') -Spec $spec -CisNumber $numberAndTitle.cisNumber
+                continue
+            }
             $Counters.Skipped++
             continue
         }
 
+        # Fetched unconditionally (not just on first occurrence): needed
+        # below for every REG_CHECK profile's valueData, not only to seed a
+        # newly-created bucket entry.
+        $info = Get-CisField -BlockText $body -FieldName 'info'
+
         $bucket = $Index[$matchKey.bucket]
         if (-not $bucket.Contains($matchKey.key)) {
-            $info = Get-CisField -BlockText $body -FieldName 'info'
             $bucket[$matchKey.key] = [ordered]@{
                 bucket   = $matchKey.bucket
                 key      = $matchKey.key
@@ -230,7 +300,21 @@ function Read-CisAuditFile {
             $Counters.Entries++
         }
 
-        $valueData = Resolve-CisValueData -Raw (Get-CisField -BlockText $body -FieldName 'value_data') -Variables $variables
+        # For REG_CHECK, "value_data" was already consumed above as the
+        # registry PATH (regKey), not the recommended value - there is no
+        # per-profile recommended value to resolve for this type from the
+        # .audit file itself the way REGISTRY_SETTING has one. Falling back
+        # to $null here would silently break the CIS Yes/No column, the CIS
+        # R. Value column and profile filtering (Get-CisRecommendationValueForProfile/
+        # Test-CisProfileFilterMatch in GpEdit.ps1 all treat an empty
+        # valueData as "no recommendation for this profile") - use this
+        # profile's own recommendedStateText ("Disabled"/"Enabled", from its
+        # own "info" above) as the value instead.
+        $rawValueData = if ($type -eq 'REG_CHECK') { $null } else { Get-CisField -BlockText $body -FieldName 'value_data' }
+        $valueData = Resolve-CisValueData -Raw $rawValueData -Variables $variables
+        if ($type -eq 'REG_CHECK' -and [string]::IsNullOrEmpty($valueData)) {
+            $valueData = Get-CisRecommendedStateText -Info $info
+        }
 
         $bucket[$matchKey.key].profiles.Add([ordered]@{
             benchmark = $spec.benchmark
@@ -242,6 +326,135 @@ function Read-CisAuditFile {
         })
         $Counters.Profiles++
     }
+}
+
+# ---------------------------------------------------------------------------
+# Title-fallback resolution (cis-fallback-map.json): second-chance matching
+# for entries collected above with no usable location field. Populates the
+# byTitle bucket and non-destructively completes cis-fallback-map.json with
+# what it can auto-resolve, leaving the rest flagged needsManualReview.
+# ---------------------------------------------------------------------------
+
+function Resolve-CisTitleAutomatically {
+    <#
+        Best-effort auto-resolution of a CIS title with no usable location
+        field in the .audit file: matched against Data_SecurityCatalog.json
+        (SecurityOptionsRegistryCatalog - the only section with a real
+        RegistryPath/ValueName) then the ADMX index, both by simple
+        substring containment - CIS titles literally wrap the catalog's
+        DisplayName in quotes (e.g. "Ensure '<DisplayName>' is set to ...").
+        Only an UNAMBIGUOUS single match (across both sources combined) is
+        accepted; 0 or 2+ candidates leave the entry unresolved
+        (needsManualReview) rather than risk pairing the wrong setting.
+    #>
+    param([string]$NormalizedTitle, [string]$SecurityCatalogPath, [string]$AdmxIndexPath, [string]$ValueType)
+
+    $candidates = New-Object System.Collections.Generic.List[object]
+
+    if (Test-Path -LiteralPath $SecurityCatalogPath) {
+        try {
+            $catalog = Get-Content -Raw -Encoding UTF8 -LiteralPath $SecurityCatalogPath | ConvertFrom-Json
+            foreach ($entry in @($catalog.SecurityOptionsRegistryCatalog)) {
+                if (-not $entry.DisplayName -or -not $entry.RegistryPath -or -not $entry.ValueName) { continue }
+                if ($NormalizedTitle.Contains($entry.DisplayName.ToLowerInvariant())) {
+                    $candidates.Add([ordered]@{ source = 'securitycatalog'; regKey = $entry.RegistryPath; regItem = $entry.ValueName })
+                }
+            }
+        }
+        catch { Write-Warning "Security catalog unreadable during CIS fallback resolution ($SecurityCatalogPath): $($_.Exception.Message)" }
+    }
+
+    if (Test-Path -LiteralPath $AdmxIndexPath) {
+        try {
+            $admx = Get-Content -Raw -Encoding UTF8 -LiteralPath $AdmxIndexPath | ConvertFrom-Json
+            foreach ($pol in @($admx.policies)) {
+                if (-not $pol.displayName -or -not $pol.registryKey -or -not $pol.valueName) { continue }
+                if ($NormalizedTitle.Contains($pol.displayName.ToLowerInvariant())) {
+                    $candidates.Add([ordered]@{ source = 'admx'; regKey = $pol.registryKey; regItem = $pol.valueName })
+                }
+            }
+        }
+        catch { Write-Warning "ADMX index unreadable during CIS fallback resolution ($AdmxIndexPath): $($_.Exception.Message)" }
+    }
+
+    if ($candidates.Count -eq 1) {
+        $c = $candidates[0]
+        return [ordered]@{ source = $c.source; regKey = $c.regKey; regItem = $c.regItem; valueType = $ValueType; valueMap = $null; needsManualReview = $false }
+    }
+    return $null
+}
+
+function Resolve-CisTitleFallbackCandidates {
+    param(
+        [System.Collections.Generic.List[object]]$Candidates,
+        [System.Collections.IDictionary]$Index,
+        [hashtable]$Counters,
+        [hashtable]$FallbackMap,
+        [string]$SecurityCatalogPath,
+        [string]$AdmxIndexPath
+    )
+
+    $Counters.NeedsManualReview = 0
+    $fallbackMapDirty = $false
+
+    foreach ($group in ($Candidates | Group-Object -Property NormalizedTitle)) {
+        $normTitle = $group.Name
+        $first = $group.Group[0]
+
+        $fbEntry = $null
+        if ($FallbackMap.ContainsKey($normTitle)) {
+            if (-not $FallbackMap[$normTitle].needsManualReview) { $fbEntry = $FallbackMap[$normTitle] }
+        }
+        else {
+            $resolved = Resolve-CisTitleAutomatically -NormalizedTitle $normTitle -SecurityCatalogPath $SecurityCatalogPath -AdmxIndexPath $AdmxIndexPath -ValueType $first.ValueType
+            if ($resolved) {
+                $FallbackMap[$normTitle] = $resolved
+                $fbEntry = $resolved
+            }
+            else {
+                $FallbackMap[$normTitle] = [ordered]@{ source = 'manual'; regKey = $null; regItem = $null; valueType = $first.ValueType; valueMap = $null; needsManualReview = $true }
+            }
+            $fallbackMapDirty = $true
+        }
+
+        if ($null -eq $fbEntry) {
+            $Counters.NeedsManualReview++
+            $Counters.Skipped += $group.Group.Count
+            continue
+        }
+
+        $Index.byTitle[$normTitle] = [ordered]@{
+            bucket   = 'byTitle'
+            key      = $normTitle
+            title    = $first.Title
+            info     = $first.Info
+            recommendedStateText = Get-CisRecommendedStateText -Info $first.Info
+            valueType = $fbEntry.valueType
+            regKey   = $fbEntry.regKey
+            regItem  = $fbEntry.regItem
+            profiles = New-Object System.Collections.Generic.List[object]
+        }
+        $Counters.Entries++
+
+        foreach ($cand in $group.Group) {
+            $stateText = Get-CisRecommendedStateText -Info $cand.Info
+            $valueData = $null
+            if ($fbEntry.valueMap -and $stateText -and $fbEntry.valueMap.PSObject.Properties[$stateText]) {
+                $valueData = $fbEntry.valueMap.$stateText
+            }
+            $Index.byTitle[$normTitle].profiles.Add([ordered]@{
+                benchmark = $cand.Spec.benchmark
+                version   = $cand.Spec.version
+                level     = $cand.Spec.level
+                role      = $cand.Spec.role
+                cisNumber = $cand.CisNumber
+                valueData = $valueData
+            })
+            $Counters.Profiles++
+        }
+    }
+
+    return $fallbackMapDirty
 }
 
 # ---------------------------------------------------------------------------
@@ -262,19 +475,46 @@ $index = [ordered]@{
     byLockoutPolicy    = [ordered]@{}
     byUserRight        = [ordered]@{}
     byAuditSubcategory = [ordered]@{}
+    byTitle            = [ordered]@{}
 }
 $counters = @{ Entries = 0; Profiles = 0; Skipped = 0 }
+$titleFallbackCandidates = New-Object System.Collections.Generic.List[object]
 
 foreach ($f in $files) {
-    Read-CisAuditFile -Path $f.FullName -Index $index -Counters $counters
+    Read-CisAuditFile -Path $f.FullName -Index $index -Counters $counters -TitleFallbackCandidates $titleFallbackCandidates
 }
+
+$dataPath = Split-Path -Parent $OutputPath
+
+# Title-fallback resolution (cis-fallback-map.json, see CisCatalog.ps1):
+# second-chance matching for REG_CHECK/ANONYMOUS_SID_SETTING entries with no
+# usable location field (Read-CisAuditFile above). Auto-resolves what it can
+# against Data_SecurityCatalog.json/the ADMX index, flags the rest
+# needsManualReview, and writes back only newly-added keys - existing
+# entries (especially manual ones) are never touched.
+if ($titleFallbackCandidates.Count -gt 0) {
+    $fallbackMap = Get-CisFallbackMap -DataPath $dataPath
+    $securityCatalogPath = Join-Path $PSScriptRoot '..\DefaultData\Data_SecurityCatalog.json'
+    $admxIndexPath = Join-Path $dataPath 'admx-index.json'
+    $fallbackMapDirty = Resolve-CisTitleFallbackCandidates -Candidates $titleFallbackCandidates -Index $index -Counters $counters -FallbackMap $fallbackMap -SecurityCatalogPath $securityCatalogPath -AdmxIndexPath $admxIndexPath
+
+    if ($fallbackMapDirty) {
+        $orderedFallbackMap = [ordered]@{}
+        foreach ($k in ($fallbackMap.Keys | Sort-Object)) { $orderedFallbackMap[$k] = $fallbackMap[$k] }
+        $fallbackMapOutPath = Get-CisFallbackMapPath -DataPath $dataPath
+        $fallbackMapOutDir = Split-Path -Parent $fallbackMapOutPath
+        if (-not (Test-Path -LiteralPath $fallbackMapOutDir)) { New-Item -ItemType Directory -Path $fallbackMapOutDir -Force | Out-Null }
+        $fallbackJson = $orderedFallbackMap | ConvertTo-Json -Depth 6
+        [System.IO.File]::WriteAllText($fallbackMapOutPath, $fallbackJson, (New-Object System.Text.UTF8Encoding($true)))
+    }
+}
+if (-not $counters.ContainsKey('NeedsManualReview')) { $counters.NeedsManualReview = 0 }
 
 # "info" overrides (see plan-gpedit-security-catalog-editor.md §4.3):
 # applied here too (in addition to Import-CisIndex, app-side) so UI edits
 # survive a full regeneration of this index. Pre-serialization hashtable
 # here (not yet a PSCustomObject from ConvertFrom-Json) - direct key
 # indexing, no .PSObject.Properties walk like in Merge-CisOverrides.
-$dataPath = Split-Path -Parent $OutputPath
 $overrides = Get-CisOverrides -DataPath $dataPath
 foreach ($overrideKey in $overrides.Keys) {
     $parts = $overrideKey -split '::', 2
@@ -292,6 +532,7 @@ $output = [ordered]@{
         entryCount  = $counters.Entries
         profileCount = $counters.Profiles
         skippedItemCount = $counters.Skipped
+        needsManualReviewCount = $counters.NeedsManualReview
         sourceFingerprint = $SourceFingerprint
     }
     byRegistry         = $index.byRegistry
@@ -299,6 +540,7 @@ $output = [ordered]@{
     byLockoutPolicy    = $index.byLockoutPolicy
     byUserRight        = $index.byUserRight
     byAuditSubcategory = $index.byAuditSubcategory
+    byTitle            = $index.byTitle
 }
 
 $outDir = Split-Path -Parent $OutputPath
@@ -310,3 +552,4 @@ Write-Host "  .audit files processed: $($files.Count)"
 Write-Host "  Entries (unique controls): $($counters.Entries)"
 Write-Host "  Recommendations per profile: $($counters.Profiles)"
 Write-Host "  Items skipped (out-of-scope type or missing fields): $($counters.Skipped)"
+Write-Host "  Fallback-map entries needing manual review: $($counters.NeedsManualReview)"
