@@ -593,6 +593,48 @@ function Show-FilterDialog {
     return $script:__filterDialogResult
 }
 
+function Show-CisMissingAdmxDialog {
+    <#
+        View > CIS - Missing ADMX templates. $Rows comes from
+        Get-CisMissingAdmxReport (GpEdit.ps1) - already filtered to the
+        active profile and to entries with a non-null requiredAdmx. This
+        function only maps Category -> translated label and
+        IsPresent -> Yes/No label, and renders the intro text/grid.
+    #>
+    param($Owner, [string]$ScriptRoot, [Parameter(Mandatory)][hashtable]$Ui, [object[]]$Rows, [string]$ActiveProfileText)
+
+    $window = Import-XamlWindow -ScriptRoot $ScriptRoot -Name 'CisMissingAdmxWindow' -Owner $Owner
+    $window.Title = $Ui.CisMissingAdmxWindowTitle
+
+    $introText = $window.FindName('CisMissingAdmxIntroText')
+    $introText.Text = if ($ActiveProfileText) { $Ui.CisMissingAdmxIntroFormat -f $ActiveProfileText } else { $Ui.CisMissingAdmxNoActiveProfile }
+
+    $categoryLabels = @{
+        BundledConditional = $Ui.CisAdmxCategoryBundledConditional
+        ManualDownload      = $Ui.CisAdmxCategoryManualDownload
+        ThirdParty          = $Ui.CisAdmxCategoryThirdParty
+    }
+
+    $grid = $window.FindName('CisMissingAdmxGrid')
+    $items = New-Object System.Collections.Generic.List[object]
+    foreach ($row in @($Rows)) {
+        $items.Add([pscustomobject]@{
+            CisNumber     = $row.CisNumber
+            Title         = $row.Title
+            AdmxFile      = $row.AdmxFile
+            CategoryLabel = if ($categoryLabels.ContainsKey($row.Category)) { $categoryLabels[$row.Category] } else { $row.Category }
+            VersionText   = $row.VersionText
+            PresentLabel  = if ($row.IsPresent) { $Ui.CisYes } else { $Ui.CisNo }
+        })
+    }
+    $grid.ItemsSource = $items
+
+    $okButton = $window.FindName('OkButton')
+    $okButton.Content = $Ui.OkButton
+    $okButton.Add_Click({ param($EventSender, $e) $window.DialogResult = $true })
+    $null = $window.ShowDialog()
+}
+
 function Show-AboutWindow {
     param($Owner, [string]$ScriptRoot, [Parameter(Mandatory)][hashtable]$Ui, [System.Collections.Generic.List[object]]$ChangelogEntries)
 

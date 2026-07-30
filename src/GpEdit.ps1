@@ -656,6 +656,7 @@ $fileOptionsMenuItem = $window.FindName('FileOptionsMenuItem')
 $fileExitMenuItem  = $window.FindName('FileExitMenuItem')
 $viewMenu          = $window.FindName('ViewMenu')
 $viewColumnsMenuItem = $window.FindName('ViewColumnsMenuItem')
+$viewMissingAdmxMenuItem = $window.FindName('ViewMissingAdmxMenuItem')
 $filterMenu        = $window.FindName('FilterMenu')
 $helpMenu          = $window.FindName('HelpMenu')
 $helpAboutMenuItem = $window.FindName('HelpAboutMenuItem')
@@ -708,6 +709,7 @@ function Update-StaticUiText {
     $fileExitMenuItem.Header = $Ui.MenuFileExit
     $viewMenu.Header = $Ui.MenuView
     $viewColumnsMenuItem.Header = $Ui.MenuViewColumns
+    $viewMissingAdmxMenuItem.Header = $Ui.MenuViewMissingAdmx
     $helpMenu.Header = $Ui.MenuHelp
     $helpAboutMenuItem.Header = $Ui.MenuHelpAbout
     $helpPatchNoteMenuItem.Header = $Ui.MenuHelpPatchNote
@@ -792,19 +794,99 @@ function Get-CisValueLabelForRow {
     return Get-CisRecommendationValueForProfile -CisEntry $CisEntry -ActiveProfile $script:CisActiveProfileForColumn -Ui $Ui
 }
 
+function Get-CisMissingAdmxReport {
+    <#
+        For the active CIS profile (CisActiveProfileForColumn - the same one
+        driving the CIS Yes/No column and "CIS R. Value"), lists cis-index.json
+        entries that:
+          - have a recommendation for this exact profile
+            (Get-CisRecommendationValueForProfile non-null);
+          - are NOT reached by any real ADMX policy / Security catalog entry
+            / Advanced Audit subcategory currently loaded on this machine
+            (i.e. never shows up as a row anywhere in the app for this
+            setting);
+          - have a non-null requiredAdmx (Build-CisIndex.ps1 found an ADMX
+            dependency note in the source .audit's "solution" field) -
+            settings with no ADMX mechanism at all (Windows Services,
+            firewall profiles...) are deliberately excluded, they're not
+            actionable via this window.
+        Feeds "View > CIS - Missing ADMX templates". Computed on demand
+        (menu click), not cached - cheap enough (thousands of policies, once)
+        that it doesn't need to run on every launch/profile change.
+    #>
+    $activeProfile = $script:CisActiveProfileForColumn
+    if ($null -eq $activeProfile) { return , (New-Object System.Collections.Generic.List[object]) }
+
+    $buckets = @('byRegistry', 'byPasswordPolicy', 'byLockoutPolicy', 'byUserRight', 'byAuditSubcategory', 'byTitle')
+    $covered = @{}
+    foreach ($bucketName in $buckets) {
+        $bucketObj = Get-CisIndexBucket -CisIndex $script:CisIndex -BucketName $bucketName
+        if ($null -eq $bucketObj) { continue }
+        foreach ($entryProp in $bucketObj.PSObject.Properties) {
+            $entry = $entryProp.Value
+            $value = Get-CisRecommendationValueForProfile -CisEntry $entry -ActiveProfile $activeProfile
+            if ($null -eq $value) { continue }
+            $covered["$bucketName::$($entryProp.Name)"] = $entry
+        }
+    }
+
+    $reached = @{}
+    foreach ($pol in @($script:admxIndex.policies)) {
+        $match = Get-CisRecommendationForAdmxPolicy -CisIndex $script:CisIndex -Policy $pol
+        if ($null -ne $match.CisEntry) { $reached["$($match.CisEntry.bucket)::$($match.CisEntry.key)"] = $true }
+    }
+    foreach ($setting in (Get-SecurityCatalogEntries)) {
+        $cisRec = Get-CisRecommendationForSecuritySetting -CisIndex $script:CisIndex -Section $setting.section -Name $setting.name -DisplayName $setting.displayName
+        if ($null -ne $cisRec) { $reached["$($cisRec.bucket)::$($cisRec.key)"] = $true }
+    }
+    foreach ($sub in (Get-AdvancedAuditCatalogEntries)) {
+        $cisRec = Get-CisRecommendationForAuditSubcategory -CisIndex $script:CisIndex -SubcategoryNameEn $sub.name
+        if ($null -ne $cisRec) { $reached["$($cisRec.bucket)::$($cisRec.key)"] = $true }
+    }
+
+    $rows = New-Object System.Collections.Generic.List[object]
+    foreach ($key in $covered.Keys) {
+        if ($reached.ContainsKey($key)) { continue }
+        $entry = $covered[$key]
+        if ($null -eq $entry.requiredAdmx) { continue }
+        $cisNumber = ($entry.profiles | Where-Object {
+            $_.benchmark -eq $activeProfile.Benchmark -and $_.version -eq $activeProfile.Version -and
+            $_.level -eq $activeProfile.Level -and $_.role -eq $activeProfile.Role
+        } | Select-Object -First 1).cisNumber
+        $rows.Add([pscustomobject]@{
+            CisNumber   = $cisNumber
+            Title       = $entry.title
+            AdmxFile    = $entry.requiredAdmx.file
+            Category    = $entry.requiredAdmx.category
+            VersionText = $entry.requiredAdmx.versionText
+            IsPresent   = (Get-CisAdmxTemplatePresence -AdmxIndex $script:admxIndex -AdmxFile $entry.requiredAdmx.file)
+        })
+    }
+    return , ($rows | Sort-Object CisNumber)
+}
+
 function Get-CisRowLabels {
     <#
         Computes all 3 CIS columns together from one resolution so they
-        stay consistent (CisLabel "Yes" must never coincide with empty
+        stay consistent (CisLabel "Yes" must never coincide with a $null
         RecommendedStateLabel/CisStatesLabel, or vice versa).
+
+        Tests $null -ne $valueLabel, NOT $valueLabel's truthiness: an empty
+        string IS a covered recommendation (a User Right set to "No One", a
+        registry multi-string list set to "None" - see
+        Get-CisRecommendationValueForProfile) and must still show CisYes,
+        unlike $null (genuinely not covered for this profile). A plain
+        `if ($valueLabel)` treated "" the same as $null and silently hid
+        these settings from the CIS column/profile filter.
     #>
     param($CisEntry, [hashtable]$Ui)
 
     $valueLabel = Get-CisValueLabelForRow -CisEntry $CisEntry -Ui $Ui
+    $isCovered = ($null -ne $valueLabel)
     return [pscustomobject]@{
-        CisLabel              = if ($valueLabel) { $Ui.CisYes } else { $Ui.CisNo }
+        CisLabel              = if ($isCovered) { $Ui.CisYes } else { $Ui.CisNo }
         RecommendedStateLabel = $valueLabel
-        CisStatesLabel        = if ($valueLabel) { Get-CisRecommendationStateText -CisEntry $CisEntry } else { $null }
+        CisStatesLabel        = if ($isCovered) { Get-CisRecommendationStateText -CisEntry $CisEntry } else { $null }
     }
 }
 
@@ -825,7 +907,7 @@ function Update-TreeVisibilityForCisFilter {
     $keepVisible = @{}
 
     foreach ($pol in $script:admxIndex.policies) {
-        $cisRec = Get-CisRecommendationForRegistry -CisIndex $script:CisIndex -RegistryKey $pol.registryKey -ValueName $pol.valueName
+        $cisRec = (Get-CisRecommendationForAdmxPolicy -CisIndex $script:CisIndex -Policy $pol).CisEntry
         if (-not (Test-CisProfileFilterMatch -CisEntry $cisRec)) { continue }
         foreach ($scope in @('Machine', 'User')) {
             if (-not (Test-PolicyMatchesScope -PolicyClass $pol.class -Scope $scope)) { continue }
@@ -1229,7 +1311,8 @@ function Invoke-CisProfileOverlay {
         foreach ($pol in $script:admxIndex.policies) {
             foreach ($scope in @('Machine', 'User')) {
                 if (-not (Test-PolicyMatchesScope -PolicyClass $pol.class -Scope $scope)) { continue }
-                $cisRec = Get-CisRecommendationForRegistry -CisIndex $script:CisIndex -RegistryKey $pol.registryKey -ValueName $pol.valueName
+                $admxMatch = Get-CisRecommendationForAdmxPolicy -CisIndex $script:CisIndex -Policy $pol
+                $cisRec = $admxMatch.CisEntry
                 if (-not $cisRec) { continue }
                 $recValue = Get-CisRecommendationValueForProfile -CisEntry $cisRec -ActiveProfile $activeProfile
                 if ($null -eq $recValue) { continue }
@@ -1239,7 +1322,7 @@ function Invoke-CisProfileOverlay {
                 $isConfigured = ((Get-AdmxPolicyState -Policy $pol -PolLookup $liveLookup) -ne 'NotConfigured')
                 if ($Mode -eq 'GapFill' -and $isConfigured) { $alreadyOkKeys[$entryKey] = $true; continue }
 
-                $write = Resolve-CisAdmxWrite -Policy $pol -RecommendedValue $recValue
+                $write = Resolve-CisAdmxWrite -Policy $pol -RecommendedValue $recValue -ElementId $admxMatch.ElementId
                 if (-not $write) { $skippedTitles.Add($cisRec.title); continue }
 
                 $targetPath = if ($scope -eq 'Machine') { $MachinePolPath } else { $UserPolPath }
@@ -2025,6 +2108,14 @@ $viewColumnsMenuItem.Add_Click({
     if ($null -ne $result) { Set-ColumnsDisplay -OrderedKeys $result }
 })
 
+$viewMissingAdmxMenuItem.Add_Click({
+    param($EventSender, $e)
+    $ui = Get-CurrentUi
+    $rows = Get-CisMissingAdmxReport
+    $profileText = Get-CisProfileDisplayText -ProfileSpec $script:CisActiveProfileForColumn
+    Show-CisMissingAdmxDialog -Owner $window -ScriptRoot $PSScriptRoot -Ui $ui -Rows $rows -ActiveProfileText $profileText
+})
+
 # --- File menu: New/Open (off-machine GPO projects) -----------------------
 # Import/Export intentionally have no handler: IsEnabled="False" permanently
 # in the XAML - not wired up.
@@ -2121,7 +2212,7 @@ function Update-PolicyList {
             foreach ($pol in $script:policiesByCategory[$tag.CategoryId]) {
                 if (-not (Test-PolicyMatchesScope -PolicyClass $pol.class -Scope $tag.Scope)) { continue }
                 $state = Get-AdmxPolicyState -Policy $pol -PolLookup $lookup
-                $cisRec = Get-CisRecommendationForRegistry -CisIndex $script:CisIndex -RegistryKey $pol.registryKey -ValueName $pol.valueName
+                $cisRec = (Get-CisRecommendationForAdmxPolicy -CisIndex $script:CisIndex -Policy $pol).CisEntry
                 if (-not (Test-CisProfileFilterMatch -CisEntry $cisRec)) { continue }
                 $cisRowLabels = Get-CisRowLabels -CisEntry $cisRec -Ui $ui
                 $items.Add([pscustomobject]@{
@@ -2215,7 +2306,7 @@ function Update-PolicyList {
                 if (-not (Test-PolicyMatchesScope -PolicyClass $pol.class -Scope $scope)) { continue }
                 $lookup = if ($scope -eq 'Machine') { $machineLookup } else { $userLookup }
                 $state = Get-AdmxPolicyState -Policy $pol -PolLookup $lookup
-                $cisRec = Get-CisRecommendationForRegistry -CisIndex $script:CisIndex -RegistryKey $pol.registryKey -ValueName $pol.valueName
+                $cisRec = (Get-CisRecommendationForAdmxPolicy -CisIndex $script:CisIndex -Policy $pol).CisEntry
                 if (-not (Test-CisProfileFilterMatch -CisEntry $cisRec)) { continue }
                 $cisRowLabels = Get-CisRowLabels -CisEntry $cisRec -Ui $ui
                 $items.Add([pscustomobject]@{
@@ -2560,7 +2651,7 @@ function Invoke-Search {
         # Computes the CIS recommendation first (does not depend on scope):
         # needed before the match filter since "Any" mode also searches the
         # CIS number - reused inside the scope loop below.
-        $cisRec = Get-CisRecommendationForRegistry -CisIndex $script:CisIndex -RegistryKey $pol.registryKey -ValueName $pol.valueName
+        $cisRec = (Get-CisRecommendationForAdmxPolicy -CisIndex $script:CisIndex -Policy $pol).CisEntry
         if (-not (Test-SearchMatchAdmx -Field $searchField -Query $Query -Policy $pol -CisEntry $cisRec)) { continue }
         if (-not (Test-KindFilterMatch -Kind 'Admx')) { continue }
         foreach ($scope in @('Machine', 'User')) {
@@ -2913,7 +3004,7 @@ function Open-SelectedPolicyEditor {
         $currentState = Get-AdmxPolicyState -Policy $pol -PolLookup $lookup
         $elementValues = Get-PolicyElementValues -Policy $pol -PolLookup $lookup
 
-        $cisRec = Get-CisRecommendationForRegistry -CisIndex $script:CisIndex -RegistryKey $pol.registryKey -ValueName $pol.valueName
+        $cisRec = (Get-CisRecommendationForAdmxPolicy -CisIndex $script:CisIndex -Policy $pol).CisEntry
         $result = Show-AdmxEditDialog -Policy $pol -CurrentState $currentState -CurrentElementValues $elementValues -CisRecommendation $cisRec -Owner $window -ScriptRoot $PSScriptRoot -Ui $ui
         if (-not $result) { return }
 

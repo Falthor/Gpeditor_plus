@@ -147,6 +147,47 @@ function ConvertTo-CisNumberAndTitle {
     return [ordered]@{ cisNumber = $m.Groups['num'].Value; title = $title.Trim() }
 }
 
+function Get-CisAdmxRequirementNote {
+    <#
+        Extracts, from a <custom_item>'s "solution" field, the ADMX template
+        this control depends on - if any. Four phrasings observed across the
+        23 bundled .audit files:
+          - "is provided by the Group Policy template X.admx/adml that is
+            included with the <Windows version> (or newer)." -> bundled with
+            Windows, conditional on OS/Administrative Templates version.
+          - "may not exist by default. It is provided by the Group Policy
+            template X..." -> same meaning, worded as a caveat first.
+          - "does not exist by default. An additional Group Policy template
+            ( X.admx/adml ) is required - ..." -> never bundled with
+            Windows, a manual download from Microsoft (Security Compliance
+            Toolkit: SecGuide.admx, MSS-legacy.admx...).
+          - "is NOT provided by Microsoft. The Group Policy template X.admx/
+            adml is included with the CIS ..." -> third-party (CIS-branded),
+            not from Microsoft at all.
+        Returns $null if none of the four phrasings match - most controls
+        have no ADMX dependency note at all (a Windows Service, a firewall
+        setting, anything with no Administrative Templates equivalent).
+    #>
+    param([string]$Solution)
+
+    if ([string]::IsNullOrEmpty($Solution)) { return $null }
+
+    $patterns = @(
+        @{ Category = 'BundledConditional'; HasVersion = $true;  Regex = 'Note:\s*This Group Policy path is provided by the Group Policy template\s+([A-Za-z0-9_.\-]+\.admx)/adml\s+that is included with the\s+([^\r\n]+)' }
+        @{ Category = 'BundledConditional'; HasVersion = $true;  Regex = 'Note:\s*This Group Policy path may not exist by default\.\s*It is provided by the Group Policy template\s+([A-Za-z0-9_.\-]+\.admx)/adml\s+that is included with the\s+([^\r\n]+)' }
+        @{ Category = 'ManualDownload';     HasVersion = $false; Regex = 'Note:\s*This Group Policy path does not exist by default\.\s*An additional Group Policy template\s*\(\s*([A-Za-z0-9_.\-]+\.admx)/adml\s*\)\s*is required' }
+        @{ Category = 'ThirdParty';         HasVersion = $true;  Regex = 'Note:\s*This Group Policy path is NOT provided by Microsoft\.\s*The Group Policy template\s+([A-Za-z0-9_.\-]+\.admx)/adml\s+is included with the\s+([^\r\n]+)' }
+    )
+
+    foreach ($p in $patterns) {
+        $m = [regex]::Match($Solution, $p.Regex)
+        if (-not $m.Success) { continue }
+        $versionText = if ($p.HasVersion) { $m.Groups[2].Value.Trim().TrimEnd('.') } else { $null }
+        return [ordered]@{ file = $m.Groups[1].Value; category = $p.Category; versionText = $versionText }
+    }
+    return $null
+}
+
 # ---------------------------------------------------------------------------
 # Match key per control type (see plan-gpedit-cis.md §4)
 # ---------------------------------------------------------------------------
@@ -321,6 +362,15 @@ function Read-CisAuditFile {
 
         $bucket = $Index[$matchKey.bucket]
         if (-not $bucket.Contains($matchKey.key)) {
+            # requiredAdmx: only meaningful for byRegistry (REGISTRY_SETTING/
+            # REG_CHECK - the only types an Administrative Templates policy
+            # can ever back) - $null for every other bucket, which are never
+            # ADMX by nature (Password/Lockout/UserRight/AuditSubcategory).
+            # Fixed at entry creation, like title/info - not re-evaluated
+            # against a later profile's .audit file for the same key.
+            $requiredAdmx = if ($matchKey.bucket -eq 'byRegistry') {
+                Get-CisAdmxRequirementNote -Solution (Get-CisField -BlockText $body -FieldName 'solution')
+            } else { $null }
             $bucket[$matchKey.key] = [ordered]@{
                 bucket   = $matchKey.bucket
                 key      = $matchKey.key
@@ -330,6 +380,7 @@ function Read-CisAuditFile {
                 valueType = Get-CisField -BlockText $body -FieldName 'value_type'
                 regKey   = $regKey
                 regItem  = $regItem
+                requiredAdmx = $requiredAdmx
                 profiles = New-Object System.Collections.Generic.List[object]
             }
             $Counters.Entries++
@@ -467,6 +518,14 @@ function Resolve-CisTitleFallbackCandidates {
             valueType = $fbEntry.valueType
             regKey   = $fbEntry.regKey
             regItem  = $fbEntry.regItem
+            # $null: byTitle entries never have a "solution" field carried
+            # over (they're a second-chance match built from
+            # cis-fallback-map.json, not directly from one .audit block) -
+            # present with $null rather than omitted, so every bucket's
+            # entries share the same shape under Set-StrictMode -Version
+            # Latest (GpEdit.ps1) - a missing property throws there, unlike
+            # a present $null.
+            requiredAdmx = $null
             profiles = New-Object System.Collections.Generic.List[object]
         }
         $Counters.Entries++

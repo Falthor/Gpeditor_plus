@@ -276,6 +276,42 @@ function Get-CisRecommendationForRegistry {
     return Get-CisIndexEntry -CisIndex $CisIndex -Bucket 'byRegistry' -Key $key
 }
 
+function Get-CisRecommendationForAdmxPolicy {
+    <#
+        Administrative Templates: like Get-CisRecommendationForRegistry, but
+        also checks each of the policy's ELEMENTS (key-or-registryKey,
+        valueName), not just its own top-level (registryKey, valueName).
+        Many real ADMX policies (dropdown/enum/decimal settings - e.g.
+        "Allow Telemetry", "Specify maximum log file size", RDP
+        SecurityLayer/MinEncryptionLevel...) expose their actual registry
+        value ONLY through an element; the policy's own top-level valueName
+        is $null for these. Without this, every caller that only checked
+        $Policy.valueName silently missed ~60 real CIS recommendations on a
+        Windows 11 Enterprise L1 profile (confirmed by measurement) - not a
+        missing-ADMX/ADML issue, just an unmatched element-level value.
+
+        Top-level match wins if the policy's own valueName AND an element
+        both happen to match (no real-world case observed - would mean two
+        different CIS numbers pointing at the very same policy). Returns
+        [pscustomobject]@{ CisEntry; ElementId } - ElementId is $null for a
+        top-level match, the matched element's id for an element match;
+        CisEntry is $null (ElementId always $null too) if nothing matches.
+    #>
+    param($CisIndex, $Policy)
+
+    if ($Policy.valueName) {
+        $rec = Get-CisRecommendationForRegistry -CisIndex $CisIndex -RegistryKey $Policy.registryKey -ValueName $Policy.valueName
+        if ($rec) { return [pscustomobject]@{ CisEntry = $rec; ElementId = $null } }
+    }
+    foreach ($el in @($Policy.elements)) {
+        if (-not $el.valueName) { continue }
+        $elKey = if ($el.key) { $el.key } else { $Policy.registryKey }
+        $rec = Get-CisRecommendationForRegistry -CisIndex $CisIndex -RegistryKey $elKey -ValueName $el.valueName
+        if ($rec) { return [pscustomobject]@{ CisEntry = $rec; ElementId = $el.id } }
+    }
+    return [pscustomobject]@{ CisEntry = $null; ElementId = $null }
+}
+
 function Get-CisRecommendationForSecuritySetting {
     # Security Settings: Password Policy / Account Lockout Policy (via the
     # manual mapping table) and User Rights Assignment (SecurityCatalog
@@ -331,6 +367,25 @@ function Get-CisRecommendationForAuditSubcategory {
     param($CisIndex, [string]$SubcategoryNameEn)
 
     return Get-CisIndexEntry -CisIndex $CisIndex -Bucket 'byAuditSubcategory' -Key $SubcategoryNameEn
+}
+
+function Get-CisAdmxTemplatePresence {
+    <#
+        Checks whether $AdmxFile (e.g. "SecGuide.admx") is already indexed
+        on this machine - i.e. Build-AdmxIndex.ps1 found and parsed at least
+        one policy from it into admx-index.json. Reuses the same source of
+        truth the rest of the app already relies on (each policy's admxFile
+        field) rather than a separate PolicyDefinitions disk check, so this
+        always agrees with what the app itself can actually resolve.
+        Feeds "View > CIS - Missing ADMX templates".
+    #>
+    param($AdmxIndex, [string]$AdmxFile)
+
+    if ([string]::IsNullOrEmpty($AdmxFile) -or $null -eq $AdmxIndex) { return $false }
+    foreach ($pol in @($AdmxIndex.policies)) {
+        if ($pol.admxFile -and $pol.admxFile.Equals($AdmxFile, [System.StringComparison]::OrdinalIgnoreCase)) { return $true }
+    }
+    return $false
 }
 
 # ---------------------------------------------------------------------------
@@ -496,9 +551,21 @@ function Get-CisRecommendationValueForProfile {
     <#
         Extracts the recommended value (valueData) for the given active
         profile from an already-resolved CIS entry's profiles[] array.
-        Returns $null if this setting has no recommendation for this exact
-        profile (even if it has one for another) - this $null drives both
-        the "Recommended state" column and the profile filter.
+        Returns $null only if this setting has NO line at all for this
+        exact profile (even if it has one for another) - this $null drives
+        both the "Recommended state" column and the profile filter.
+
+        An empty string is a DIFFERENT, legitimate case: several CIS
+        controls recommend an explicitly empty list (a User Right set to
+        "No One", or a registry multi-string list set to "None" - e.g.
+        "Network access: Named/Shares that can be accessed anonymously").
+        The .audit file's value_data is "" for these, on purpose - it is
+        not "no recommendation for this profile", it IS the recommendation
+        (Windows' own default for these is not necessarily empty, so the
+        control still needs enforcing). Returning $null here used to make
+        Test-CisProfileFilterMatch/the CIS Yes-No column silently treat
+        these as uncovered - callers must use $null-vs-"" (not truthiness)
+        to tell "not covered" apart from "covered, empty value".
     #>
     param($CisEntry, $ActiveProfile, [hashtable]$Ui)
 
@@ -506,7 +573,7 @@ function Get-CisRecommendationValueForProfile {
     foreach ($p in @($CisEntry.profiles)) {
         if ($null -eq $p) { continue }
         if ($p.benchmark -eq $ActiveProfile.Benchmark -and $p.version -eq $ActiveProfile.Version -and $p.level -eq $ActiveProfile.Level -and $p.role -eq $ActiveProfile.Role) {
-            if ([string]::IsNullOrEmpty($p.valueData)) { return $null }
+            if ([string]::IsNullOrEmpty($p.valueData)) { return '' }
             if ($Ui) { return ($p.valueData -replace '\s*\|\|\s*', " $($Ui.CisOrWord) ") }
             return $p.valueData
         }
@@ -630,49 +697,79 @@ function Resolve-CisAdmxWrite {
     <#
         Best-effort mapping from a CIS recommended value to a concrete ADMX
         write (state + element values, ready for Save-AdmxChangeToFile).
-        Only two shapes are handled with confidence:
-          - a plain registryKey/valueName toggle (no elements): the
+        Two shapes are handled with confidence:
+          - a plain registryKey/valueName toggle (no $ElementId): the
             recommended value is compared to the policy's own
             enabledValue/disabledValue - reliable because a CIS registry
             check for a toggle ADMX setting is, in practice, exactly the
             same literal registry value the policy itself writes for
             Enabled/Disabled.
-          - a policy with exactly one 'decimal' element and a purely
-            numeric recommended value: Enabled + that element set to the
-            number.
-        Anything else (multiple elements, enum/text/list-only elements, a
-        recommended value that matches neither shape) is left unresolved
+          - $ElementId given (from Get-CisRecommendationForAdmxPolicy - the
+            CIS recommendation matched one specific element, not the
+            policy's own top-level value): every element-level CIS
+            registry value observed in the real .audit files is a plain
+            number (or a "[min..MAX]" range, or an alternative "A" || "B" -
+            both already reduced to one number by
+            Get-CisFirstAlternativeValue), so a single numeric extraction
+            covers decimal/enum/boolean element types alike. Applied ONLY
+            when the policy has EXACTLY that one element and no top-level
+            valueName of its own - writing "Enabled" for this policy also
+            resets every OTHER element to its empty/default value (see
+            Merge-PolEntriesForPolicy), which would silently clobber a
+            multi-element policy's other, unrelated settings (real example:
+            "Configure Automatic Updates" has 10 elements - ScheduledInstallDay
+            is only one of them). Multi-element policies are correctly left
+            unresolved here (listed as "not covered" in the generation
+            summary) even though Get-CisRecommendationForAdmxPolicy still
+            finds and displays their CIS recommendation elsewhere in the UI.
+        Anything else (multiple elements, a recommended value that matches
+        neither shape, a non-numeric element type) is left unresolved
         ($null) rather than guessed.
     #>
-    param($Policy, [string]$RecommendedValue)
+    param($Policy, [string]$RecommendedValue, [string]$ElementId)
 
     $value = Get-CisFirstAlternativeValue -RawValueData $RecommendedValue
     if ([string]::IsNullOrWhiteSpace($value)) { return $null }
 
     $elements = @($Policy.elements)
-    if (-not $Policy.valueName -and $elements.Count -eq 0) { return $null }
 
-    if ($elements.Count -eq 0) {
-        if ($null -ne $Policy.enabledValue -and "$value" -eq "$($Policy.enabledValue)") {
-            return [pscustomobject]@{ State = 'Enabled'; ElementValues = @{} }
+    if ($ElementId) {
+        if ($Policy.valueName -or $elements.Count -ne 1 -or $elements[0].id -ne $ElementId) { return $null }
+        $el = $elements[0]
+        $m = [regex]::Match($value, '\d+')
+        if (-not $m.Success) { return $null }
+        $number = [int]$m.Value
+        switch ($el.type) {
+            'enum' {
+                $validItem = @($el.items) | Where-Object { [int]$_.value -eq $number } | Select-Object -First 1
+                if (-not $validItem) { return $null }
+                return [pscustomobject]@{ State = 'Enabled'; ElementValues = @{ $ElementId = $number } }
+            }
+            'decimal' {
+                return [pscustomobject]@{ State = 'Enabled'; ElementValues = @{ $ElementId = $number } }
+            }
+            'boolean' {
+                return [pscustomobject]@{ State = 'Enabled'; ElementValues = @{ $ElementId = ($number -ne 0) } }
+            }
+            default { return $null }   # text/multiText/list: not a numeric registry check, out of scope
         }
-        if ($null -ne $Policy.disabledValue -and "$value" -eq "$($Policy.disabledValue)") {
-            return [pscustomobject]@{ State = 'Disabled'; ElementValues = @{} }
-        }
-        $lower = $value.ToLowerInvariant()
-        if ($lower -eq 'enabled' -and $null -ne $Policy.enabledValue) {
-            return [pscustomobject]@{ State = 'Enabled'; ElementValues = @{} }
-        }
-        if ($lower -eq 'disabled' -and $null -ne $Policy.disabledValue) {
-            return [pscustomobject]@{ State = 'Disabled'; ElementValues = @{} }
-        }
-        return $null
     }
 
-    if ($elements.Count -eq 1 -and $elements[0].type -eq 'decimal' -and $value -match '^\d+$') {
-        return [pscustomobject]@{ State = 'Enabled'; ElementValues = @{ ($elements[0].id) = [int]$value } }
-    }
+    if (-not $Policy.valueName) { return $null }
 
+    if ($null -ne $Policy.enabledValue -and "$value" -eq "$($Policy.enabledValue)") {
+        return [pscustomobject]@{ State = 'Enabled'; ElementValues = @{} }
+    }
+    if ($null -ne $Policy.disabledValue -and "$value" -eq "$($Policy.disabledValue)") {
+        return [pscustomobject]@{ State = 'Disabled'; ElementValues = @{} }
+    }
+    $lower = $value.ToLowerInvariant()
+    if ($lower -eq 'enabled' -and $null -ne $Policy.enabledValue) {
+        return [pscustomobject]@{ State = 'Enabled'; ElementValues = @{} }
+    }
+    if ($lower -eq 'disabled' -and $null -ne $Policy.disabledValue) {
+        return [pscustomobject]@{ State = 'Disabled'; ElementValues = @{} }
+    }
     return $null
 }
 
@@ -685,6 +782,24 @@ function Resolve-CisSecurityWrite {
         be confidently parsed for this entry's ValueType.
     #>
     param($Setting, [string]$RecommendedValue)
+
+    # An empty $RecommendedValue is Get-CisRecommendationValueForProfile's
+    # signal that the CIS-recommended value for this profile IS an empty
+    # list (a User Right set to "No One", a registry multi-string list set
+    # to "None" - e.g. Named Pipes/Shares accessible anonymously) - not
+    # "nothing to write". Windows' own default for these is not necessarily
+    # empty, so Gap-fill/Full compliance must still enforce it. Only
+    # principal-list/reg-multistring have a meaningful empty-list write;
+    # every other ValueType has no concept of "empty" and stays unresolved
+    # ($null, listed as "not covered" in the generation summary), same as
+    # before this case existed.
+    if ([string]::IsNullOrEmpty($RecommendedValue)) {
+        switch ($Setting.valueType) {
+            'principal-list'  { return [pscustomobject]@{ Value = '' } }
+            'reg-multistring' { return [pscustomobject]@{ Value = (ConvertTo-RegistryValuesEncoding -RegType $Setting.regType -Data '') } }
+            default           { return $null }
+        }
+    }
 
     $value = Get-CisFirstAlternativeValue -RawValueData $RecommendedValue
     if ([string]::IsNullOrWhiteSpace($value)) { return $null }

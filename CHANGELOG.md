@@ -7,6 +7,25 @@ source for the "Release Notes" panel in the right-hand pane and for
 
 ## 2026-07-30 — Integrity check on Export/Import and pre-import backups
 
+- Added View > "CIS - Missing ADMX templates": for the active CIS profile,
+  lists controls this app cannot resolve to any real Administrative
+  Templates policy/Security setting/Advanced Audit subcategory, but for
+  which the source CIS benchmark names a required `.admx`/`.adml`
+  template — distinguishing a template bundled with Windows from a
+  certain version onward, one requiring a manual download from Microsoft
+  (e.g. `SecGuide.admx`, `MSS-legacy.admx`), or a third-party template —
+  and whether that file is already present on this machine. Settings with
+  no ADMX mechanism at all (Windows Services, firewall profiles...) are
+  not listed, since adding a template can never help them.
+- Fix: a CIS control whose recommended value is an explicitly empty list
+  (a User Right set to "No One", e.g. "Act as part of the operating
+  system"; a registry multi-string list set to "None", e.g. "Network
+  access: Named Pipes/Shares that can be accessed anonymously") no longer
+  shows CIS = No and no longer disappears when filtering by CIS profile.
+  These settings' recommended value legitimately IS "empty" - Windows'
+  own default is not necessarily empty either, so the setting still needs
+  enforcing. "New Group Policy > CIS Gap-fill/Full compliance" now writes
+  the empty list for these instead of silently skipping them.
 - Export and the automatic pre-import backup now record a SHA-256 hash of
   each file (`Machine\registry.pol`, `User\registry.pol`, `secedit.inf`,
   `Machine\Microsoft\Windows NT\Audit\audit.csv`) in their `*_Info.xml`
