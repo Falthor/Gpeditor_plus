@@ -151,7 +151,7 @@ function ConvertTo-CisNumberAndTitle {
 # Match key per control type (see plan-gpedit-cis.md §4)
 # ---------------------------------------------------------------------------
 function Get-CisMatchKey {
-    param([string]$Type, [string]$RegKey, [string]$RegItem, [string]$PasswordPolicy, [string]$LockoutPolicy, [string]$RightType, [string]$AuditSubcategory)
+    param([string]$Type, [string]$RegKey, [string]$RegItem, [string]$PasswordPolicy, [string]$LockoutPolicy, [string]$RightType, [string]$AuditSubcategory, [string]$CheckType, [string]$AccountType)
 
     switch ($Type) {
         'REGISTRY_SETTING' {
@@ -187,6 +187,37 @@ function Get-CisMatchKey {
         'AUDIT_POLICY_SUBCATEGORY' {
             if (-not $AuditSubcategory) { return $null }
             return [ordered]@{ bucket = 'byAuditSubcategory'; key = $AuditSubcategory }
+        }
+        'CHECK_ACCOUNT' {
+            # Two different shapes share this .audit type (see
+            # plan-gpedit-new-gpo-cis-generation.md §4.3): a rename check
+            # (check_type = CHECK_NOT_REGEX/CHECK_NOT_EQUAL - "must NOT
+            # match/equal X", no single correct answer, genuinely
+            # organization-specific) vs. a plain status check (no
+            # check_type - "must equal Disabled", a normal fixed
+            # recommendation). Only the rename shape goes to byOrgValue;
+            # the status shape returns $null here on purpose so the caller
+            # (Read-CisAuditFile) defers it to the title-fallback pass,
+            # same path as ANONYMOUS_SID_SETTING/REG_CHECK.
+            if (-not $CheckType) { return $null }
+            switch ($AccountType) {
+                'ADMINISTRATOR_ACCOUNT' { return [ordered]@{ bucket = 'byOrgValue'; key = 'RenameAdministratorAccount' } }
+                'GUEST_ACCOUNT'         { return [ordered]@{ bucket = 'byOrgValue'; key = 'RenameGuestAccount' } }
+                default { return $null }
+            }
+        }
+        'BANNER_CHECK' {
+            # Always organization-specific (a logon banner has no
+            # universal recommended text) despite carrying a real
+            # reg_key/reg_item - matched by the (stable, Microsoft-defined)
+            # registry value name rather than folded into byRegistry, so it
+            # never gets silently auto-filled with the unresolved
+            # "@LEGAL_NOTICE_TEXT@"/"@LEGAL_CAPTION_TEXT@" placeholder.
+            switch ($RegItem) {
+                'LegalNoticeText'    { return [ordered]@{ bucket = 'byOrgValue'; key = 'LogonMessageText' } }
+                'LegalNoticeCaption' { return [ordered]@{ bucket = 'byOrgValue'; key = 'LogonMessageTitle' } }
+                default { return $null }
+            }
         }
         default { return $null }
     }
@@ -264,10 +295,14 @@ function Read-CisAuditFile {
         $lockoutPolicy = Get-CisField -BlockText $body -FieldName 'lockout_policy'
         $rightType = Get-CisField -BlockText $body -FieldName 'right_type'
         $auditSubcategory = Get-CisField -BlockText $body -FieldName 'audit_policy_subcategory'
+        # Only meaningful for CHECK_ACCOUNT (see Get-CisMatchKey's
+        # 'CHECK_ACCOUNT' case) - $null for every other type, harmless.
+        $checkType = Get-CisField -BlockText $body -FieldName 'check_type'
+        $accountType = Get-CisField -BlockText $body -FieldName 'account_type'
 
-        $matchKey = Get-CisMatchKey -Type $type -RegKey $regKey -RegItem $regItem -PasswordPolicy $passwordPolicy -LockoutPolicy $lockoutPolicy -RightType $rightType -AuditSubcategory $auditSubcategory
+        $matchKey = Get-CisMatchKey -Type $type -RegKey $regKey -RegItem $regItem -PasswordPolicy $passwordPolicy -LockoutPolicy $lockoutPolicy -RightType $rightType -AuditSubcategory $auditSubcategory -CheckType $checkType -AccountType $accountType
         if ($null -eq $matchKey) {
-            if ($type -eq 'REG_CHECK' -or $type -eq 'ANONYMOUS_SID_SETTING') {
+            if ($type -eq 'REG_CHECK' -or $type -eq 'ANONYMOUS_SID_SETTING' -or ($type -eq 'CHECK_ACCOUNT' -and -not $checkType)) {
                 # Deferred, not counted as Skipped yet - the title-fallback
                 # pass (after all files are read) may still resolve it via
                 # cis-fallback-map.json into the byTitle bucket; only what's
@@ -476,6 +511,14 @@ $index = [ordered]@{
     byUserRight        = [ordered]@{}
     byAuditSubcategory = [ordered]@{}
     byTitle            = [ordered]@{}
+    # Organization-specific items (account rename / logon banner text) with
+    # NO universal recommended value - see Get-CisMatchKey's
+    # 'CHECK_ACCOUNT'/'BANNER_CHECK' cases and CisCatalog.ps1's
+    # Get-CisOrgValueEntries. Deliberately NOT in $script:CisIndexBuckets
+    # (CisCatalog.ps1): these entries must stay out of Get-CisAllEntries and
+    # the generic CIS Yes/No column/profile filter, which all assume a
+    # fixed recommended value exists.
+    byOrgValue         = [ordered]@{}
 }
 $counters = @{ Entries = 0; Profiles = 0; Skipped = 0 }
 $titleFallbackCandidates = New-Object System.Collections.Generic.List[object]
@@ -541,6 +584,7 @@ $output = [ordered]@{
     byUserRight        = $index.byUserRight
     byAuditSubcategory = $index.byAuditSubcategory
     byTitle            = $index.byTitle
+    byOrgValue         = $index.byOrgValue
 }
 
 $outDir = Split-Path -Parent $OutputPath

@@ -1081,6 +1081,30 @@ function Set-ActiveGpoProject {
     Update-ActiveProjectLabel
 }
 
+function Start-GpoUnsavedSessionState {
+    # Shared skeleton for every "New Group Policy" flavor (Default, CIS
+    # Gap-fill/Full compliance): resets the active-project/temp-file state
+    # to a fresh unsaved session. Callers still need to point the 4
+    # $script:*Path variables at real content afterward.
+    $script:ActiveProject = @{ Dir = $null; Name = $null; Saved = $false; PreProjectSecEditInfDirty = $script:SecEditInfDirty }
+    $script:ProjectDirty = $false
+    $script:GpoTempFiles = @{ MachinePol = $null; UserPol = $null; SecEditInf = $null; AuditCsv = $null }
+    $script:GpoTempSuffix = $null
+}
+
+function Complete-GpoSessionActivation {
+    # Shared tail for every "New Group Policy" flavor, once the 4
+    # $script:*Path variables point at real content: rebuild lookups/
+    # indexes, lock New/Open, enable Save/Close, refresh the status bar.
+    Update-GpoDerivedState
+    Disable-GpoAdvancedMenusForActiveSession
+    $fileSaveMenuItem.IsEnabled = $true
+    $fileCloseMenuItem.IsEnabled = $true
+    Update-SaveNowButtonVisibility
+
+    Update-ActiveProjectLabel
+}
+
 function Start-UnsavedGpoSession {
     <#
         "Advanced > New Group Policy > Default": loads the Default template
@@ -1088,10 +1112,7 @@ function Start-UnsavedGpoSession {
         temp files (Get-OrCreateGpoTempFile); File > Save first writes to a
         real project folder.
     #>
-    $script:ActiveProject = @{ Dir = $null; Name = $null; Saved = $false; PreProjectSecEditInfDirty = $script:SecEditInfDirty }
-    $script:ProjectDirty = $false
-    $script:GpoTempFiles = @{ MachinePol = $null; UserPol = $null; SecEditInf = $null; AuditCsv = $null }
-    $script:GpoTempSuffix = $null
+    Start-GpoUnsavedSessionState
 
     # Default.pol covers only Machine scope - $UserPolPath points directly
     # at its future temp location (absent until materialized, tolerated by
@@ -1101,13 +1122,270 @@ function Start-UnsavedGpoSession {
     $script:SecEditInfPath = Join-Path $script:DefaultGpPath 'Default.cfg'
     $script:AuditCsvPath = Join-Path $script:DefaultGpPath 'Default.csv'
 
-    Update-GpoDerivedState
-    Disable-GpoAdvancedMenusForActiveSession
-    $fileSaveMenuItem.IsEnabled = $true
-    $fileCloseMenuItem.IsEnabled = $true
-    Update-SaveNowButtonVisibility
+    Complete-GpoSessionActivation
+}
 
-    Update-ActiveProjectLabel
+function Show-CisGenerationProfileSelection {
+    <#
+        "New Group Policy > CIS Gap-fill/Full compliance", screen 2 (plan
+        §4.2): wraps Show-ProfileSelectionDialog -AllowLevelUnion and
+        resolves its { Group; Levels } result into a flat list of concrete
+        profile rows (1 row for "L1 only", 2 for "L1 + L2" - simple union,
+        no overlap between L1/L2 CIS numbers, see plan §5). $null on
+        Cancel.
+    #>
+    param([Parameter(Mandatory)][ValidateSet('GapFill', 'FullCompliance')][string]$Mode, [Parameter(Mandatory)][hashtable]$Ui)
+
+    $title = if ($Mode -eq 'GapFill') { $Ui.CisGenerationProfileWindowTitleGapFill } else { $Ui.CisGenerationProfileWindowTitleFullCompliance }
+    $result = Show-ProfileSelectionDialog -Owner $window -ScriptRoot $PSScriptRoot -Ui $Ui -CisIndex $script:CisIndex -CurrentProfile $script:CisDefaultProfile -AllowLevelUnion -TitleOverride $title
+    if (-not $result) { return $null }
+
+    $profiles = New-Object System.Collections.Generic.List[object]
+    foreach ($level in $result.Levels) {
+        $p = $result.Group.Profiles | Where-Object { $_.Level -eq $level } | Select-Object -First 1
+        if ($p) { $profiles.Add($p) }
+    }
+    if ($profiles.Count -eq 0) { return $null }
+    return , $profiles
+}
+
+function Get-CisOrgSpecificValues {
+    <#
+        "New Group Policy > CIS Gap-fill/Full compliance", screen 2->3
+        (plan §4.3/§4.4): shows the "Organization-specific values" screen
+        only if the chosen profile(s) actually recommend at least one of
+        the 4 org-specific items (Get-CisOrgValueEntries) - otherwise
+        skips straight past it, per the plan's flow diagram. Returns a
+        hashtable (possibly empty, if the screen was skipped) on
+        Generate/skip, or $null on Cancel - $null must abort the WHOLE
+        "New Group Policy" flow, same as a Cancel on any earlier screen.
+    #>
+    param([Parameter(Mandatory)][System.Collections.Generic.List[object]]$Profiles, [Parameter(Mandatory)][hashtable]$Ui)
+
+    $orgEntries = Get-CisOrgValueEntries -CisIndex $script:CisIndex -ActiveProfiles $Profiles
+    if ($orgEntries.Count -eq 0) { return @{} }
+    return Show-OrgSpecificValuesDialog -Owner $window -ScriptRoot $PSScriptRoot -Ui $Ui -OrgValueEntries $orgEntries
+}
+
+# Get-CisOrgValueEntries's synthetic Key -> SecurityCatalog.ps1 catalogKey
+# (System Access: NewAdministratorName/NewGuestName; Registry Values:
+# LegalNoticeCaption/LegalNoticeText) - lets Invoke-CisProfileOverlay find
+# the real Section/Name/ValueType/RegType to write through
+# Save-SecurityChangeToFile without hardcoding either.
+$script:CisOrgValueCatalogKeyMap = @{
+    RenameAdministratorAccount = 'NewAdministratorName'
+    RenameGuestAccount         = 'NewGuestName'
+    LogonMessageTitle          = 'LegalNoticeCaption'
+    LogonMessageText           = 'LegalNoticeText'
+}
+
+function Invoke-CisProfileOverlay {
+    <#
+        Core of "New Group Policy > CIS Gap-fill/Full compliance" (plan §7):
+        walks every ADMX policy (both scopes), every Security Settings
+        catalog entry and every Advanced Audit subcategory - exactly the
+        same enumeration as the "Overview" tree node (Update-PolicyList) -
+        and, for each one that has a CIS recommendation for the chosen
+        profile(s), writes it into the freshly seeded working files:
+          - Gap-fill: only if the LIVE host doesn't already have this
+            setting configured.
+          - Full compliance: always.
+        Settings with no CIS recommendation for the chosen profile(s) are
+        never touched, in either mode (plan §3.2). Value resolution goes
+        through Resolve-CisAdmxWrite/Resolve-CisSecurityWrite/
+        ConvertTo-CisAuditSettingValue (CisCatalog.ps1) - anything they
+        can't confidently resolve is recorded as "skipped" rather than
+        guessed (plan §8 point 5).
+
+        $OrgValues (plan §4.3, user-entered text keyed by
+        Get-CisOrgValueEntries's Key) is applied once at the end, outside
+        the per-profile loop above - unlike everything else in this
+        function, these 4 items have no CIS-recommended value to look up
+        per profile; the user's text is the value, written as-is via
+        Write-CisOrgSpecificValues.
+    #>
+    param(
+        [Parameter(Mandatory)][ValidateSet('GapFill', 'FullCompliance')][string]$Mode,
+        [Parameter(Mandatory)][System.Collections.Generic.List[object]]$Profiles,
+        [Parameter(Mandatory)][hashtable]$LiveMachineLookup,
+        [Parameter(Mandatory)][hashtable]$LiveUserLookup,
+        [Parameter(Mandatory)]$LiveGpt,
+        [Parameter(Mandatory)][hashtable]$LiveAuditRows,
+        [Parameter(Mandatory)][string]$MachinePolPath,
+        [Parameter(Mandatory)][string]$UserPolPath,
+        [Parameter(Mandatory)][string]$SecEditInfPath,
+        [Parameter(Mandatory)][string]$AuditCsvPath,
+        [hashtable]$OrgValues = @{}
+    )
+
+    $appliedKeys = @{}
+    $alreadyOkKeys = @{}
+    $skippedTitles = New-Object System.Collections.Generic.List[string]
+    $securitySettings = Get-SecurityCatalogEntries
+
+    foreach ($activeProfile in $Profiles) {
+
+        # --- Administrative Templates ---
+        foreach ($pol in $script:admxIndex.policies) {
+            foreach ($scope in @('Machine', 'User')) {
+                if (-not (Test-PolicyMatchesScope -PolicyClass $pol.class -Scope $scope)) { continue }
+                $cisRec = Get-CisRecommendationForRegistry -CisIndex $script:CisIndex -RegistryKey $pol.registryKey -ValueName $pol.valueName
+                if (-not $cisRec) { continue }
+                $recValue = Get-CisRecommendationValueForProfile -CisEntry $cisRec -ActiveProfile $activeProfile
+                if ($null -eq $recValue) { continue }
+
+                $entryKey = "Admx|$($pol.id)|$scope"
+                $liveLookup = if ($scope -eq 'Machine') { $LiveMachineLookup } else { $LiveUserLookup }
+                $isConfigured = ((Get-AdmxPolicyState -Policy $pol -PolLookup $liveLookup) -ne 'NotConfigured')
+                if ($Mode -eq 'GapFill' -and $isConfigured) { $alreadyOkKeys[$entryKey] = $true; continue }
+
+                $write = Resolve-CisAdmxWrite -Policy $pol -RecommendedValue $recValue
+                if (-not $write) { $skippedTitles.Add($cisRec.title); continue }
+
+                $targetPath = if ($scope -eq 'Machine') { $MachinePolPath } else { $UserPolPath }
+                Save-AdmxChangeToFile -Policy $pol -Scope $scope -NewState $write.State -ElementValues $write.ElementValues -PolPath $targetPath | Out-Null
+                $appliedKeys[$entryKey] = $true
+            }
+        }
+
+        # --- Security Settings (Account Policies, classic Audit Policy, Security Options, User Rights Assignment) ---
+        foreach ($setting in $securitySettings) {
+            $cisRec = Get-CisRecommendationForSecuritySetting -CisIndex $script:CisIndex -Section $setting.section -Name $setting.name -DisplayName $setting.displayName
+            if (-not $cisRec) { continue }
+            $recValue = Get-CisRecommendationValueForProfile -CisEntry $cisRec -ActiveProfile $activeProfile
+            if ($null -eq $recValue) { continue }
+
+            $entryKey = "Sec|$($setting.section)|$($setting.name)"
+            $isConfigured = ($null -ne (Get-GptTmplValue -GptTmpl $LiveGpt -Section $setting.section -Key $setting.name))
+            if ($Mode -eq 'GapFill' -and $isConfigured) { $alreadyOkKeys[$entryKey] = $true; continue }
+
+            $write = Resolve-CisSecurityWrite -Setting $setting -RecommendedValue $recValue
+            if (-not $write) { $skippedTitles.Add($cisRec.title); continue }
+
+            Save-SecurityChangeToFile -SettingSection $setting.section -SettingName $setting.name -IsConfigured $true -Value $write.Value -SecEditInfPath $SecEditInfPath
+            $appliedKeys[$entryKey] = $true
+        }
+
+        # --- Advanced Audit Policy Configuration ---
+        foreach ($sub in (Get-AdvancedAuditCatalogEntries)) {
+            $cisRec = Get-CisRecommendationForAuditSubcategory -CisIndex $script:CisIndex -SubcategoryNameEn $sub.name
+            if (-not $cisRec) { continue }
+            $recValue = Get-CisRecommendationValueForProfile -CisEntry $cisRec -ActiveProfile $activeProfile
+            if ($null -eq $recValue) { continue }
+
+            $entryKey = "Aud|$($sub.guid)"
+            $isConfigured = ($null -ne (Get-AuditCsvValue -Rows $LiveAuditRows -Guid $sub.guid))
+            if ($Mode -eq 'GapFill' -and $isConfigured) { $alreadyOkKeys[$entryKey] = $true; continue }
+
+            $auditValue = ConvertTo-CisAuditSettingValue -Text (Get-CisFirstAlternativeValue -RawValueData $recValue)
+            if ($null -eq $auditValue) { $skippedTitles.Add($cisRec.title); continue }
+
+            Save-AdvancedAuditChangeToFile -Guid $sub.guid -Name $sub.name -IsConfigured $true -Value $auditValue -AuditCsvPath $AuditCsvPath
+            $appliedKeys[$entryKey] = $true
+        }
+    }
+
+    # --- Organization-specific values (plan §4.3) - once, not per profile ---
+    foreach ($key in $script:CisOrgValueCatalogKeyMap.Keys) {
+        if (-not $OrgValues.ContainsKey($key)) { continue }
+        $text = $OrgValues[$key]
+        if ([string]::IsNullOrWhiteSpace($text)) { continue }   # left blank = leave as-is, not written
+
+        $catalogKey = $script:CisOrgValueCatalogKeyMap[$key]
+        $setting = $securitySettings | Where-Object { $_.catalogKey -eq $catalogKey } | Select-Object -First 1
+        if (-not $setting) { continue }
+
+        $entryKey = "Org|$key"
+        $isConfigured = ($null -ne (Get-GptTmplValue -GptTmpl $LiveGpt -Section $setting.section -Key $setting.name))
+        if ($Mode -eq 'GapFill' -and $isConfigured) { $alreadyOkKeys[$entryKey] = $true; continue }
+
+        $value = if ($setting.valueType -like 'reg-*') {
+            ConvertTo-RegistryValuesEncoding -RegType $(if ($setting.regType) { $setting.regType } else { 1 }) -Data $text
+        } else {
+            $text
+        }
+        Save-SecurityChangeToFile -SettingSection $setting.section -SettingName $setting.name -IsConfigured $true -Value $value -SecEditInfPath $SecEditInfPath
+        $appliedKeys[$entryKey] = $true
+    }
+
+    return [pscustomobject]@{
+        AppliedCount   = $appliedKeys.Count
+        AlreadyOkCount = $alreadyOkKeys.Count
+        SkippedTitles  = @($skippedTitles | Sort-Object -Unique)
+    }
+}
+
+function Show-CisGenerationSummary {
+    param([Parameter(Mandatory)]$Summary, [Parameter(Mandatory)][hashtable]$Ui)
+    $skippedText = if ($Summary.SkippedTitles.Count -eq 0) { $Ui.CisGenerationSummaryNoneSkipped } else { ($Summary.SkippedTitles | ForEach-Object { "  - $_" }) -join "`r`n" }
+    $text = $Ui.CisGenerationSummaryFormat -f $Summary.AppliedCount, $Summary.AlreadyOkCount, $Summary.SkippedTitles.Count, $skippedText
+    [System.Windows.MessageBox]::Show($text, $Ui.CisGenerationSummaryTitle, 'OK', 'Information') | Out-Null
+}
+
+function Start-CisGpoSession {
+    <#
+        "Advanced > New Group Policy > CIS Gap-fill/Full compliance" (plan
+        §7): seeds a fresh unsaved session (same shape as
+        Start-UnsavedGpoSession, see Start-GpoUnsavedSessionState/
+        Complete-GpoSessionActivation) from a straight COPY of the current
+        LIVE machine state, then overlays the chosen CIS profile(s) via
+        Invoke-CisProfileOverlay. Unlike "Default" (which starts from the
+        static data\Default_gp-equivalent template), the baseline here is
+        deliberately the real host state - "gap-fill" only makes sense
+        relative to what's actually configured (plan §3.1).
+    #>
+    param(
+        [Parameter(Mandatory)][ValidateSet('GapFill', 'FullCompliance')][string]$Mode,
+        [Parameter(Mandatory)][System.Collections.Generic.List[object]]$Profiles,
+        [Parameter(Mandatory)][hashtable]$Ui,
+        [hashtable]$OrgValues = @{}
+    )
+
+    $window.Cursor = [System.Windows.Input.Cursors]::Wait
+    $summary = $null
+    try {
+        $liveMachineEntries = Get-LiveMachinePolEntries
+        $liveUserEntries = Get-LiveUserPolEntries
+        $liveAuditRows = Get-LiveAuditCsvRows
+        $liveSecEditTempPath = Get-LiveSecEditInf
+        try {
+            $liveGpt = Read-GptTmplInf -Path $liveSecEditTempPath
+        }
+        finally {
+            Remove-Item -LiteralPath $liveSecEditTempPath -Force -ErrorAction SilentlyContinue
+        }
+        $liveMachineLookup = New-PolLookup -Entries $liveMachineEntries
+        $liveUserLookup = New-PolLookup -Entries $liveUserEntries
+
+        Start-GpoUnsavedSessionState
+
+        $machinePolPath = Get-OrCreateGpoTempFile -Key 'MachinePol'
+        $userPolPath = Get-OrCreateGpoTempFile -Key 'UserPol'
+        $secEditInfPath = Get-OrCreateGpoTempFile -Key 'SecEditInf'
+        $auditCsvPath = Get-OrCreateGpoTempFile -Key 'AuditCsv'
+
+        Write-PolFile -Path $machinePolPath -Entries $liveMachineEntries
+        Write-PolFile -Path $userPolPath -Entries $liveUserEntries
+        Write-GptTmplInf -Path $secEditInfPath -GptTmpl $liveGpt
+        Write-AuditCsv -Path $auditCsvPath -Rows $liveAuditRows
+
+        $script:MachinePolPath = $machinePolPath
+        $script:UserPolPath = $userPolPath
+        $script:SecEditInfPath = $secEditInfPath
+        $script:AuditCsvPath = $auditCsvPath
+
+        $summary = Invoke-CisProfileOverlay -Mode $Mode -Profiles $Profiles `
+            -LiveMachineLookup $liveMachineLookup -LiveUserLookup $liveUserLookup -LiveGpt $liveGpt -LiveAuditRows $liveAuditRows `
+            -MachinePolPath $machinePolPath -UserPolPath $userPolPath -SecEditInfPath $secEditInfPath -AuditCsvPath $auditCsvPath `
+            -OrgValues $OrgValues
+
+        Complete-GpoSessionActivation
+    }
+    finally {
+        $window.Cursor = [System.Windows.Input.Cursors]::Arrow
+    }
+
+    if ($summary) { Show-CisGenerationSummary -Summary $summary -Ui $Ui }
 }
 
 function Copy-GpoWorkingFile {
@@ -1336,12 +1614,29 @@ function Invoke-SaveGpoProjectNow {
 function New-GpoProject {
     <#
         "Advanced > New Group Policy": Default loads the template directly
-        for editing (Start-UnsavedGpoSession), saved only via File > Save.
+        for editing (Start-UnsavedGpoSession). CIS Gap-fill/Full compliance
+        additionally ask for a CIS profile/level (Show-CisGenerationProfileSelection)
+        then, only if the chosen profile(s) call for it, organization-specific
+        values (Get-CisOrgSpecificValues, plan §4.3/§4.4) before generating
+        (Start-CisGpoSession). All three end up in the same unsaved-session
+        state, saved only via File > Save.
     #>
     $ui = Get-CurrentUi
     $choice = Show-NewGpoDialog -Owner $window -ScriptRoot $PSScriptRoot -Ui $ui
     if (-not $choice) { return }
-    Start-UnsavedGpoSession
+
+    if ($choice -eq 'Default') {
+        Start-UnsavedGpoSession
+        return
+    }
+
+    $profiles = Show-CisGenerationProfileSelection -Mode $choice -Ui $ui
+    if (-not $profiles) { return }
+
+    $orgValues = Get-CisOrgSpecificValues -Profiles $profiles -Ui $ui
+    if ($null -eq $orgValues) { return }
+
+    Start-CisGpoSession -Mode $choice -Profiles $profiles -OrgValues $orgValues -Ui $ui
 }
 
 function Open-GpoProject {

@@ -14,8 +14,14 @@
     Does NOT regenerate or write anything - reads the live index/fallback map
     from %LOCALAPPDATA%\Gpeditor_plus\Index and the bundled .audit files from
     the repo. Any per-profile mismatch beyond the expected out-of-scope types
-    (WMI_POLICY, AUDIT_POWERSHELL, CHECK_ACCOUNT, BANNER_CHECK) or an
-    unresolved fallback candidate (needsManualReview) points at a real bug.
+    (WMI_POLICY, AUDIT_POWERSHELL, a "rename" CHECK_ACCOUNT, BANNER_CHECK -
+    all four go to byOrgValue/are org-specific, see
+    plan-gpedit-new-gpo-cis-generation.md §4.3, and Get-AppFilterCount below
+    never scans byOrgValue) or an unresolved fallback candidate
+    (needsManualReview) points at a real bug. A check_type-less CHECK_ACCOUNT
+    (e.g. "Accounts: Guest account status") is NOT out-of-scope: it has a
+    real fixed recommended value and is resolved via the byTitle fallback
+    like ANONYMOUS_SID_SETTING/REG_CHECK - see Test-CheckAccountIsTitleFallback.
 
     Usage: run from anywhere, e.g.
       powershell -NoProfile -ExecutionPolicy Bypass -File .\Verify-CisProfileCounts.ps1
@@ -90,8 +96,29 @@ function ConvertTo-CisNumberAndTitleLocal {
 # right fields present).
 $directTypes = @('REGISTRY_SETTING', 'REG_CHECK', 'PASSWORD_POLICY', 'LOCKOUT_POLICY', 'USER_RIGHTS_POLICY', 'AUDIT_POLICY_SUBCATEGORY')
 # Types that never get a primary match key and always go through the
-# byTitle fallback candidate path.
+# byTitle fallback candidate path. CHECK_ACCOUNT is handled separately
+# below (Test-CheckAccountIsTitleFallback) since only ONE of its two
+# real-world shapes goes through byTitle - see that function's comment.
 $titleFallbackTypes = @('ANONYMOUS_SID_SETTING')
+
+function Test-CheckAccountIsTitleFallback {
+    <#
+        CHECK_ACCOUNT covers two different shapes (see Get-CisMatchKey's
+        'CHECK_ACCOUNT' case, Build-CisIndex.ps1): a rename check
+        (check_type = CHECK_NOT_REGEX/CHECK_NOT_EQUAL, e.g. "Rename
+        administrator/guest account" - genuinely organization-specific, no
+        universal value, routed to byOrgValue, which Get-AppFilterCount
+        never scans) vs. a plain status check (no check_type, e.g.
+        "Accounts: Guest account status" = a normal fixed recommendation
+        "Disabled") - only the LATTER is deferred to the byTitle
+        fallback pass like ANONYMOUS_SID_SETTING/REG_CHECK, and must be
+        counted as in-scope here too, or ExpectedAppCount silently
+        undercounts by 1 wherever this item appears.
+    #>
+    param([string]$Body)
+    $checkType = Get-CisFieldLocal -BlockText $Body -FieldName 'check_type'
+    return [string]::IsNullOrEmpty($checkType)
+}
 
 function Get-DirectMatchKey {
     # Returns the same (bucket, key) pair Build-CisIndex.ps1's
@@ -221,8 +248,11 @@ foreach ($f in $files) {
             }
             continue
         }
-        if ($directTypes -contains $type -or $titleFallbackTypes -contains $type) {
-            # REG_CHECK/ANONYMOUS_SID_SETTING missing fields -> title-fallback candidate
+        $isCheckAccountTitleFallback = ($type -eq 'CHECK_ACCOUNT') -and (Test-CheckAccountIsTitleFallback -Body $body)
+        if ($directTypes -contains $type -or $titleFallbackTypes -contains $type -or $isCheckAccountTitleFallback) {
+            # REG_CHECK/ANONYMOUS_SID_SETTING missing fields, or a
+            # check_type-less CHECK_ACCOUNT (e.g. "Guest account status")
+            # -> title-fallback candidate
             $normalizedTitle = ConvertTo-CisNormalizedTitle -Title (Get-CisSettingNameFromTitle -Title $numberAndTitle.title)
             $fallbackKey = "byTitle::$normalizedTitle"
             if ($normalizedTitle -and $seenKeys.ContainsKey($fallbackKey)) {

@@ -514,6 +514,238 @@ function Get-CisRecommendationValueForProfile {
     return $null
 }
 
+# ---------------------------------------------------------------------------
+# "New Group Policy > CIS Gap-fill/Full compliance" generation (see
+# plan-gpedit-new-gpo-cis-generation.md) - best-effort mapping from a
+# resolved CIS recommended value (Get-CisRecommendationValueForProfile) to a
+# concrete write for the app's own pipeline (Save-AdmxChangeToFile/
+# Save-SecurityChangeToFile/Save-AdvancedAuditChangeToFile). Only value
+# shapes that can be resolved with confidence are handled; anything else
+# returns $null so the caller can list it as "not covered" in the generation
+# summary instead of guessing (plan §8 point 5).
+# ---------------------------------------------------------------------------
+
+# The 4 organization-specific items (plan §4.3) - no universal recommended
+# value exists for any of them, so they're never auto-filled: the
+# "Organization-specific values" screen collects them from the user instead.
+# Order matches the plan §4.3 mockup.
+$script:CisOrgValueKeys = @('RenameAdministratorAccount', 'RenameGuestAccount', 'LogonMessageTitle', 'LogonMessageText')
+
+function Test-CisOrgValueEntryInProfile {
+    # Whether $Entry (a byOrgValue entry) is actually recommended for
+    # $ActiveProfile - same (benchmark, version, level, role) match as
+    # Get-CisRecommendationValueForProfile, but presence-only: these
+    # entries carry no meaningful valueData to extract.
+    param($Entry, $ActiveProfile)
+    if ($null -eq $Entry -or $null -eq $ActiveProfile) { return $false }
+    foreach ($p in @($Entry.profiles)) {
+        if ($null -eq $p) { continue }
+        if ($p.benchmark -eq $ActiveProfile.Benchmark -and $p.version -eq $ActiveProfile.Version -and $p.level -eq $ActiveProfile.Level -and $p.role -eq $ActiveProfile.Role) { return $true }
+    }
+    return $false
+}
+
+function Get-CisOrgValueEntries {
+    <#
+        "New Group Policy > CIS Gap-fill/Full compliance", screen 2->3 gate
+        (plan §4.3/§4.4): which of the (at most 4) organization-specific
+        items are actually recommended by AT LEAST ONE of the chosen
+        profile(s) (L1 alone, or L1+L2 union). Returns a list of
+        [pscustomobject]@{ Key; Title; Info } in the fixed §4.3 field order
+        - empty (never $null) if none apply, so the caller can skip the
+        "Organization-specific values" screen entirely, as the plan
+        prescribes ("screen absent if the profile contains none").
+    #>
+    param($CisIndex, [System.Collections.Generic.List[object]]$ActiveProfiles)
+
+    $result = New-Object System.Collections.Generic.List[object]
+    $bucket = Get-CisIndexBucket -CisIndex $CisIndex -BucketName 'byOrgValue'
+    if ($null -eq $bucket) { return , $result }
+
+    foreach ($key in $script:CisOrgValueKeys) {
+        $prop = $bucket.PSObject.Properties[$key]
+        if ($null -eq $prop) { continue }
+        $entry = $prop.Value
+        $isRecommended = $false
+        foreach ($activeProfile in $ActiveProfiles) {
+            if (Test-CisOrgValueEntryInProfile -Entry $entry -ActiveProfile $activeProfile) { $isRecommended = $true; break }
+        }
+        if ($isRecommended) {
+            $result.Add([pscustomobject]@{ Key = $key; Title = $entry.title; Info = $entry.info })
+        }
+    }
+    return , $result
+}
+
+function Get-CisFirstAlternativeValue {
+    <#
+        A recommended value can be an alternative ("A" || "B", see
+        plan-gpedit-cis.md §5.2) - generation can only write ONE concrete
+        value, so this takes the FIRST alternative exactly as written in
+        the source .audit file (a deliberate, documented simplification,
+        not an attempt to pick the "loosest"/"strictest" option). Also
+        strips the surrounding quotes .audit values are always wrapped in.
+    #>
+    param([string]$RawValueData)
+    if ([string]::IsNullOrWhiteSpace($RawValueData)) { return $RawValueData }
+    $first = ($RawValueData -split '\|\|')[0].Trim()
+    if ($first.Length -ge 2 -and $first.StartsWith('"') -and $first.EndsWith('"')) {
+        $first = $first.Substring(1, $first.Length - 2)
+    }
+    return $first
+}
+
+function ConvertTo-CisBooleanValue {
+    # 'Enabled'/'1'/'true' -> 1, 'Disabled'/'0'/'false' -> 0, else $null.
+    param([string]$Text)
+    if ([string]::IsNullOrWhiteSpace($Text)) { return $null }
+    switch ($Text.Trim().ToLowerInvariant()) {
+        { $_ -in @('enabled', '1', 'true') } { return 1 }
+        { $_ -in @('disabled', '0', 'false') } { return 0 }
+        default { return $null }
+    }
+}
+
+function ConvertTo-CisAuditSettingValue {
+    <#
+        CIS text ("Success", "Failure", "Success and Failure"/"Success,
+        Failure", "No Auditing") -> the 0-3 int audit.csv/classic Audit
+        Policy expect (0 = No Auditing, 1 = Success, 2 = Failure, 3 =
+        Success and Failure - see AuditCsvFile.ps1 header). $null if
+        neither keyword is recognizable.
+    #>
+    param([string]$Text)
+    if ([string]::IsNullOrWhiteSpace($Text)) { return $null }
+    $t = $Text.ToLowerInvariant()
+    $hasSuccess = $t -match 'success'
+    $hasFailure = $t -match 'fail'
+    if ($hasSuccess -and $hasFailure) { return 3 }
+    if ($hasFailure) { return 2 }
+    if ($hasSuccess) { return 1 }
+    if ($t -match 'no audit') { return 0 }
+    return $null
+}
+
+function Resolve-CisAdmxWrite {
+    <#
+        Best-effort mapping from a CIS recommended value to a concrete ADMX
+        write (state + element values, ready for Save-AdmxChangeToFile).
+        Only two shapes are handled with confidence:
+          - a plain registryKey/valueName toggle (no elements): the
+            recommended value is compared to the policy's own
+            enabledValue/disabledValue - reliable because a CIS registry
+            check for a toggle ADMX setting is, in practice, exactly the
+            same literal registry value the policy itself writes for
+            Enabled/Disabled.
+          - a policy with exactly one 'decimal' element and a purely
+            numeric recommended value: Enabled + that element set to the
+            number.
+        Anything else (multiple elements, enum/text/list-only elements, a
+        recommended value that matches neither shape) is left unresolved
+        ($null) rather than guessed.
+    #>
+    param($Policy, [string]$RecommendedValue)
+
+    $value = Get-CisFirstAlternativeValue -RawValueData $RecommendedValue
+    if ([string]::IsNullOrWhiteSpace($value)) { return $null }
+
+    $elements = @($Policy.elements)
+    if (-not $Policy.valueName -and $elements.Count -eq 0) { return $null }
+
+    if ($elements.Count -eq 0) {
+        if ($null -ne $Policy.enabledValue -and "$value" -eq "$($Policy.enabledValue)") {
+            return [pscustomobject]@{ State = 'Enabled'; ElementValues = @{} }
+        }
+        if ($null -ne $Policy.disabledValue -and "$value" -eq "$($Policy.disabledValue)") {
+            return [pscustomobject]@{ State = 'Disabled'; ElementValues = @{} }
+        }
+        $lower = $value.ToLowerInvariant()
+        if ($lower -eq 'enabled' -and $null -ne $Policy.enabledValue) {
+            return [pscustomobject]@{ State = 'Enabled'; ElementValues = @{} }
+        }
+        if ($lower -eq 'disabled' -and $null -ne $Policy.disabledValue) {
+            return [pscustomobject]@{ State = 'Disabled'; ElementValues = @{} }
+        }
+        return $null
+    }
+
+    if ($elements.Count -eq 1 -and $elements[0].type -eq 'decimal' -and $value -match '^\d+$') {
+        return [pscustomobject]@{ State = 'Enabled'; ElementValues = @{ ($elements[0].id) = [int]$value } }
+    }
+
+    return $null
+}
+
+function Resolve-CisSecurityWrite {
+    <#
+        Equivalent of Resolve-CisAdmxWrite for a Security Settings catalog
+        entry (Get-SecurityCatalogEntries shape): returns
+        [pscustomobject]@{ Value = <raw string ready for
+        Save-SecurityChangeToFile> } or $null if the recommended text can't
+        be confidently parsed for this entry's ValueType.
+    #>
+    param($Setting, [string]$RecommendedValue)
+
+    $value = Get-CisFirstAlternativeValue -RawValueData $RecommendedValue
+    if ([string]::IsNullOrWhiteSpace($value)) { return $null }
+
+    switch ($Setting.valueType) {
+        'boolean' {
+            $b = ConvertTo-CisBooleanValue -Text $value
+            if ($null -eq $b) { return $null }
+            return [pscustomobject]@{ Value = "$b" }
+        }
+        'audit' {
+            $a = ConvertTo-CisAuditSettingValue -Text $value
+            if ($null -eq $a) { return $null }
+            return [pscustomobject]@{ Value = "$a" }
+        }
+        { $_ -in @('minutes-or-forever', 'minutes', 'days', 'attempts', 'count') } {
+            if ($value -match '(?<n>-?\d+)') { return [pscustomobject]@{ Value = $Matches['n'] } }
+            return $null
+        }
+        'principal-list' {
+            # "No One" (any casing) => explicitly configured, empty list.
+            # Otherwise best-effort NTAccount.Translate per comma-separated
+            # name; a name that fails to resolve (unknown/renamed built-in,
+            # non-English OS) is dropped silently rather than failing the
+            # whole entry - unresolved ($null) only if NOTHING translated.
+            if ($value.Trim().ToLowerInvariant() -eq 'no one') { return [pscustomobject]@{ Value = '' } }
+            $tokens = New-Object System.Collections.Generic.List[string]
+            foreach ($name in ($value -split ',')) {
+                $trimmed = $name.Trim()
+                if (-not $trimmed) { continue }
+                try {
+                    $account = New-Object System.Security.Principal.NTAccount($trimmed)
+                    $sid = $account.Translate([System.Security.Principal.SecurityIdentifier]).Value
+                    $tokens.Add("*$sid")
+                }
+                catch { continue }
+            }
+            if ($tokens.Count -eq 0) { return $null }
+            return [pscustomobject]@{ Value = (ConvertFrom-PrivilegeMemberList -Members $tokens) }
+        }
+        'reg-boolean' {
+            $b = ConvertTo-CisBooleanValue -Text $value
+            if ($null -eq $b) { return $null }
+            return [pscustomobject]@{ Value = (ConvertTo-RegistryValuesEncoding -RegType $Setting.regType -Data "$b") }
+        }
+        'reg-number' {
+            if ($value -match '(?<n>-?\d+)') { return [pscustomobject]@{ Value = (ConvertTo-RegistryValuesEncoding -RegType $Setting.regType -Data $Matches['n']) } }
+            return $null
+        }
+        'reg-enum' {
+            $choice = @($Setting.choices) | Where-Object { $value -match [regex]::Escape($_.displayName) -or "$($_.value)" -eq $value } | Select-Object -First 1
+            if (-not $choice) { return $null }
+            return [pscustomobject]@{ Value = (ConvertTo-RegistryValuesEncoding -RegType $Setting.regType -Data "$($choice.value)") }
+        }
+        # reg-string / reg-multistring / reg-flags: free-text/bitmask values
+        # too ambiguous to auto-fill reliably from CIS wording - out of
+        # scope for this pass (listed as "not covered" in the summary).
+        default { return $null }
+    }
+}
+
 function Get-CisRecommendationStateText {
     <#
         Text following "The recommended state for this setting is:" in a

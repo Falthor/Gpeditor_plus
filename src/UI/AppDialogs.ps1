@@ -204,19 +204,29 @@ function Show-ProfileSelectionDialog {
         Get-CisDistinctProfiles) on OK, $null on Cancel - never a $null
         meaning "clear the filter", that stays the job of the separate
         "Remove profile filter" button.
+
+        -AllowLevelUnion (only used by the "New Group Policy > CIS
+        Gap-fill/Full compliance" flow, plan-gpedit-new-gpo-cis-generation.md
+        §3.3/§4.2): reveals a 3rd "L1 + L2" radio and changes the OK return
+        shape to [pscustomobject]@{ Group = <group>; Levels = @('L1') or
+        @('L1','L2') } instead of a single profile row, since "L1 + L2" has
+        no single matching row. The plain View > Profile picker never sets
+        this switch, so its return shape is completely unchanged.
     #>
     param(
         $Owner,
         [string]$ScriptRoot,
         [Parameter(Mandatory)][hashtable]$Ui,
         $CisIndex,
-        $CurrentProfile
+        $CurrentProfile,
+        [switch]$AllowLevelUnion,
+        [string]$TitleOverride
     )
 
     $groups = Get-CisProfileGroups -CisIndex $CisIndex
 
     $window = Import-XamlWindow -ScriptRoot $ScriptRoot -Name 'ProfileSelectionWindow' -Owner $Owner
-    $window.Title = $Ui.ProfileSelectionWindowTitle
+    $window.Title = if ($TitleOverride) { $TitleOverride } else { $Ui.ProfileSelectionWindowTitle }
     $window.FindName('ProfileDesktopTabItem').Header = $Ui.ProfileTabDesktop
     $window.FindName('ProfileServersTabItem').Header = $Ui.ProfileTabServers
     $window.FindName('ProfileDomainControllerTabItem').Header = $Ui.ProfileTabDomainController
@@ -226,6 +236,18 @@ function Show-ProfileSelectionDialog {
     $dcListBox = $window.FindName('ProfileDomainControllerListBox')
     $level1Radio = $window.FindName('ProfileLevel1RadioButton')
     $level2Radio = $window.FindName('ProfileLevel2RadioButton')
+    $bothRadio = $window.FindName('ProfileLevelBothRadioButton')
+    $bothRadio.Content = $Ui.ProfileLevelBothLabel
+    if ($AllowLevelUnion) {
+        # CIS generation only offers "L1 only" / "L1 + L2" (plan
+        # §3.3 - a plain L2 file is a pure delta on top of L1, never a
+        # standalone profile) - the plain "L2" radio is hidden entirely
+        # rather than just disabled, so it can never end up the checked
+        # option. The ordinary View > Profile picker (AllowLevelUnion not
+        # set) is completely unaffected.
+        $level2Radio.Visibility = 'Collapsed'
+        $bothRadio.Visibility = 'Visible'
+    }
     $okButton = $window.FindName('OkButton')
     $cancelButton = $window.FindName('CancelButton')
     $okButton.Content = $Ui.OkButton
@@ -267,13 +289,34 @@ function Show-ProfileSelectionDialog {
         if ($null -eq $Group) {
             $level1Radio.IsEnabled = $false
             $level2Radio.IsEnabled = $false
+            $bothRadio.IsEnabled = $false
             return
         }
         $hasL1 = [bool]($Group.Profiles | Where-Object { $_.Level -eq 'L1' })
         $hasL2 = [bool]($Group.Profiles | Where-Object { $_.Level -eq 'L2' })
         $level1Radio.IsEnabled = $hasL1
-        $level2Radio.IsEnabled = $hasL2
-        if ($PreferredLevel -eq 'L2' -and $hasL2) { $level2Radio.IsChecked = $true }
+        # Plain "L2 only" is never a selectable outcome during CIS
+        # generation (see the AllowLevelUnion branch above) - disabled here
+        # too so IsEnabled stays consistent with the hidden Visibility.
+        $level2Radio.IsEnabled = (-not $AllowLevelUnion) -and $hasL2
+        # "L1 + L2" only makes sense (and is only enabled) when BOTH levels
+        # actually exist for this group - otherwise it would be identical
+        # to whichever single level is available.
+        $bothRadio.IsEnabled = ($hasL1 -and $hasL2)
+        if ($AllowLevelUnion) {
+            if ($PreferredLevel -eq 'Both' -and $hasL1 -and $hasL2) { $bothRadio.IsChecked = $true }
+            elseif ($hasL1) { $level1Radio.IsChecked = $true }
+            elseif ($hasL2) {
+                # No L1 recommendations at all for this group - "L1 only"/
+                # "L1 + L2" are both meaningless. No radio can be validly
+                # checked; block OK rather than silently falling back to a
+                # bare L2 (never offered here, see plan §3.3).
+                $level1Radio.IsChecked = $false
+                $bothRadio.IsChecked = $false
+                $okButton.IsEnabled = $false
+            }
+        }
+        elseif ($PreferredLevel -eq 'L2' -and $hasL2) { $level2Radio.IsChecked = $true }
         elseif ($PreferredLevel -eq 'L1' -and $hasL1) { $level1Radio.IsChecked = $true }
         elseif ($hasL1) { $level1Radio.IsChecked = $true }
         else { $level2Radio.IsChecked = $true }
@@ -313,8 +356,17 @@ function Show-ProfileSelectionDialog {
     $script:__profileSelectionResult = $null
     $okButton.Add_Click({
         param($EventSender, $e)
-        $level = if ($level2Radio.IsChecked) { 'L2' } else { 'L1' }
-        $script:__profileSelectionResult = $script:__profileSelectedGroup.Profiles | Where-Object { $_.Level -eq $level } | Select-Object -First 1
+        if ($bothRadio.IsChecked) {
+            $script:__profileSelectionResult = [pscustomobject]@{ Group = $script:__profileSelectedGroup; Levels = @('L1', 'L2') }
+        }
+        elseif ($AllowLevelUnion) {
+            $level = if ($level2Radio.IsChecked) { 'L2' } else { 'L1' }
+            $script:__profileSelectionResult = [pscustomobject]@{ Group = $script:__profileSelectedGroup; Levels = @($level) }
+        }
+        else {
+            $level = if ($level2Radio.IsChecked) { 'L2' } else { 'L1' }
+            $script:__profileSelectionResult = $script:__profileSelectedGroup.Profiles | Where-Object { $_.Level -eq $level } | Select-Object -First 1
+        }
         $window.DialogResult = $true
     })
     $cancelButton.Add_Click({
@@ -324,6 +376,61 @@ function Show-ProfileSelectionDialog {
 
     $null = $window.ShowDialog()
     return $script:__profileSelectionResult
+}
+
+# Field metadata for Show-OrgSpecificValuesDialog, in the plan §4.3 mockup
+# order - Panel/Label/Box are the XAML x:Name suffixes shared by
+# OrgSpecificValuesWindow, UiKey is the UiStrings.ps1 label for that field.
+$script:CisOrgValueFieldDefs = @(
+    @{ Key = 'RenameAdministratorAccount'; Panel = 'RenameAdministratorAccountPanel'; Label = 'RenameAdministratorAccountLabel'; Box = 'RenameAdministratorAccountTextBox'; UiKey = 'OrgSpecificFieldRenameAdministratorAccount' }
+    @{ Key = 'RenameGuestAccount'; Panel = 'RenameGuestAccountPanel'; Label = 'RenameGuestAccountLabel'; Box = 'RenameGuestAccountTextBox'; UiKey = 'OrgSpecificFieldRenameGuestAccount' }
+    @{ Key = 'LogonMessageTitle'; Panel = 'LogonMessageTitlePanel'; Label = 'LogonMessageTitleLabel'; Box = 'LogonMessageTitleTextBox'; UiKey = 'OrgSpecificFieldLogonMessageTitle' }
+    @{ Key = 'LogonMessageText'; Panel = 'LogonMessageTextPanel'; Label = 'LogonMessageTextLabel'; Box = 'LogonMessageTextTextBox'; UiKey = 'OrgSpecificFieldLogonMessageText' }
+)
+
+function Show-OrgSpecificValuesDialog {
+    <#
+        "New Group Policy > CIS Gap-fill/Full compliance", screen 3 (plan
+        §4.3): one text field per organization-specific CIS item actually
+        present in the chosen profile(s) - $OrgValueEntries is
+        Get-CisOrgValueEntries's result (already filtered to what's
+        recommended; the caller is expected to skip this whole dialog when
+        it's empty, per plan §4.4). Fields for anything absent from
+        $OrgValueEntries are hidden entirely, never just disabled.
+
+        Cancel aborts the WHOLE "New Group Policy" flow (plan §4.3 - "Annuler
+        ici annule tout le flux, aucun dossier créé"): returns $null. Generate
+        returns a hashtable Key -> entered text (untrimmed; a field left
+        blank is simply not written later - see Invoke-CisProfileOverlay).
+    #>
+    param($Owner, [string]$ScriptRoot, [Parameter(Mandatory)][hashtable]$Ui, [Parameter(Mandatory)][System.Collections.Generic.List[object]]$OrgValueEntries)
+
+    $window = Import-XamlWindow -ScriptRoot $ScriptRoot -Name 'OrgSpecificValuesWindow' -Owner $Owner
+    $window.Title = $Ui.OrgSpecificValuesWindowTitle
+    $window.FindName('OrgSpecificValuesIntroText').Text = $Ui.OrgSpecificValuesIntro
+
+    $presentKeys = @($OrgValueEntries | ForEach-Object { $_.Key })
+    $boxes = @{}
+    foreach ($def in $script:CisOrgValueFieldDefs) {
+        $window.FindName($def.Label).Text = $Ui[$def.UiKey]
+        $box = $window.FindName($def.Box)
+        $boxes[$def.Key] = $box
+        $window.FindName($def.Panel).Visibility = if ($def.Key -in $presentKeys) { 'Visible' } else { 'Collapsed' }
+    }
+
+    $generateButton = $window.FindName('GenerateButton')
+    $cancelButton = $window.FindName('CancelButton')
+    $generateButton.Content = $Ui.GenerateButton
+    $cancelButton.Content = $Ui.CancelButton
+
+    $generateButton.Add_Click({ param($EventSender, $e) $window.DialogResult = $true })
+    $cancelButton.Add_Click({ param($EventSender, $e) $window.DialogResult = $false })
+
+    if (-not $window.ShowDialog()) { return $null }
+
+    $result = @{}
+    foreach ($key in $boxes.Keys) { $result[$key] = $boxes[$key].Text }
+    return $result
 }
 
 function Show-FilterDialog {
@@ -524,17 +631,23 @@ function Show-PatchNoteWindow {
 
 function Show-NewGpoDialog {
     <#
-        "Advanced > New Group Policy" first step: Default (only enabled
-        option) vs CIS prefill (grayed out, future work). Returns 'Default'
-        on OK, $null on Cancel - since CIS prefill isn't selectable, OK
-        always means Default.
+        "Advanced > New Group Policy" first step: Default, CIS - Gap-fill,
+        or CIS - Full compliance. Returns 'Default'/'GapFill'/
+        'FullCompliance' on OK, $null on Cancel.
     #>
     param($Owner, [string]$ScriptRoot, [Parameter(Mandatory)][hashtable]$Ui)
 
     $window = Import-XamlWindow -ScriptRoot $ScriptRoot -Name 'NewGpoWindow' -Owner $Owner
     $window.Title = $Ui.NewGpoWindowTitle
-    $window.FindName('NewGpoDefaultRadioButton').Content = $Ui.NewGpoOptionDefault
-    $window.FindName('NewGpoCisPrefillRadioButton').Content = $Ui.NewGpoOptionCisPrefill
+    $defaultRadio = $window.FindName('NewGpoDefaultRadioButton')
+    $gapFillRadio = $window.FindName('NewGpoCisGapFillRadioButton')
+    $fullComplianceRadio = $window.FindName('NewGpoCisFullComplianceRadioButton')
+    $defaultRadio.Content = $Ui.NewGpoOptionDefault
+    $gapFillRadio.Content = $Ui.NewGpoOptionCisGapFill
+    $fullComplianceRadio.Content = $Ui.NewGpoOptionCisFullCompliance
+    $window.FindName('NewGpoDefaultDescriptionText').Text = $Ui.NewGpoOptionDefaultDescription
+    $window.FindName('NewGpoCisGapFillDescriptionText').Text = $Ui.NewGpoOptionCisGapFillDescription
+    $window.FindName('NewGpoCisFullComplianceDescriptionText').Text = $Ui.NewGpoOptionCisFullComplianceDescription
     $okButton = $window.FindName('OkButton')
     $cancelButton = $window.FindName('CancelButton')
     $okButton.Content = $Ui.OkButton
@@ -543,7 +656,11 @@ function Show-NewGpoDialog {
     $okButton.Add_Click({ param($EventSender, $e) $window.DialogResult = $true })
     $cancelButton.Add_Click({ param($EventSender, $e) $window.DialogResult = $false })
 
-    if ($window.ShowDialog()) { return 'Default' }
+    if ($window.ShowDialog()) {
+        if ($gapFillRadio.IsChecked) { return 'GapFill' }
+        if ($fullComplianceRadio.IsChecked) { return 'FullCompliance' }
+        return 'Default'
+    }
     return $null
 }
 

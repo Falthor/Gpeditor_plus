@@ -762,7 +762,9 @@
         <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,10,0,0">
             <TextBlock x:Name="ProfileLevelLabel" Text="Level:" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,10,0" />
             <RadioButton x:Name="ProfileLevel1RadioButton" GroupName="ProfileLevel" Content="L1" VerticalAlignment="Center" Margin="0,0,16,0" />
-            <RadioButton x:Name="ProfileLevel2RadioButton" GroupName="ProfileLevel" Content="L2" VerticalAlignment="Center" />
+            <RadioButton x:Name="ProfileLevel2RadioButton" GroupName="ProfileLevel" Content="L2" VerticalAlignment="Center" Margin="0,0,16,0" />
+            <!-- Only shown/enabled for CIS generation (Show-ProfileSelectionDialog -AllowLevelUnion) - the plain View > Profile picker never shows it. -->
+            <RadioButton x:Name="ProfileLevelBothRadioButton" GroupName="ProfileLevel" Content="L1 + L2" VerticalAlignment="Center" Visibility="Collapsed" />
         </StackPanel>
 
         <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
@@ -839,10 +841,13 @@
   <!-- ==========================================================================
        BLOCK: NewGpoWindow.xaml
        "Advanced > New Group Policy" first step: choose between Default
-       (copies DefaultData\int_default_grouppolicy\ into the new project, active) and CIS
-       prefill (disabled, future iteration). OK/Cancel.
+       (copies DefaultData\int_default_grouppolicy\ into the new project),
+       CIS Gap-fill (fills only settings not already configured on the live
+       host) and CIS Full compliance (forces every recommended value). All
+       three then flow into CIS profile/level selection (Gap-fill/Full
+       compliance only) before the new session starts. OK/Cancel.
        ========================================================================== -->
-  <Window x:Name="NewGpoWindow" Title="New Group Policy" Height="220" Width="380"
+  <Window x:Name="NewGpoWindow" Title="New Group Policy" Height="320" Width="400"
           WindowStartupLocation="CenterOwner" ShowInTaskbar="False" ResizeMode="NoResize">
     <Grid Margin="14">
         <Grid.RowDefinitions>
@@ -851,12 +856,64 @@
         </Grid.RowDefinitions>
 
         <StackPanel Grid.Row="0">
-            <RadioButton x:Name="NewGpoDefaultRadioButton" GroupName="NewGpoOption" Content="Default" IsChecked="True" Margin="0,0,0,10" />
-            <RadioButton x:Name="NewGpoCisPrefillRadioButton" GroupName="NewGpoOption" Content="CIS prefill" IsEnabled="False" />
+            <RadioButton x:Name="NewGpoDefaultRadioButton" GroupName="NewGpoOption" Content="Default" IsChecked="True" />
+            <TextBlock x:Name="NewGpoDefaultDescriptionText" Text="Blank template based on a freshly installed Windows." TextWrapping="Wrap" Margin="20,2,0,12" Foreground="Gray" FontSize="11" />
+            <RadioButton x:Name="NewGpoCisGapFillRadioButton" GroupName="NewGpoOption" Content="CIS - Gap-fill" />
+            <TextBlock x:Name="NewGpoCisGapFillDescriptionText" Text="Apply CIS-recommended settings only where nothing is currently configured. Existing settings are untouched." TextWrapping="Wrap" Margin="20,2,0,12" Foreground="Gray" FontSize="11" />
+            <RadioButton x:Name="NewGpoCisFullComplianceRadioButton" GroupName="NewGpoOption" Content="CIS - Full compliance" />
+            <TextBlock x:Name="NewGpoCisFullComplianceDescriptionText" Text="Apply every CIS-recommended setting, overriding any existing value, to reach 100% profile compliance." TextWrapping="Wrap" Margin="20,2,0,0" Foreground="Gray" FontSize="11" />
         </StackPanel>
 
         <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
             <Button x:Name="OkButton" Content="OK" Width="90" Margin="0,0,8,0" Padding="4" IsDefault="True" />
+            <Button x:Name="CancelButton" Content="Cancel" Width="90" Padding="4" IsCancel="True" />
+        </StackPanel>
+    </Grid>
+  </Window>
+
+  <!-- ==========================================================================
+       BLOCK: OrgSpecificValuesWindow.xaml
+       "New Group Policy > CIS Gap-fill/Full compliance", screen 3 (plan
+       §4.3): one labeled field per organization-specific CIS item actually
+       present in the chosen profile(s) - at most 4
+       (RenameAdministratorAccount/RenameGuestAccount/LogonMessageTitle/
+       LogonMessageText). Each field's own StackPanel is shown/hidden by
+       Show-OrgSpecificValuesDialog depending on Get-CisOrgValueEntries.
+       Cancel aborts the whole "New Group Policy" flow.
+       ========================================================================== -->
+  <Window x:Name="OrgSpecificValuesWindow" Title="New Group Policy — Organization-specific values" Height="480" Width="420"
+          WindowStartupLocation="CenterOwner" ShowInTaskbar="False" ResizeMode="NoResize">
+    <Grid Margin="14">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <TextBlock x:Name="OrgSpecificValuesIntroText" Grid.Row="0" TextWrapping="Wrap" Margin="0,0,0,14"
+                   Text="These CIS items have no universal recommended value - provide your organization's values below." />
+
+        <StackPanel Grid.Row="1">
+            <StackPanel x:Name="RenameAdministratorAccountPanel" Margin="0,0,0,12">
+                <TextBlock x:Name="RenameAdministratorAccountLabel" Text="Rename administrator account" FontWeight="SemiBold" Margin="0,0,0,4" />
+                <TextBox x:Name="RenameAdministratorAccountTextBox" Padding="3" />
+            </StackPanel>
+            <StackPanel x:Name="RenameGuestAccountPanel" Margin="0,0,0,12">
+                <TextBlock x:Name="RenameGuestAccountLabel" Text="Rename guest account" FontWeight="SemiBold" Margin="0,0,0,4" />
+                <TextBox x:Name="RenameGuestAccountTextBox" Padding="3" />
+            </StackPanel>
+            <StackPanel x:Name="LogonMessageTitlePanel" Margin="0,0,0,12">
+                <TextBlock x:Name="LogonMessageTitleLabel" Text="Logon message title" FontWeight="SemiBold" Margin="0,0,0,4" />
+                <TextBox x:Name="LogonMessageTitleTextBox" Padding="3" />
+            </StackPanel>
+            <StackPanel x:Name="LogonMessageTextPanel">
+                <TextBlock x:Name="LogonMessageTextLabel" Text="Logon message text" FontWeight="SemiBold" Margin="0,0,0,4" />
+                <TextBox x:Name="LogonMessageTextTextBox" AcceptsReturn="True" TextWrapping="Wrap" Height="100" Padding="3" VerticalScrollBarVisibility="Auto" />
+            </StackPanel>
+        </StackPanel>
+
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
+            <Button x:Name="GenerateButton" Content="Generate" Width="90" Margin="0,0,8,0" Padding="4" IsDefault="True" />
             <Button x:Name="CancelButton" Content="Cancel" Width="90" Padding="4" IsCancel="True" />
         </StackPanel>
     </Grid>
