@@ -9,7 +9,7 @@
     computed on every launch (PolicyDefinitionsFingerprint.ps1). If it does
     not match the one stored in the existing JSON index, ADMX/ADML parsing
     is redone automatically. The Audit files folder (CIS benchmarks) is
-    covered the same way (AuditFilesFingerprint.ps1) so that Build-CisIndex.ps1
+    covered the same way (AuditFilesFingerprint.ps1) so that Build-Index.ps1 -Kind Cis
     reruns automatically whenever its content changed, whether from the
     Options window or a direct edit of the folder.
 #>
@@ -175,7 +175,7 @@ if (Test-Path -LiteralPath $admxPath) {
 }
 if ($needsRebuild) {
     Write-Host "ADMX index missing or stale, generating..."
-    & (Join-Path $PSScriptRoot 'Indexers\Build-AdmxIndex.ps1') -PolicyDefinitionsPath $PolicyDefinitionsPath -OutputPath $admxPath -SourceFingerprint $admxFingerprint
+    & (Join-Path $PSScriptRoot 'Indexers\Build-Index.ps1') -Kind Admx -PolicyDefinitionsPath $PolicyDefinitionsPath -OutputPath $admxPath -SourceFingerprint $admxFingerprint
     $admxIndex = Get-Content -Raw -Encoding UTF8 $admxPath | ConvertFrom-Json
 }
 
@@ -198,18 +198,18 @@ if ($baselineGptForRegistryCleanup.Sections.Contains('Registry Values')) {
 }
 
 $secPath = Join-Path $script:AppSettings.paths.indexDir 'security-index.json'
-& (Join-Path $PSScriptRoot 'Indexers\Build-SecurityIndex.ps1') -SecEditInfPath $SecEditInfPath -OutputPath $secPath
+& (Join-Path $PSScriptRoot 'Indexers\Build-Index.ps1') -Kind Security -SecEditInfPath $SecEditInfPath -OutputPath $secPath
 $securityIndex = Get-Content -Raw -Encoding UTF8 $secPath | ConvertFrom-Json
 
 # Advanced Audit Policy lives in its own file (audit.csv, not GptTmpl.inf):
 # same always-regenerate logic as the security index (small file, uncached).
 $auditIndexPath = Join-Path $script:AppSettings.paths.indexDir 'advanced-audit-index.json'
-& (Join-Path $PSScriptRoot 'Indexers\Build-AdvancedAuditIndex.ps1') -AuditCsvPath $AuditCsvPath -OutputPath $auditIndexPath
+& (Join-Path $PSScriptRoot 'Indexers\Build-Index.ps1') -Kind AdvancedAudit -AuditCsvPath $AuditCsvPath -OutputPath $auditIndexPath
 $advancedAuditIndex = Get-Content -Raw -Encoding UTF8 $auditIndexPath | ConvertFrom-Json
 
 # cis-fallback-map.json lives alongside cis-index.json/cis-overrides.json in
 # indexDir, same self-heal-from-bundled-template pattern as
-# Data_SecurityCatalog.json above - seeded here so Build-CisIndex.ps1 (just
+# Data_SecurityCatalog.json above - seeded here so Build-Index.ps1 -Kind Cis (just
 # below) has it available on a first run.
 $cisFallbackMapPath = Join-Path $script:AppSettings.paths.indexDir 'cis-fallback-map.json'
 if (-not (Test-Path -LiteralPath $cisFallbackMapPath)) {
@@ -236,7 +236,7 @@ if (Test-Path -LiteralPath $cisIndexPath) {
 }
 if ($cisNeedsRebuild -and (Test-Path -LiteralPath $script:AppSettings.paths.auditFilesDir) -and (Get-ChildItem -LiteralPath $script:AppSettings.paths.auditFilesDir -Filter '*.audit' -File -ErrorAction SilentlyContinue)) {
     Write-Host "CIS index missing or stale, generating..."
-    & (Join-Path $PSScriptRoot 'Indexers\Build-CisIndex.ps1') -AuditFilesPath $script:AppSettings.paths.auditFilesDir -OutputPath $cisIndexPath -SourceFingerprint $auditFingerprint
+    & (Join-Path $PSScriptRoot 'Indexers\Build-Index.ps1') -Kind Cis -AuditFilesPath $script:AppSettings.paths.auditFilesDir -OutputPath $cisIndexPath -SourceFingerprint $auditFingerprint
 }
 $script:CisIndex = Import-CisIndex -Path $cisIndexPath
 
@@ -922,11 +922,11 @@ function Update-GpoDerivedState {
     $script:userLookup = New-PolLookup -Entries $newUserEntries
 
     $secPath = Join-Path $script:AppSettings.paths.indexDir 'security-index.json'
-    & (Join-Path $PSScriptRoot 'Indexers\Build-SecurityIndex.ps1') -SecEditInfPath $script:SecEditInfPath -OutputPath $secPath
+    & (Join-Path $PSScriptRoot 'Indexers\Build-Index.ps1') -Kind Security -SecEditInfPath $script:SecEditInfPath -OutputPath $secPath
     $script:securityIndex = Get-Content -Raw -Encoding UTF8 $secPath | ConvertFrom-Json
 
     $auditIndexPath = Join-Path $script:AppSettings.paths.indexDir 'advanced-audit-index.json'
-    & (Join-Path $PSScriptRoot 'Indexers\Build-AdvancedAuditIndex.ps1') -AuditCsvPath $script:AuditCsvPath -OutputPath $auditIndexPath
+    & (Join-Path $PSScriptRoot 'Indexers\Build-Index.ps1') -Kind AdvancedAudit -AuditCsvPath $script:AuditCsvPath -OutputPath $auditIndexPath
     $script:advancedAuditIndex = Get-Content -Raw -Encoding UTF8 $auditIndexPath | ConvertFrom-Json
 
     Refresh-ListForCisStateChange
@@ -2997,7 +2997,7 @@ function Open-SelectedPolicyEditor {
             # A catalog field was already written to disk by the dialog
             # itself - refresh even if the user then Cancels.
             $secPath = Join-Path $script:AppSettings.paths.indexDir 'security-index.json'
-            & (Join-Path $PSScriptRoot 'Indexers\Build-SecurityIndex.ps1') -SecEditInfPath $SecEditInfPath -OutputPath $secPath
+            & (Join-Path $PSScriptRoot 'Indexers\Build-Index.ps1') -Kind Security -SecEditInfPath $SecEditInfPath -OutputPath $secPath
             $script:securityIndex = Get-Content -Raw -Encoding UTF8 $secPath | ConvertFrom-Json
             Update-PolicyList
         }
@@ -3030,7 +3030,7 @@ function Open-SelectedPolicyEditor {
             # Reloads the security index from the file just written, to
             # stay consistent with the source of truth on disk.
             $secPath = Join-Path $script:AppSettings.paths.indexDir 'security-index.json'
-            & (Join-Path $PSScriptRoot 'Indexers\Build-SecurityIndex.ps1') -SecEditInfPath $SecEditInfPath -OutputPath $secPath
+            & (Join-Path $PSScriptRoot 'Indexers\Build-Index.ps1') -Kind Security -SecEditInfPath $SecEditInfPath -OutputPath $secPath
             $script:securityIndex = Get-Content -Raw -Encoding UTF8 $secPath | ConvertFrom-Json
 
             Update-PolicyList
@@ -3068,7 +3068,7 @@ function Open-SelectedPolicyEditor {
 
             # Reloads the advanced audit index from the file just written.
             $auditIndexPath = Join-Path $script:AppSettings.paths.indexDir 'advanced-audit-index.json'
-            & (Join-Path $PSScriptRoot 'Indexers\Build-AdvancedAuditIndex.ps1') -AuditCsvPath $AuditCsvPath -OutputPath $auditIndexPath
+            & (Join-Path $PSScriptRoot 'Indexers\Build-Index.ps1') -Kind AdvancedAudit -AuditCsvPath $AuditCsvPath -OutputPath $auditIndexPath
             $script:advancedAuditIndex = Get-Content -Raw -Encoding UTF8 $auditIndexPath | ConvertFrom-Json
 
             Update-PolicyList

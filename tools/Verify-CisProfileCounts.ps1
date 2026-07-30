@@ -1,11 +1,11 @@
-<#
+﻿<#
     Verification (read-only): for every CIS profile (benchmark/version/level/
     role, one per .audit file), compares:
       - "raw in-scope count"  = number of numbered <custom_item> blocks in the
         .audit file that are of a type the app can actually resolve to a
         setting (REGISTRY_SETTING/REG_CHECK/PASSWORD_POLICY/LOCKOUT_POLICY/
         USER_RIGHTS_POLICY/AUDIT_POLICY_SUBCATEGORY/ANONYMOUS_SID_SETTING),
-        replicating Build-CisIndex.ps1's own matching rules;
+        replicating Build-Index.ps1 -Kind Cis's own matching rules;
       - "app filter count"    = number of entries in the REAL cis-index.json
         (the one GpEdit.ps1 actually loads) whose profiles[] contains that
         exact profile - i.e. exactly what Test-CisProfileFilterMatch
@@ -58,7 +58,7 @@ if (Test-Path -LiteralPath $fallbackMapPath) {
 $buckets = @('byRegistry', 'byPasswordPolicy', 'byLockoutPolicy', 'byUserRight', 'byAuditSubcategory', 'byTitle')
 
 # ---------------------------------------------------------------------------
-# Helpers duplicated (read-only parsing) from Build-CisIndex.ps1 - kept
+# Helpers duplicated (read-only parsing) from Build-Index.ps1 -Kind Cis - kept
 # minimal and behaviourally identical, since the whole point is to check
 # that script's output, not to re-run it.
 # ---------------------------------------------------------------------------
@@ -92,7 +92,7 @@ function ConvertTo-CisNumberAndTitleLocal {
     return [ordered]@{ cisNumber = $m.Groups['num'].Value; title = $title.Trim() }
 }
 
-# Types Build-CisIndex.ps1's Get-CisMatchKey resolves directly (given the
+# Types Build-Index.ps1 -Kind Cis's Get-CisMatchKey resolves directly (given the
 # right fields present).
 $directTypes = @('REGISTRY_SETTING', 'REG_CHECK', 'PASSWORD_POLICY', 'LOCKOUT_POLICY', 'USER_RIGHTS_POLICY', 'AUDIT_POLICY_SUBCATEGORY')
 # Types that never get a primary match key and always go through the
@@ -104,7 +104,7 @@ $titleFallbackTypes = @('ANONYMOUS_SID_SETTING')
 function Test-CheckAccountIsTitleFallback {
     <#
         CHECK_ACCOUNT covers two different shapes (see Get-CisMatchKey's
-        'CHECK_ACCOUNT' case, Build-CisIndex.ps1): a rename check
+        'CHECK_ACCOUNT' case, Build-Index.ps1 -Kind Cis): a rename check
         (check_type = CHECK_NOT_REGEX/CHECK_NOT_EQUAL, e.g. "Rename
         administrator/guest account" - genuinely organization-specific, no
         universal value, routed to byOrgValue, which Get-AppFilterCount
@@ -121,7 +121,7 @@ function Test-CheckAccountIsTitleFallback {
 }
 
 function Get-DirectMatchKey {
-    # Returns the same (bucket, key) pair Build-CisIndex.ps1's
+    # Returns the same (bucket, key) pair Build-Index.ps1 -Kind Cis's
     # Get-CisMatchKey would compute, as a single string - $null if the
     # required field(s) are missing (no direct match key). Used both to
     # decide whether an item is a "direct match" and to detect two
@@ -223,7 +223,7 @@ foreach ($f in $files) {
     $duplicateCount = 0
     $duplicateDetails = New-Object System.Collections.Generic.List[object]
     # Tracks match keys already seen IN THIS FILE: a second <custom_item>
-    # with the same key doesn't add a new grid row (Build-CisIndex.ps1
+    # with the same key doesn't add a new grid row (Build-Index.ps1 -Kind Cis
     # collapses it into the same bucket entry) - counted separately as a
     # "duplicate", not folded silently into ExpectedAppCount.
     $seenKeys = @{}

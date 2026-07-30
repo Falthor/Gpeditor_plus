@@ -747,7 +747,7 @@ Describe 'CisCatalog' -Tag 'Integration' {
 
         $auditFilesPath = Join-Path $SrcRoot 'DefaultData\Audit'
         $outputPath = Join-Path $TestDrive 'cis-index.json'
-        & (Join-Path $SrcRoot 'Indexers\Build-CisIndex.ps1') -AuditFilesPath $auditFilesPath -OutputPath $outputPath | Out-Null
+        & (Join-Path $SrcRoot 'Indexers\Build-Index.ps1') -Kind Cis -AuditFilesPath $auditFilesPath -OutputPath $outputPath | Out-Null
 
         $script:cisIndex = Import-CisIndex -Path $outputPath
     }
@@ -881,7 +881,7 @@ Describe 'CisCatalog' -Tag 'Integration' {
             Copy-Item -LiteralPath (Join-Path $SrcRoot 'DefaultData\Data_CisFallbackMap.json') -Destination (Join-Path $fallbackTestDir 'cis-fallback-map.json') -Force
 
             $fallbackOutputPath = Join-Path $fallbackTestDir 'cis-index.json'
-            & (Join-Path $SrcRoot 'Indexers\Build-CisIndex.ps1') -AuditFilesPath $auditFilesPath -OutputPath $fallbackOutputPath | Out-Null
+            & (Join-Path $SrcRoot 'Indexers\Build-Index.ps1') -Kind Cis -AuditFilesPath $auditFilesPath -OutputPath $fallbackOutputPath | Out-Null
             $script:cisIndexWithFallback = Import-CisIndex -Path $fallbackOutputPath
         }
 
@@ -917,7 +917,7 @@ Describe 'CisCatalog' -Tag 'Integration' {
             $TestDrive folder, never mixed with the real 23 benchmark files.
 
             The ADMX index is a small hand-built fixture (NOT
-            Build-AdmxIndex.ps1 against this machine's real
+            Build-Index.ps1 -Kind Admx against this machine's real
             C:\Windows\PolicyDefinitions) so this test stays deterministic
             and machine-independent, unlike the manual verification pass
             this test formalizes. Security Options / Password / Lockout /
@@ -936,7 +936,7 @@ Describe 'CisCatalog' -Tag 'Integration' {
             Copy-Item -LiteralPath (Join-Path $SrcRoot 'Tests\Fixtures\CIS_Microsoft_Windows_FAKE-TEST_v9.9.9_L1.audit') -Destination $fixtureAuditDir -Force
 
             $fixtureOutputPath = Join-Path $TestDrive 'catalog-gaps-fixture-index.json'
-            & (Join-Path $SrcRoot 'Indexers\Build-CisIndex.ps1') -AuditFilesPath $fixtureAuditDir -OutputPath $fixtureOutputPath | Out-Null
+            & (Join-Path $SrcRoot 'Indexers\Build-Index.ps1') -Kind Cis -AuditFilesPath $fixtureAuditDir -OutputPath $fixtureOutputPath | Out-Null
             $script:fixtureCisIndex = Import-CisIndex -Path $fixtureOutputPath
             $script:fixtureProfile = (Get-CisDistinctProfiles -CisIndex $fixtureCisIndex) | Select-Object -First 1
 

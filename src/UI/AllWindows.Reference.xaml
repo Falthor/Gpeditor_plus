@@ -1,4 +1,4 @@
-<!--
+﻿<!--
   ============================================================================
   MERGED XAML SOURCE — this is the file actually loaded by the app.
   ============================================================================
@@ -1349,7 +1349,7 @@
             </StackPanel>
         </Grid>
 
-        <!-- Busy overlay: shown while Build-CisIndex.ps1 runs (Add/Delete audit
+        <!-- Busy overlay: shown while Build-Index.ps1 -Kind Cis runs (Add/Delete audit
              file), spans both columns so the whole window (sidebar included)
              reads as blocked, not just the right-hand panel. -->
         <Grid x:Name="BusyOverlay" Grid.ColumnSpan="2" Background="#A0000000" Visibility="Collapsed">

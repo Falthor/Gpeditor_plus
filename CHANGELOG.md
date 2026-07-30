@@ -5,6 +5,21 @@ section per release date, most recent first. This file is the single
 source for the "Release Notes" panel in the right-hand pane and for
 ? > Patch note
 
+## 2026-07-31 — Index builders merged into a single script
+
+- The four index builders (`Build-AdmxIndex.ps1`, `Build-SecurityIndex.ps1`,
+  `Build-AdvancedAuditIndex.ps1`, `Build-CisIndex.ps1`) are now one
+  `Indexers\Build-Index.ps1`, selected by `-Kind
+  Admx|Security|AdvancedAudit|Cis`. Internal change only: the four
+  generated JSON indexes are byte-for-byte identical to what the previous
+  scripts produced, and nothing about how the app reads them changed.
+- Faster CIS index rebuild when the fallback map has gaps: the sources used
+  to auto-resolve a CIS control with no registry key (the security catalog
+  and the multi-MB ADMX index) were re-read and re-parsed from disk once per
+  unresolved control; they are now read at most once per rebuild, and not at
+  all when the fallback map is already complete.
+- The security index no longer walks the settings catalog twice per build.
+
 ## 2026-07-30 — Integrity check on Export/Import and pre-import backups
 
 - Added View > "CIS - Missing ADMX templates": for the active CIS profile,

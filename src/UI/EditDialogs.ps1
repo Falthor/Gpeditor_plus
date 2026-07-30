@@ -399,7 +399,7 @@ function Show-AdmxEditDialog {
         $currentValue = $null
         if ($CurrentElementValues.ContainsKey($el.id)) { $currentValue = $CurrentElementValues[$el.id] }
         # Localized label from the ADML presentation (Get-AdmlPresentationLabelMap
-        # in Build-AdmxIndex.ps1); falls back to the raw ADMX id if missing
+        # in Build-Index.ps1 -Kind Admx); falls back to the raw ADMX id if missing
         # (e.g. presentation not found/malformed).
         $labelText = if ($el.label) { $el.label } else { $el.id }
         if ($el.required) { $labelText += $Ui.RequiredSuffix }
@@ -639,7 +639,7 @@ function Show-SecurityEditDialog {
 
     # LegalNoticeCaption/LegalNoticeText (Security Options): per explicit
     # user decision, these settings must always stay configured - checkbox
-    # checked and locked (Build-SecurityIndex.ps1 already forces
+    # checked and locked (Build-Index.ps1 -Kind Security already forces
     # isConfigured=$true on the data side; this also blocks unchecking in
     # the UI).
     if ($Setting.PSObject.Properties['alwaysConfigured'] -and $Setting.alwaysConfigured) {

@@ -1,12 +1,12 @@
-#TEST FIXTURE - NOT A REAL CIS BENCHMARK
+﻿#TEST FIXTURE - NOT A REAL CIS BENCHMARK
 #
 # Fabricated .audit file used to exercise every custom_item shape the real
-# parser handles (Build-CisIndex.ps1) and every outcome of the "CIS -
+# parser handles (Build-Index.ps1 -Kind Cis) and every outcome of the "CIS -
 # Missing ADMX templates" / "CIS - Catalog gaps" reports (GpEdit.ps1). See
 # Claude_Plan/plan-gpedit-cis-admx-check.md.
 #
 # Lives under src\Tests\Fixtures (NOT src\DefaultData\Audit - that folder is
-# real bundled benchmark data, loaded by default by Build-CisIndex.ps1/the
+# real bundled benchmark data, loaded by default by Build-Index.ps1 -Kind Cis/the
 # app). Always point -AuditFilesPath at an ISOLATED copy of just this file
 # when building an index from it - never mix it into a folder that also has
 # the real benchmark files, or its fake CIS numbers/entries would pollute

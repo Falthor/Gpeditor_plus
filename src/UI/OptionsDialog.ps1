@@ -1,4 +1,4 @@
-<#
+﻿<#
     File > Options: sidebar (Path / File / Others / Close) on the left,
     right panel toggles between the 3 tabs (Close just closes the window).
 #>
@@ -212,7 +212,7 @@ function Invoke-CisIndexRebuild {
         Rebuilds cis-index.json from the current Audit files folder
         (synchronous), then reloads $script:CisIndex so the running session
         reflects the change without a restart. The Dispatcher.Invoke forces
-        WPF to render the BusyOverlay before the blocking Build-CisIndex.ps1
+        WPF to render the BusyOverlay before the blocking Build-Index.ps1 -Kind Cis
         call - just setting Visibility isn't enough, WPF only paints it
         after this handler returns otherwise. The folder fingerprint is
         stored in meta.sourceFingerprint so GpEdit.ps1 can skip rebuilding
@@ -233,7 +233,7 @@ function Invoke-CisIndexRebuild {
     try {
         $outputPath = Join-Path $IndexDir 'cis-index.json'
         $fingerprint = Get-AuditFilesFingerprint -AuditFilesPath $AuditFilesPath
-        & (Join-Path $ScriptRoot 'Indexers\Build-CisIndex.ps1') -AuditFilesPath $AuditFilesPath -OutputPath $outputPath -SourceFingerprint $fingerprint
+        & (Join-Path $ScriptRoot 'Indexers\Build-Index.ps1') -Kind Cis -AuditFilesPath $AuditFilesPath -OutputPath $outputPath -SourceFingerprint $fingerprint
         $script:CisIndex = Import-CisIndex -Path $outputPath
     }
     catch {

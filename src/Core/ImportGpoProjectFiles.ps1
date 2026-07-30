@@ -1,4 +1,4 @@
-<#
+﻿<#
     "File > Import" - reads an exported Group Policy project folder (same
     layout Export-GpoProjectFiles writes, see GpEdit.ps1) and applies it FOR
     REAL, IMMEDIATELY, to the live machine (secedit.sdb, real registry.pol
@@ -138,13 +138,13 @@ function Get-LiveAuditCsvRows { return Read-AuditCsv -Path $script:RealAuditCsvP
 # --- Diff engine -------------------------------------------------------------
 
 function Get-DiffIndexPair {
-    # Runs Build-SecurityIndex.ps1/Build-AdvancedAuditIndex.ps1 TWICE each
-    # (once against the live snapshot, once against the imported files) to
+    # Runs Build-Index.ps1 TWICE per kind (Security, AdvancedAudit): once
+    # against the live snapshot, once against the imported files, both to
     # throwaway JSON - reuses the app's own index builders rather than
     # writing bespoke catalog-walking code. Returns the 4 flat settings
     # arrays plus an id-keyed hashtable for each, for O(1) live-vs-import
     # lookup (id = "$section::$name" for security, "AdvAudit::{guid}" for
-    # audit - see Build-SecurityIndex.ps1/Build-AdvancedAuditIndex.ps1).
+    # audit - see Build-Index.ps1).
     param(
         [Parameter(Mandatory)][string]$ScriptRoot,
         [Parameter(Mandatory)][string]$LiveSecEditInfPath,
@@ -161,10 +161,10 @@ function Get-DiffIndexPair {
         $audLivePath = Join-Path $tmp 'aud-live.json'
         $audImportPath = Join-Path $tmp 'aud-import.json'
 
-        & (Join-Path $ScriptRoot 'Indexers\Build-SecurityIndex.ps1') -SecEditInfPath $LiveSecEditInfPath -OutputPath $secLivePath | Out-Null
-        & (Join-Path $ScriptRoot 'Indexers\Build-SecurityIndex.ps1') -SecEditInfPath $ImportSecEditInfPath -OutputPath $secImportPath | Out-Null
-        & (Join-Path $ScriptRoot 'Indexers\Build-AdvancedAuditIndex.ps1') -AuditCsvPath $LiveAuditCsvPath -OutputPath $audLivePath | Out-Null
-        & (Join-Path $ScriptRoot 'Indexers\Build-AdvancedAuditIndex.ps1') -AuditCsvPath $ImportAuditCsvPath -OutputPath $audImportPath | Out-Null
+        & (Join-Path $ScriptRoot 'Indexers\Build-Index.ps1') -Kind Security -SecEditInfPath $LiveSecEditInfPath -OutputPath $secLivePath | Out-Null
+        & (Join-Path $ScriptRoot 'Indexers\Build-Index.ps1') -Kind Security -SecEditInfPath $ImportSecEditInfPath -OutputPath $secImportPath | Out-Null
+        & (Join-Path $ScriptRoot 'Indexers\Build-Index.ps1') -Kind AdvancedAudit -AuditCsvPath $LiveAuditCsvPath -OutputPath $audLivePath | Out-Null
+        & (Join-Path $ScriptRoot 'Indexers\Build-Index.ps1') -Kind AdvancedAudit -AuditCsvPath $ImportAuditCsvPath -OutputPath $audImportPath | Out-Null
 
         $secLive = @((Get-Content -Raw -Encoding UTF8 $secLivePath | ConvertFrom-Json).settings)
         $secImport = @((Get-Content -Raw -Encoding UTF8 $secImportPath | ConvertFrom-Json).settings)
@@ -287,7 +287,7 @@ function Get-AdvancedSecurityDiffRows {
 
 function Get-AdvancedAuditDiffRows {
     # Same Change/Add split as Get-AdvancedSecurityDiffRows, over the
-    # Advanced Audit settings array. Build-AdvancedAuditIndex.ps1's item
+    # Advanced Audit settings array. Build-Index.ps1 -Kind AdvancedAudit's item
     # shape (isConfigured/rawValue/valueType='audit') matches what
     # Format-SecuritySettingValue already expects, so it is reused as-is -
     # no separate audit-only formatter needed.
@@ -350,7 +350,7 @@ function Get-AdvancedAuditDiffRows {
 function Get-AdmxPolicyStateSummaryText {
     # Base Enabled/Disabled/Not Configured label (Get-AdmxPolicyStateLabel,
     # PolicyState.ps1) plus configured element values, resolving enum choices
-    # to their .adml display labels (Build-AdmxIndex.ps1's element shape:
+    # to their .adml display labels (Build-Index.ps1 -Kind Admx's element shape:
     # .id/.type/.label/.items[].value/.items[].displayName) where available.
     # Nothing at this fidelity exists elsewhere in the app today - flagged in
     # the plan as the highest-risk net-new piece.

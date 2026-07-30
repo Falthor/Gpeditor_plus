@@ -93,9 +93,7 @@ src/
 │   ├── AuditCsvFile.ps1
 │   └── ChangelogFile.ps1
 ├── Indexers/                 # Builds JSON indexes (data/*.json)
-│   ├── Build-AdmxIndex.ps1
-│   ├── Build-AdvancedAuditIndex.ps1
-│   ├── Build-CisIndex.ps1
+│   ├── Build-Index.ps1                   # -Kind Admx|Security|AdvancedAudit|Cis
 │   ├── PolicyDefinitionsFingerprint.ps1  # ADMX freshness detection
 │   └── AuditFilesFingerprint.ps1         # CIS audit freshness detection
 ├── Policy/                   # Current-state read / change write

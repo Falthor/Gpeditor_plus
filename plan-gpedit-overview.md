@@ -117,13 +117,18 @@ navigation/restoration).
   recommendations loaded from `cis-index.json`. Supports per-entry user
   overrides, OS-based default profile detection via WMI, and
   profile-specific recommended-value lookup.
-- `Build-AdmxIndex.ps1` — parses all `.admx`/`.adml` (en-US) under
+- `Build-Index.ps1` — single index builder for all four kinds, selected
+  by `-Kind` (the four former `Build-*Index.ps1` scripts were merged into
+  it on 2026-07-31, see `plan-gpedit-script-consolidation.md` §Candidate 4).
+  Still invoked with `&`, never dot-sourced, so each run keeps its own
+  scope and per-kind strict mode:
+- `-Kind Admx` — parses all `.admx`/`.adml` (en-US) under
   `PolicyDefinitions` → `admx-index.json`.
-- `Build-SecurityIndex.ps1` — merges `SecurityCatalog.ps1` with live
+- `-Kind Security` — merges `SecurityCatalog.ps1` with live
   `secedit.inf` state → `security-index.json`.
-- `Build-AdvancedAuditIndex.ps1` — merges `AdvancedAuditCatalog.ps1`
+- `-Kind AdvancedAudit` — merges `AdvancedAuditCatalog.ps1`
   with `audit.csv` state → `advanced-audit-index.json`.
-- `Build-CisIndex.ps1` — parses the `.audit` files (Tenable/Nessus-format
+- `-Kind Cis` — parses the `.audit` files (Tenable/Nessus-format
   CIS Benchmark exports, 24 files under `DefaultData\Audit\`, covering
   Windows 10/11 and Server 2016/2019/2022/2025, various levels/roles)
   into `cis-index.json`, grouped by profile
