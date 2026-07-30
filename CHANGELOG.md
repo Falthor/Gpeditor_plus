@@ -5,6 +5,30 @@ section per release date, most recent first. This file is the single
 source for the "Release Notes" panel in the right-hand pane and for
 ? > Patch note
 
+## 2026-07-31 — Four CIS controls the app could not reach
+
+- Added two missing Security Settings: "Relax minimum password length
+  limits" (under Account Policies > Password Policy, as in the standard
+  console) and "Network security: LDAP client encryption requirements"
+  (Local Policies > Security Options) - the latter is a different setting
+  from the already-present "LDAP client *signing* requirements", despite the
+  near-identical name.
+- Fix: "Allow Administrator account lockout" showed CIS = No and vanished
+  when filtering by CIS profile, although the benchmark does cover it.
+- Fix: settings added to the app's security catalog by a new version never
+  appeared on a machine that had already run the app once - the catalog was
+  only seeded on a first run. New settings are now merged in at startup,
+  leaving any setting you renamed or re-explained in Editor Mode untouched.
+- Fix: six CIS controls needing a Group Policy template Windows does not
+  ship (NetBT NodeType configuration and two other MS Security Guide items,
+  plus one AppX and two Lanman ones) were listed under View > "CIS - Catalog
+  gaps" with no explanation, instead of under "CIS - Missing ADMX templates"
+  naming the template to install (`SecGuide.admx`, `AppXRuntime.admx`,
+  `LanmanServer.admx`, `LanmanWorkstation.admx`).
+- Fix: "New Group Policy > CIS Gap-fill/Full compliance" wrote a malformed
+  registry type for most Security Options settings (REG_NONE instead of
+  REG_DWORD). Settings edited by hand were never affected.
+
 ## 2026-07-31 — Index builders merged into a single script
 
 - The four index builders (`Build-AdmxIndex.ps1`, `Build-SecurityIndex.ps1`,
