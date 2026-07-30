@@ -1,0 +1,282 @@
+#TEST FIXTURE - NOT A REAL CIS BENCHMARK
+#
+# Fabricated .audit file used to exercise every custom_item shape the real
+# parser handles (Build-CisIndex.ps1) and every outcome of the "CIS -
+# Missing ADMX templates" / "CIS - Catalog gaps" reports (GpEdit.ps1). See
+# Claude_Plan/plan-gpedit-cis-admx-check.md.
+#
+# Lives under src\Tests\Fixtures (NOT src\DefaultData\Audit - that folder is
+# real bundled benchmark data, loaded by default by Build-CisIndex.ps1/the
+# app). Always point -AuditFilesPath at an ISOLATED copy of just this file
+# when building an index from it - never mix it into a folder that also has
+# the real benchmark files, or its fake CIS numbers/entries would pollute
+# the real cis-index.json.
+#
+#<spec>
+#  <type>CIS</type>
+#  <name>Microsoft Windows FAKE-TEST Benchmark</name>
+#  <profile>L1</profile>
+#  <version>9.9.9</version>
+#</spec>
+
+<check_type:"Windows" version:"2">
+  <group_policy:"WMI">
+
+    <!-- 1. REGISTRY_SETTING, reachable - real ADMX policy (NTP Client), no
+         solution note. Expect: NOT in Missing ADMX, NOT in Catalog gaps
+         (reached via admx-index.json). -->
+    <custom_item>
+      type        : REGISTRY_SETTING
+      description : "99.1 Ensure 'FAKE - NTP passthrough test' is set to 'Enabled'"
+      info        : "Fabricated wrapper around a real ADMX-backed setting to verify a genuinely reachable control is never reported as a gap.
+
+The recommended state for this setting is: Enabled."
+      value_type  : POLICY_DWORD
+      value_data  : "1"
+      reg_key     : "HKLM\Software\Policies\Microsoft\W32Time\TimeProviders\NtpClient"
+      reg_item    : "Enabled"
+    </custom_item>
+
+    <!-- 2. REGISTRY_SETTING, catalog gap - fictional key, no solution note.
+         Expect: IN Catalog gaps, NOT in Missing ADMX. -->
+    <custom_item>
+      type        : REGISTRY_SETTING
+      description : "99.2 Ensure 'FAKE - Fictitious registry feature' is set to 'Enabled'"
+      info        : "Fabricated control with no real backing anywhere (ADMX or Security Options) and no ADMX dependency note - models a true catalog gap (plan-gpedit-cis-admx-check.md §3.2/3.3/3.4).
+
+The recommended state for this setting is: Enabled."
+      value_type  : POLICY_DWORD
+      value_data  : "1"
+      reg_key     : "Software\Policies\FictitiousTestVendor\FakeFeature"
+      reg_item    : "EnableFakeFeature"
+    </custom_item>
+
+    <!-- 3. REGISTRY_SETTING, missing ADMX - fictional key WITH a solution
+         note naming a (fictional) required template. Expect: IN Missing
+         ADMX, NOT in Catalog gaps. -->
+    <custom_item>
+      type        : REGISTRY_SETTING
+      description : "99.3 Ensure 'FAKE - Fictitious feature needing a template' is set to 'Enabled'"
+      info        : "Fabricated control whose solution field carries an ADMX dependency note - models the existing 'Missing ADMX templates' case (plan §1/§2).
+
+The recommended state for this setting is: Enabled."
+      solution    : "To establish the recommended configuration via GP, set the following UI path to Enabled :
+
+Computer Configuration\Policies\Administrative Templates\Fake Test Category\FAKE - Fictitious feature needing a template
+
+Note: This Group Policy path does not exist by default. An additional Group Policy template ( FakeTestTemplate.admx/adml ) is required - this is a fabricated ADMX dependency note for test purposes only."
+      value_type  : POLICY_DWORD
+      value_data  : "1"
+      reg_key     : "Software\Policies\FictitiousTestVendor\FakeFeature2"
+      reg_item    : "EnableFakeFeature2"
+    </custom_item>
+
+    <!-- 4. REG_CHECK, reachable - real Security Options "Registry Values"
+         entry (Accounts: Limit local account use of blank passwords).
+         Fields are swapped vs. REGISTRY_SETTING (value_data = path,
+         key_item = value name - see Get-CisMatchKey's REG_CHECK case).
+         Expect: NOT in Missing ADMX, NOT in Catalog gaps. -->
+    <custom_item>
+      type        : REG_CHECK
+      description : "99.4 Ensure 'FAKE - Blank password use passthrough test' is set to 'Enabled'"
+      info        : "Fabricated wrapper around a real Security Options Registry Values entry to verify the Section='Registry Values' reached-path (Get-CisRecommendationForSecuritySetting) is honored.
+
+The recommended state for this setting is: Enabled."
+      value_type  : POLICY_DWORD
+      value_data  : "System\CurrentControlSet\Control\Lsa"
+      key_item    : "LimitBlankPasswordUse"
+    </custom_item>
+
+    <!-- 5. REG_CHECK, catalog gap - fictional path/item. Expect: IN
+         Catalog gaps, NOT in Missing ADMX. -->
+    <custom_item>
+      type        : REG_CHECK
+      description : "99.5 Ensure 'FAKE - Fictitious REG_CHECK feature' is set to 'Enabled'"
+      info        : "Fabricated REG_CHECK control with no real backing anywhere.
+
+The recommended state for this setting is: Enabled."
+      value_type  : POLICY_DWORD
+      value_data  : "System\FictitiousTestPath\DoesNotExist"
+      key_item    : "FictitiousValueName"
+    </custom_item>
+
+    <!-- 6. PASSWORD_POLICY, reachable - real key already in
+         CisPasswordLockoutKeyMap (MinimumPasswordLength ->
+         MINIMUM_PASSWORD_LENGTH). Expect: NOT in Missing ADMX, NOT in
+         Catalog gaps. -->
+    <custom_item>
+      type            : PASSWORD_POLICY
+      description     : "99.6 Ensure 'FAKE - Minimum password length passthrough test' is set to '14 or more character(s)'"
+      info            : "Fabricated wrapper around a real Password Policy key to verify the byPasswordPolicy reached-path (CisPasswordLockoutKeyMap) is honored.
+
+The recommended state for this setting is: 14 or more character(s)."
+      value_type      : POLICY_DWORD
+      value_data      : "14"
+      password_policy : MINIMUM_PASSWORD_LENGTH
+    </custom_item>
+
+    <!-- 7. PASSWORD_POLICY, catalog gap - fictional key, NOT in
+         CisPasswordLockoutKeyMap. Mirrors the real "Allow Administrator
+         account lockout" bug (plan §3.1), but here it's a genuinely
+         uncatalogued key rather than a mapping omission - both produce the
+         exact same symptom. Expect: IN Catalog gaps, NOT in Missing ADMX. -->
+    <custom_item>
+      type            : PASSWORD_POLICY
+      description     : "99.7 Ensure 'FAKE - Fictitious password rule' is set to 'Enabled'"
+      info            : "Fabricated Password Policy control with a key absent from CisPasswordLockoutKeyMap.
+
+The recommended state for this setting is: Enabled."
+      value_type      : POLICY_DWORD
+      value_data      : "1"
+      password_policy : FICTITIOUS_PASSWORD_RULE
+    </custom_item>
+
+    <!-- 8. LOCKOUT_POLICY, reachable - real key (LockoutBadCount ->
+         LOCKOUT_THRESHOLD). Expect: NOT in Missing ADMX, NOT in Catalog
+         gaps. -->
+    <custom_item>
+      type           : LOCKOUT_POLICY
+      description    : "99.8 Ensure 'FAKE - Account lockout threshold passthrough test' is set to '5 or fewer invalid logon attempt(s)'"
+      info           : "Fabricated wrapper around a real Account Lockout Policy key.
+
+The recommended state for this setting is: 5 or fewer invalid logon attempt(s)."
+      value_type     : POLICY_DWORD
+      value_data     : "5"
+      lockout_policy : LOCKOUT_THRESHOLD
+    </custom_item>
+
+    <!-- 9. LOCKOUT_POLICY, catalog gap - fictional key. Expect: IN Catalog
+         gaps, NOT in Missing ADMX. -->
+    <custom_item>
+      type           : LOCKOUT_POLICY
+      description    : "99.9 Ensure 'FAKE - Fictitious lockout rule' is set to 'Enabled'"
+      info           : "Fabricated Account Lockout Policy control with a key absent from CisPasswordLockoutKeyMap.
+
+The recommended state for this setting is: Enabled."
+      value_type     : POLICY_DWORD
+      value_data     : "1"
+      lockout_policy : FICTITIOUS_LOCKOUT_RULE
+    </custom_item>
+
+    <!-- 10. USER_RIGHTS_POLICY, reachable - real UserRightsCatalog key
+         (SeBackupPrivilege). Expect: NOT in Missing ADMX, NOT in Catalog
+         gaps. -->
+    <custom_item>
+      type        : USER_RIGHTS_POLICY
+      description : "99.10 Ensure 'FAKE - Backup privilege passthrough test' is set to 'Administrators'"
+      info        : "Fabricated wrapper around a real User Rights Assignment entry.
+
+The recommended state for this setting is: Administrators."
+      value_type  : POLICY_MULTI_TEXT
+      value_data  : "Administrators"
+      right_type  : SeBackupPrivilege
+    </custom_item>
+
+    <!-- 11. USER_RIGHTS_POLICY, catalog gap - fictional right_type. Expect:
+         IN Catalog gaps, NOT in Missing ADMX. -->
+    <custom_item>
+      type        : USER_RIGHTS_POLICY
+      description : "99.11 Ensure 'FAKE - Fictitious privilege' is set to 'No One'"
+      info        : "Fabricated User Rights Assignment control with a right_type absent from UserRightsCatalog.
+
+The recommended state for this setting is: No One."
+      value_type  : POLICY_MULTI_TEXT
+      value_data  : ""
+      right_type  : SeFictitiousTestPrivilege
+    </custom_item>
+
+    <!-- 12. AUDIT_POLICY_SUBCATEGORY, reachable - real subcategory name
+         (Credential Validation). Expect: NOT in Missing ADMX, NOT in
+         Catalog gaps. -->
+    <custom_item>
+      type                     : AUDIT_POLICY_SUBCATEGORY
+      description              : "99.12 Ensure 'FAKE - Credential Validation passthrough test' is set to 'Success and Failure'"
+      info                     : "Fabricated wrapper around a real Advanced Audit Policy subcategory.
+
+The recommended state for this setting is: Success and Failure."
+      value_type               : AUDIT_SET
+      value_data               : "Success, Failure"
+      audit_policy_subcategory : "Credential Validation"
+    </custom_item>
+
+    <!-- 13. AUDIT_POLICY_SUBCATEGORY, catalog gap - fictional subcategory
+         name. Expect: IN Catalog gaps, NOT in Missing ADMX. -->
+    <custom_item>
+      type                     : AUDIT_POLICY_SUBCATEGORY
+      description              : "99.13 Ensure 'FAKE - Fictitious audit subcategory' is set to 'Success and Failure'"
+      info                     : "Fabricated Advanced Audit Policy control with a subcategory name absent from AdvancedAuditCatalog.ps1.
+
+The recommended state for this setting is: Success and Failure."
+      value_type               : AUDIT_SET
+      value_data               : "Success, Failure"
+      audit_policy_subcategory : "Fictitious Test Subcategory"
+    </custom_item>
+
+    <!-- 14. CHECK_ACCOUNT (rename), byOrgValue - deliberately organization-
+         specific (Get-CisMatchKey's CHECK_ACCOUNT case), no universal
+         recommended value. Expect: NEVER appears in either report (byOrgValue
+         is not in $script:CisIndexBuckets, see CisCatalog.ps1). -->
+    <custom_item>
+      type         : CHECK_ACCOUNT
+      description  : "99.14 Ensure 'FAKE - Fictitious Administrator account name' is not set to default"
+      info         : "Fabricated rename-account check - organization-specific, no fixed recommended value.
+
+The recommended state for this setting is: any value other than the default."
+      value_type   : POLICY_TEXT
+      check_type   : CHECK_NOT_EQUAL
+      value_data   : "Administrator"
+      account_type : ADMINISTRATOR_ACCOUNT
+    </custom_item>
+
+    <!-- 15. BANNER_CHECK, byOrgValue - same exclusion as above. Expect:
+         NEVER appears in either report. -->
+    <custom_item>
+      type        : BANNER_CHECK
+      description : "99.15 Ensure 'FAKE - Fictitious logon banner text' is configured"
+      info        : "Fabricated logon banner text check - organization-specific, no fixed recommended value."
+      value_type  : POLICY_TEXT
+      value_data  : "@LEGAL_NOTICE_TEXT@"
+      reg_key     : "Software\Microsoft\Windows\CurrentVersion\Policies\System"
+      reg_item    : "LegalNoticeText"
+    </custom_item>
+
+    <!-- 16. ANONYMOUS_SID_SETTING, purely fictional title - no reg_key at
+         all (see Get-CisMatchKey: this type is never given a location
+         field), and the title has no substring match against any real
+         SecurityCatalog/ADMX DisplayName, so the title-fallback pass
+         (Resolve-CisTitleAutomatically) cannot auto-resolve it either.
+         Expect: flagged needsManualReview, absent from every bucket - never
+         appears in either report, doesn't throw. Models a genuinely new,
+         not-yet-catalogued setting (distinct from a "catalog gap": this one
+         isn't even matchable by title, cis-fallback-map.json would need a
+         manual entry first). -->
+    <custom_item>
+      type        : ANONYMOUS_SID_SETTING
+      description : "99.16 Ensure 'FAKE - Totally fictitious unmatched setting' is set to 'Enabled'"
+      info        : "Fabricated setting whose title matches nothing in Data_SecurityCatalog.json or admx-index.json - exercises the needsManualReview path.
+
+The recommended state for this setting is: Enabled."
+      value_type  : POLICY_TEXT
+      value_data  : "1"
+    </custom_item>
+
+  </group_policy>
+</check_type>
+
+<!-- 17. Deliberately OUTSIDE any <custom_item> type this parser recognizes:
+     a fictional "SERVICE_POLICY" type, modeling the real, currently
+     unimplemented Windows Services (5.x) / Firewall (9.2.x/9.3.x) domain
+     (plan §2/§4 - "hors périmètre de ce plan", needs its own read/write
+     mechanism). Get-CisMatchKey's switch has no case for it, falls to
+     default => $null => counted as Skipped, never enters any bucket.
+     Expect: never appears anywhere, and Counters.Skipped increases by 1. -->
+<custom_item>
+  type        : SERVICE_POLICY
+  description : "99.17 Ensure 'Fictitious Test Service (FakeTestSvc)' is set to 'Disabled'"
+  info        : "Fabricated Windows Service check - out of scope for this app (no Services domain implemented yet).
+
+The recommended state for this setting is: Disabled."
+  value_type  : POLICY_TEXT
+  value_data  : "4"
+  svc_name    : "FakeTestSvc"
+</custom_item>

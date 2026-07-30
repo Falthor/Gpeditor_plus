@@ -861,6 +861,149 @@ function Resolve-CisSecurityWrite {
     }
 }
 
+function Get-CisProfileCoverageMaps {
+    <#
+        Shared by Get-CisMissingAdmxReport and Get-CisCatalogGapsReport: both
+        windows list cis-index.json entries that are "covered but not
+        reached" for the active profile - they only disagree on WHICH
+        subset (does the source .audit's "solution" field explain the gap
+        via an ADMX template note, or not). Computing this once avoids the
+        two reports silently drifting apart on what "covered"/"reached"
+        means (real risk: this pairing is subtle - see plan-gpedit-cis-admx-check.md).
+
+        Covered: entries with a recommendation for this exact profile
+        (Get-CisRecommendationValueForProfile non-null).
+        Reached: of those, which show up as a row somewhere in the app right
+        now (real ADMX policy / Security catalog entry / Advanced Audit
+        subcategory currently loaded on this machine resolves to it).
+
+        Takes $CisIndex/$AdmxIndex explicitly (not $script:CisIndex/
+        $script:admxIndex) so this - and the two reports built on top of it -
+        can be unit-tested against a fixture index without loading GpEdit.ps1
+        (the whole app, with WPF wiring at global scope) - see the
+        "CIS - Catalog gaps"/"CIS - Missing ADMX templates" Describe block in
+        Gpeditor_plus.Tests.ps1.
+    #>
+    param($CisIndex, $AdmxIndex, $ActiveProfile)
+
+    $covered = @{}
+    if ($null -eq $ActiveProfile) { return [pscustomobject]@{ Covered = $covered; Reached = @{} } }
+
+    $buckets = @('byRegistry', 'byPasswordPolicy', 'byLockoutPolicy', 'byUserRight', 'byAuditSubcategory', 'byTitle')
+    foreach ($bucketName in $buckets) {
+        $bucketObj = Get-CisIndexBucket -CisIndex $CisIndex -BucketName $bucketName
+        if ($null -eq $bucketObj) { continue }
+        foreach ($entryProp in $bucketObj.PSObject.Properties) {
+            $entry = $entryProp.Value
+            $value = Get-CisRecommendationValueForProfile -CisEntry $entry -ActiveProfile $ActiveProfile
+            if ($null -eq $value) { continue }
+            $covered["$bucketName::$($entryProp.Name)"] = $entry
+        }
+    }
+
+    $reached = @{}
+    foreach ($pol in @($AdmxIndex.policies)) {
+        $match = Get-CisRecommendationForAdmxPolicy -CisIndex $CisIndex -Policy $pol
+        if ($null -ne $match.CisEntry) { $reached["$($match.CisEntry.bucket)::$($match.CisEntry.key)"] = $true }
+    }
+    foreach ($setting in (Get-SecurityCatalogEntries)) {
+        $cisRec = Get-CisRecommendationForSecuritySetting -CisIndex $CisIndex -Section $setting.section -Name $setting.name -DisplayName $setting.displayName
+        if ($null -ne $cisRec) { $reached["$($cisRec.bucket)::$($cisRec.key)"] = $true }
+    }
+    foreach ($sub in (Get-AdvancedAuditCatalogEntries)) {
+        $cisRec = Get-CisRecommendationForAuditSubcategory -CisIndex $CisIndex -SubcategoryNameEn $sub.name
+        if ($null -ne $cisRec) { $reached["$($cisRec.bucket)::$($cisRec.key)"] = $true }
+    }
+
+    return [pscustomobject]@{ Covered = $covered; Reached = $reached }
+}
+
+function Get-CisMissingAdmxReport {
+    <#
+        For the given active CIS profile, lists cis-index.json entries that
+        are covered but not reached (Get-CisProfileCoverageMaps) AND have a
+        non-null requiredAdmx (Build-CisIndex.ps1 found an ADMX dependency
+        note in the source .audit's "solution" field) - settings with no
+        ADMX mechanism at all (Windows Services, firewall profiles...) are
+        deliberately excluded, they're not actionable via this window.
+        Feeds "View > CIS - Missing ADMX templates" (GpEdit.ps1 passes
+        $script:CisIndex/$script:admxIndex/$script:CisActiveProfileForColumn).
+        Computed on demand (menu click), not cached - cheap enough (thousands
+        of policies, once) that it doesn't need to run on every launch/profile change.
+    #>
+    param($CisIndex, $AdmxIndex, $ActiveProfile)
+
+    if ($null -eq $ActiveProfile) { return , (New-Object System.Collections.Generic.List[object]) }
+
+    $maps = Get-CisProfileCoverageMaps -CisIndex $CisIndex -AdmxIndex $AdmxIndex -ActiveProfile $ActiveProfile
+
+    $rows = New-Object System.Collections.Generic.List[object]
+    foreach ($key in $maps.Covered.Keys) {
+        if ($maps.Reached.ContainsKey($key)) { continue }
+        $entry = $maps.Covered[$key]
+        if ($null -eq $entry.requiredAdmx) { continue }
+        $cisNumber = ($entry.profiles | Where-Object {
+            $_.benchmark -eq $ActiveProfile.Benchmark -and $_.version -eq $ActiveProfile.Version -and
+            $_.level -eq $ActiveProfile.Level -and $_.role -eq $ActiveProfile.Role
+        } | Select-Object -First 1).cisNumber
+        $rows.Add([pscustomobject]@{
+            CisNumber   = $cisNumber
+            Title       = $entry.title
+            AdmxFile    = $entry.requiredAdmx.file
+            Category    = $entry.requiredAdmx.category
+            VersionText = $entry.requiredAdmx.versionText
+            IsPresent   = (Get-CisAdmxTemplatePresence -AdmxIndex $AdmxIndex -AdmxFile $entry.requiredAdmx.file)
+        })
+    }
+    return , ($rows | Sort-Object CisNumber)
+}
+
+function Get-CisCatalogGapsReport {
+    <#
+        Same "covered but not reached" set as Get-CisMissingAdmxReport
+        (Get-CisProfileCoverageMaps), but the OTHER half of it: entries with
+        NO requiredAdmx note either - nothing in the source .audit file
+        explains why the app can't resolve them. Unlike a missing ADMX
+        template, these are never fixed by the user installing something:
+        either a catalog entry is missing (Data_SecurityCatalog.json,
+        AdvancedAuditCatalog.ps1...) or a code-level mapping is incomplete
+        (e.g. CisPasswordLockoutKeyMap) - see plan-gpedit-cis-admx-check.md
+        §3, the 4 items ("Allow Administrator account lockout", "Relax
+        minimum password length limits", "NetBT NodeType configuration",
+        "Network security: LDAP client encryption requirements") that
+        motivated this report: none of them had a solution-field ADMX note,
+        so they were invisible even to "Missing ADMX templates".
+        Feeds "View > CIS - Catalog gaps" (GpEdit.ps1 passes
+        $script:CisIndex/$script:admxIndex/$script:CisActiveProfileForColumn).
+        Computed on demand (menu click), same reasoning as Get-CisMissingAdmxReport.
+    #>
+    param($CisIndex, $AdmxIndex, $ActiveProfile)
+
+    if ($null -eq $ActiveProfile) { return , (New-Object System.Collections.Generic.List[object]) }
+
+    $maps = Get-CisProfileCoverageMaps -CisIndex $CisIndex -AdmxIndex $AdmxIndex -ActiveProfile $ActiveProfile
+
+    $rows = New-Object System.Collections.Generic.List[object]
+    foreach ($key in $maps.Covered.Keys) {
+        if ($maps.Reached.ContainsKey($key)) { continue }
+        $entry = $maps.Covered[$key]
+        if ($null -ne $entry.requiredAdmx) { continue }
+        $cisNumber = ($entry.profiles | Where-Object {
+            $_.benchmark -eq $ActiveProfile.Benchmark -and $_.version -eq $ActiveProfile.Version -and
+            $_.level -eq $ActiveProfile.Level -and $_.role -eq $ActiveProfile.Role
+        } | Select-Object -First 1).cisNumber
+        $rows.Add([pscustomobject]@{
+            CisNumber        = $cisNumber
+            Title            = $entry.title
+            Bucket           = $entry.bucket
+            RegistryKey      = $entry.regKey
+            RegistryValue    = $entry.regItem
+            RecommendedState = Get-CisRecommendationValueForProfile -CisEntry $entry -ActiveProfile $ActiveProfile
+        })
+    }
+    return , ($rows | Sort-Object CisNumber)
+}
+
 function Get-CisRecommendationStateText {
     <#
         Text following "The recommended state for this setting is:" in a

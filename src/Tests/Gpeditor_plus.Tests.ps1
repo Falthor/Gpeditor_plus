@@ -905,4 +905,146 @@ Describe 'CisCatalog' -Tag 'Integration' {
             Get-CisRecommendationStateText -CisEntry $rec | Should -Be 'No One'
         }
     }
+
+    Context 'Get-CisMissingAdmxReport / Get-CisCatalogGapsReport (plan-gpedit-cis-admx-check.md)' {
+        <#
+            Fixture-driven: src\Tests\Fixtures\CIS_Microsoft_Windows_FAKE-TEST_v9.9.9_L1.audit
+            has one fabricated custom_item per shape the real parser handles
+            (REGISTRY_SETTING, REG_CHECK, PASSWORD_POLICY, LOCKOUT_POLICY,
+            USER_RIGHTS_POLICY, AUDIT_POLICY_SUBCATEGORY, CHECK_ACCOUNT,
+            BANNER_CHECK, ANONYMOUS_SID_SETTING, and an unrecognized type
+            modeling Windows Services/Firewall) - built ALONE in its own
+            $TestDrive folder, never mixed with the real 23 benchmark files.
+
+            The ADMX index is a small hand-built fixture (NOT
+            Build-AdmxIndex.ps1 against this machine's real
+            C:\Windows\PolicyDefinitions) so this test stays deterministic
+            and machine-independent, unlike the manual verification pass
+            this test formalizes. Security Options / Password / Lockout /
+            User Rights / Advanced Audit "reached" cases instead reuse real,
+            stable keys from the repo-bundled Data_SecurityCatalog.json /
+            AdvancedAuditCatalog.ps1 (already a dependency of every other
+            test in this file, not machine state).
+        #>
+
+        BeforeAll {
+            . (Join-Path $SrcRoot 'Catalogs\SecurityCatalog.ps1')
+            . (Join-Path $SrcRoot 'Catalogs\AdvancedAuditCatalog.ps1')
+
+            $fixtureAuditDir = Join-Path $TestDrive 'catalog-gaps-fixture'
+            New-Item -ItemType Directory -Path $fixtureAuditDir -Force | Out-Null
+            Copy-Item -LiteralPath (Join-Path $SrcRoot 'Tests\Fixtures\CIS_Microsoft_Windows_FAKE-TEST_v9.9.9_L1.audit') -Destination $fixtureAuditDir -Force
+
+            $fixtureOutputPath = Join-Path $TestDrive 'catalog-gaps-fixture-index.json'
+            & (Join-Path $SrcRoot 'Indexers\Build-CisIndex.ps1') -AuditFilesPath $fixtureAuditDir -OutputPath $fixtureOutputPath | Out-Null
+            $script:fixtureCisIndex = Import-CisIndex -Path $fixtureOutputPath
+            $script:fixtureProfile = (Get-CisDistinctProfiles -CisIndex $fixtureCisIndex) | Select-Object -First 1
+
+            # Only what fixture item #1 (real ADMX passthrough) needs to resolve as "reached".
+            $script:fixtureAdmxIndex = [pscustomobject]@{
+                policies = @(
+                    [pscustomobject]@{
+                        registryKey  = 'Software\Policies\Microsoft\W32Time\TimeProviders\NtpClient'
+                        valueName    = 'Enabled'
+                        enabledValue = 1
+                        disabledValue = 0
+                        elements     = @()
+                        admxFile     = 'W32Time.admx'
+                    }
+                )
+            }
+
+            $script:missingAdmxRows = Get-CisMissingAdmxReport -CisIndex $fixtureCisIndex -AdmxIndex $fixtureAdmxIndex -ActiveProfile $fixtureProfile
+            $script:catalogGapsRows = Get-CisCatalogGapsReport -CisIndex $fixtureCisIndex -AdmxIndex $fixtureAdmxIndex -ActiveProfile $fixtureProfile
+        }
+
+        It 'builds the fixture index with the expected Skipped/needsManualReview counts' {
+            # 2 Skipped: the unrecognized "SERVICE_POLICY" item (models
+            # Windows Services/Firewall, out of scope - plan §2/§4) PLUS the
+            # ANONYMOUS_SID_SETTING item below, which also counts towards
+            # Skipped once its title-fallback resolution fails (see
+            # Resolve-CisTitleFallbackCandidates: NeedsManualReview items are
+            # folded into Skipped too, not a separate disjoint count).
+            $fixtureCisIndex.meta.skippedItemCount | Should -Be 2
+            $fixtureCisIndex.meta.needsManualReviewCount | Should -Be 1
+        }
+
+        It 'never flags a setting reachable via a real ADMX policy (byRegistry)' {
+            (@($missingAdmxRows.Title) -match 'NTP passthrough').Count | Should -Be 0
+            (@($catalogGapsRows.Title) -match 'NTP passthrough').Count | Should -Be 0
+        }
+
+        It 'never flags a setting reachable via a real Security Options "Registry Values" entry (REG_CHECK)' {
+            (@($missingAdmxRows.Title) -match 'Blank password use passthrough').Count | Should -Be 0
+            (@($catalogGapsRows.Title) -match 'Blank password use passthrough').Count | Should -Be 0
+        }
+
+        It 'never flags a setting reachable via CisPasswordLockoutKeyMap (Password/Lockout Policy)' {
+            $allTitles = @($missingAdmxRows.Title) + @($catalogGapsRows.Title)
+            ($allTitles -match 'Minimum password length passthrough').Count | Should -Be 0
+            ($allTitles -match 'Account lockout threshold passthrough').Count | Should -Be 0
+        }
+
+        It 'never flags a setting reachable via a real User Right / Advanced Audit subcategory' {
+            $allTitles = @($missingAdmxRows.Title) + @($catalogGapsRows.Title)
+            ($allTitles -match 'Backup privilege passthrough').Count | Should -Be 0
+            ($allTitles -match 'Credential Validation passthrough').Count | Should -Be 0
+        }
+
+        It 'reports an unreached REGISTRY_SETTING/REG_CHECK with no requiredAdmx note as a Catalog gap, not Missing ADMX' {
+            (@($catalogGapsRows.Title) -match 'Fictitious registry feature').Count | Should -Be 1
+            (@($catalogGapsRows.Title) -match 'Fictitious REG_CHECK feature').Count | Should -Be 1
+            (@($missingAdmxRows.Title) -match 'Fictitious registry feature').Count | Should -Be 0
+            (@($missingAdmxRows.Title) -match 'Fictitious REG_CHECK feature').Count | Should -Be 0
+        }
+
+        It 'reports an unreached REGISTRY_SETTING WITH a requiredAdmx note as Missing ADMX, not a Catalog gap' {
+            (@($missingAdmxRows.Title) -match 'Fictitious feature needing a template').Count | Should -Be 1
+            (@($catalogGapsRows.Title) -match 'Fictitious feature needing a template').Count | Should -Be 0
+        }
+
+        It 'reports an unreached Password/Lockout/User Right/Audit Subcategory entry as a Catalog gap (the real 1.2.3-style bug this report exists for)' {
+            (@($catalogGapsRows.Title) -match 'Fictitious password rule').Count | Should -Be 1
+            (@($catalogGapsRows.Title) -match 'Fictitious lockout rule').Count | Should -Be 1
+            (@($catalogGapsRows.Title) -match 'Fictitious privilege').Count | Should -Be 1
+            (@($catalogGapsRows.Title) -match 'Fictitious audit subcategory').Count | Should -Be 1
+        }
+
+        It 'never reports a Catalog gap row with the wrong bucket label' {
+            ($catalogGapsRows | Where-Object { $_.Title -match 'Fictitious registry feature' }).Bucket | Should -Be 'byRegistry'
+            ($catalogGapsRows | Where-Object { $_.Title -match 'Fictitious password rule' }).Bucket | Should -Be 'byPasswordPolicy'
+            ($catalogGapsRows | Where-Object { $_.Title -match 'Fictitious lockout rule' }).Bucket | Should -Be 'byLockoutPolicy'
+            ($catalogGapsRows | Where-Object { $_.Title -match 'Fictitious privilege' }).Bucket | Should -Be 'byUserRight'
+            ($catalogGapsRows | Where-Object { $_.Title -match 'Fictitious audit subcategory' }).Bucket | Should -Be 'byAuditSubcategory'
+        }
+
+        It 'never surfaces organization-specific (byOrgValue) entries in either report' {
+            $allTitles = @($missingAdmxRows.Title) + @($catalogGapsRows.Title)
+            ($allTitles -match 'Fictitious Administrator account name').Count | Should -Be 0
+            ($allTitles -match 'Fictitious logon banner text').Count | Should -Be 0
+        }
+
+        It 'never surfaces an unresolved title-fallback (needsManualReview) entry in either report' {
+            $allTitles = @($missingAdmxRows.Title) + @($catalogGapsRows.Title)
+            ($allTitles -match 'Totally fictitious unmatched setting').Count | Should -Be 0
+        }
+
+        It 'never surfaces an unrecognized (Skipped) custom_item type in either report' {
+            $allTitles = @($missingAdmxRows.Title) + @($catalogGapsRows.Title)
+            ($allTitles -match 'Fictitious Test Service').Count | Should -Be 0
+        }
+
+        It 'returns empty lists (not $null, does not throw) when no CIS profile is active' {
+            # NOT wrapped in @() at the call site: Get-CisMissingAdmxReport/
+            # Get-CisCatalogGapsReport already "return , $list" (see
+            # Get-CisAllEntries's comment on this idiom) precisely so the
+            # caller gets the List[object] itself - wrapping the call in an
+            # extra @() would instead produce a 1-element array containing
+            # that (empty) list, making .Count report 1 instead of 0.
+            { Get-CisMissingAdmxReport -CisIndex $fixtureCisIndex -AdmxIndex $fixtureAdmxIndex -ActiveProfile $null } | Should -Not -Throw
+            { Get-CisCatalogGapsReport -CisIndex $fixtureCisIndex -AdmxIndex $fixtureAdmxIndex -ActiveProfile $null } | Should -Not -Throw
+            (Get-CisMissingAdmxReport -CisIndex $fixtureCisIndex -AdmxIndex $fixtureAdmxIndex -ActiveProfile $null).Count | Should -Be 0
+            (Get-CisCatalogGapsReport -CisIndex $fixtureCisIndex -AdmxIndex $fixtureAdmxIndex -ActiveProfile $null).Count | Should -Be 0
+        }
+    }
 }

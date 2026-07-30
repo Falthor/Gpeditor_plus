@@ -596,7 +596,7 @@ function Show-FilterDialog {
 function Show-CisMissingAdmxDialog {
     <#
         View > CIS - Missing ADMX templates. $Rows comes from
-        Get-CisMissingAdmxReport (GpEdit.ps1) - already filtered to the
+        Get-CisMissingAdmxReport (CisCatalog.ps1) - already filtered to the
         active profile and to entries with a non-null requiredAdmx. This
         function only maps Category -> translated label and
         IsPresent -> Yes/No label, and renders the intro text/grid.
@@ -625,6 +625,50 @@ function Show-CisMissingAdmxDialog {
             CategoryLabel = if ($categoryLabels.ContainsKey($row.Category)) { $categoryLabels[$row.Category] } else { $row.Category }
             VersionText   = $row.VersionText
             PresentLabel  = if ($row.IsPresent) { $Ui.CisYes } else { $Ui.CisNo }
+        })
+    }
+    $grid.ItemsSource = $items
+
+    $okButton = $window.FindName('OkButton')
+    $okButton.Content = $Ui.OkButton
+    $okButton.Add_Click({ param($EventSender, $e) $window.DialogResult = $true })
+    $null = $window.ShowDialog()
+}
+
+function Show-CisCatalogGapsDialog {
+    <#
+        View > CIS - Catalog gaps. $Rows comes from Get-CisCatalogGapsReport
+        (CisCatalog.ps1) - already filtered to the active profile and to
+        entries with no requiredAdmx note. This function only maps Bucket ->
+        translated label, builds the "Registry key\value" text, and renders
+        the intro text/grid.
+    #>
+    param($Owner, [string]$ScriptRoot, [Parameter(Mandatory)][hashtable]$Ui, [object[]]$Rows, [string]$ActiveProfileText)
+
+    $window = Import-XamlWindow -ScriptRoot $ScriptRoot -Name 'CisCatalogGapsWindow' -Owner $Owner
+    $window.Title = $Ui.CisCatalogGapsWindowTitle
+
+    $introText = $window.FindName('CisCatalogGapsIntroText')
+    $introText.Text = if ($ActiveProfileText) { $Ui.CisCatalogGapsIntroFormat -f $ActiveProfileText } else { $Ui.CisCatalogGapsNoActiveProfile }
+
+    $bucketLabels = @{
+        byRegistry         = $Ui.CisCatalogGapsBucketRegistry
+        byPasswordPolicy   = $Ui.CisCatalogGapsBucketPasswordPolicy
+        byLockoutPolicy    = $Ui.CisCatalogGapsBucketLockoutPolicy
+        byUserRight        = $Ui.CisCatalogGapsBucketUserRight
+        byAuditSubcategory = $Ui.CisCatalogGapsBucketAuditSubcategory
+        byTitle            = $Ui.CisCatalogGapsBucketTitleFallback
+    }
+
+    $grid = $window.FindName('CisCatalogGapsGrid')
+    $items = New-Object System.Collections.Generic.List[object]
+    foreach ($row in @($Rows)) {
+        $items.Add([pscustomobject]@{
+            CisNumber        = $row.CisNumber
+            Title            = $row.Title
+            BucketLabel      = if ($bucketLabels.ContainsKey($row.Bucket)) { $bucketLabels[$row.Bucket] } else { $row.Bucket }
+            RegistryText     = if ($row.RegistryKey -and $row.RegistryValue) { "$($row.RegistryKey)\$($row.RegistryValue)" } else { $null }
+            RecommendedState = $row.RecommendedState
         })
     }
     $grid.ItemsSource = $items

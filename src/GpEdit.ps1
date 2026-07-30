@@ -657,6 +657,7 @@ $fileExitMenuItem  = $window.FindName('FileExitMenuItem')
 $viewMenu          = $window.FindName('ViewMenu')
 $viewColumnsMenuItem = $window.FindName('ViewColumnsMenuItem')
 $viewMissingAdmxMenuItem = $window.FindName('ViewMissingAdmxMenuItem')
+$viewCatalogGapsMenuItem = $window.FindName('ViewCatalogGapsMenuItem')
 $filterMenu        = $window.FindName('FilterMenu')
 $helpMenu          = $window.FindName('HelpMenu')
 $helpAboutMenuItem = $window.FindName('HelpAboutMenuItem')
@@ -710,6 +711,7 @@ function Update-StaticUiText {
     $viewMenu.Header = $Ui.MenuView
     $viewColumnsMenuItem.Header = $Ui.MenuViewColumns
     $viewMissingAdmxMenuItem.Header = $Ui.MenuViewMissingAdmx
+    $viewCatalogGapsMenuItem.Header = $Ui.MenuViewCatalogGaps
     $helpMenu.Header = $Ui.MenuHelp
     $helpAboutMenuItem.Header = $Ui.MenuHelpAbout
     $helpPatchNoteMenuItem.Header = $Ui.MenuHelpPatchNote
@@ -792,77 +794,6 @@ function Get-CisValueLabelForRow {
     param($CisEntry, [hashtable]$Ui)
 
     return Get-CisRecommendationValueForProfile -CisEntry $CisEntry -ActiveProfile $script:CisActiveProfileForColumn -Ui $Ui
-}
-
-function Get-CisMissingAdmxReport {
-    <#
-        For the active CIS profile (CisActiveProfileForColumn - the same one
-        driving the CIS Yes/No column and "CIS R. Value"), lists cis-index.json
-        entries that:
-          - have a recommendation for this exact profile
-            (Get-CisRecommendationValueForProfile non-null);
-          - are NOT reached by any real ADMX policy / Security catalog entry
-            / Advanced Audit subcategory currently loaded on this machine
-            (i.e. never shows up as a row anywhere in the app for this
-            setting);
-          - have a non-null requiredAdmx (Build-CisIndex.ps1 found an ADMX
-            dependency note in the source .audit's "solution" field) -
-            settings with no ADMX mechanism at all (Windows Services,
-            firewall profiles...) are deliberately excluded, they're not
-            actionable via this window.
-        Feeds "View > CIS - Missing ADMX templates". Computed on demand
-        (menu click), not cached - cheap enough (thousands of policies, once)
-        that it doesn't need to run on every launch/profile change.
-    #>
-    $activeProfile = $script:CisActiveProfileForColumn
-    if ($null -eq $activeProfile) { return , (New-Object System.Collections.Generic.List[object]) }
-
-    $buckets = @('byRegistry', 'byPasswordPolicy', 'byLockoutPolicy', 'byUserRight', 'byAuditSubcategory', 'byTitle')
-    $covered = @{}
-    foreach ($bucketName in $buckets) {
-        $bucketObj = Get-CisIndexBucket -CisIndex $script:CisIndex -BucketName $bucketName
-        if ($null -eq $bucketObj) { continue }
-        foreach ($entryProp in $bucketObj.PSObject.Properties) {
-            $entry = $entryProp.Value
-            $value = Get-CisRecommendationValueForProfile -CisEntry $entry -ActiveProfile $activeProfile
-            if ($null -eq $value) { continue }
-            $covered["$bucketName::$($entryProp.Name)"] = $entry
-        }
-    }
-
-    $reached = @{}
-    foreach ($pol in @($script:admxIndex.policies)) {
-        $match = Get-CisRecommendationForAdmxPolicy -CisIndex $script:CisIndex -Policy $pol
-        if ($null -ne $match.CisEntry) { $reached["$($match.CisEntry.bucket)::$($match.CisEntry.key)"] = $true }
-    }
-    foreach ($setting in (Get-SecurityCatalogEntries)) {
-        $cisRec = Get-CisRecommendationForSecuritySetting -CisIndex $script:CisIndex -Section $setting.section -Name $setting.name -DisplayName $setting.displayName
-        if ($null -ne $cisRec) { $reached["$($cisRec.bucket)::$($cisRec.key)"] = $true }
-    }
-    foreach ($sub in (Get-AdvancedAuditCatalogEntries)) {
-        $cisRec = Get-CisRecommendationForAuditSubcategory -CisIndex $script:CisIndex -SubcategoryNameEn $sub.name
-        if ($null -ne $cisRec) { $reached["$($cisRec.bucket)::$($cisRec.key)"] = $true }
-    }
-
-    $rows = New-Object System.Collections.Generic.List[object]
-    foreach ($key in $covered.Keys) {
-        if ($reached.ContainsKey($key)) { continue }
-        $entry = $covered[$key]
-        if ($null -eq $entry.requiredAdmx) { continue }
-        $cisNumber = ($entry.profiles | Where-Object {
-            $_.benchmark -eq $activeProfile.Benchmark -and $_.version -eq $activeProfile.Version -and
-            $_.level -eq $activeProfile.Level -and $_.role -eq $activeProfile.Role
-        } | Select-Object -First 1).cisNumber
-        $rows.Add([pscustomobject]@{
-            CisNumber   = $cisNumber
-            Title       = $entry.title
-            AdmxFile    = $entry.requiredAdmx.file
-            Category    = $entry.requiredAdmx.category
-            VersionText = $entry.requiredAdmx.versionText
-            IsPresent   = (Get-CisAdmxTemplatePresence -AdmxIndex $script:admxIndex -AdmxFile $entry.requiredAdmx.file)
-        })
-    }
-    return , ($rows | Sort-Object CisNumber)
 }
 
 function Get-CisRowLabels {
@@ -2111,9 +2042,17 @@ $viewColumnsMenuItem.Add_Click({
 $viewMissingAdmxMenuItem.Add_Click({
     param($EventSender, $e)
     $ui = Get-CurrentUi
-    $rows = Get-CisMissingAdmxReport
+    $rows = Get-CisMissingAdmxReport -CisIndex $script:CisIndex -AdmxIndex $script:admxIndex -ActiveProfile $script:CisActiveProfileForColumn
     $profileText = Get-CisProfileDisplayText -ProfileSpec $script:CisActiveProfileForColumn
     Show-CisMissingAdmxDialog -Owner $window -ScriptRoot $PSScriptRoot -Ui $ui -Rows $rows -ActiveProfileText $profileText
+})
+
+$viewCatalogGapsMenuItem.Add_Click({
+    param($EventSender, $e)
+    $ui = Get-CurrentUi
+    $rows = Get-CisCatalogGapsReport -CisIndex $script:CisIndex -AdmxIndex $script:admxIndex -ActiveProfile $script:CisActiveProfileForColumn
+    $profileText = Get-CisProfileDisplayText -ProfileSpec $script:CisActiveProfileForColumn
+    Show-CisCatalogGapsDialog -Owner $window -ScriptRoot $PSScriptRoot -Ui $ui -Rows $rows -ActiveProfileText $profileText
 })
 
 # --- File menu: New/Open (off-machine GPO projects) -----------------------
