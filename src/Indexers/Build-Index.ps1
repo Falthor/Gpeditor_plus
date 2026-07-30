@@ -784,16 +784,27 @@ function Get-CisAdmxRequirementNote {
         Returns $null if none of the four match - most controls have no ADMX
         dependency note at all (a Windows Service, a firewall setting,
         anything with no Administrative Templates equivalent).
+
+        The note is not always the first one in the "solution" field: when a
+        control already carries other notes, the ADMX one is numbered
+        ("Note #2:", "Note #3:"). Matching only a bare "Note:" silently lost
+        6 controls (18.4.5/18.4.6/18.4.7 SecGuide.admx, 18.10.6.2
+        AppXRuntime.admx, 18.6.7.5 LanmanServer.admx, 18.6.8.5
+        LanmanWorkstation.admx), which then showed up in "CIS - Catalog
+        gaps" as unexplained instead of in "CIS - Missing ADMX templates"
+        with the template to install - see plan-gpedit-cis-admx-check.md §3.3.
     #>
     param([string]$Solution)
 
     if ([string]::IsNullOrEmpty($Solution)) { return $null }
 
+    # "Note:" or "Note #<n>:" - both introduce the same four phrasings.
+    $notePrefix = 'Note(?:\s*#\d+)?:\s*'
     $patterns = @(
-        @{ Category = 'BundledConditional'; HasVersion = $true;  Regex = 'Note:\s*This Group Policy path is provided by the Group Policy template\s+([A-Za-z0-9_.\-]+\.admx)/adml\s+that is included with the\s+([^\r\n]+)' }
-        @{ Category = 'BundledConditional'; HasVersion = $true;  Regex = 'Note:\s*This Group Policy path may not exist by default\.\s*It is provided by the Group Policy template\s+([A-Za-z0-9_.\-]+\.admx)/adml\s+that is included with the\s+([^\r\n]+)' }
-        @{ Category = 'ManualDownload';     HasVersion = $false; Regex = 'Note:\s*This Group Policy path does not exist by default\.\s*An additional Group Policy template\s*\(\s*([A-Za-z0-9_.\-]+\.admx)/adml\s*\)\s*is required' }
-        @{ Category = 'ThirdParty';         HasVersion = $true;  Regex = 'Note:\s*This Group Policy path is NOT provided by Microsoft\.\s*The Group Policy template\s+([A-Za-z0-9_.\-]+\.admx)/adml\s+is included with the\s+([^\r\n]+)' }
+        @{ Category = 'BundledConditional'; HasVersion = $true;  Regex = $notePrefix + 'This Group Policy path is provided by the Group Policy template\s+([A-Za-z0-9_.\-]+\.admx)/adml\s+that is included with the\s+([^\r\n]+)' }
+        @{ Category = 'BundledConditional'; HasVersion = $true;  Regex = $notePrefix + 'This Group Policy path may not exist by default\.\s*It is provided by the Group Policy template\s+([A-Za-z0-9_.\-]+\.admx)/adml\s+that is included with the\s+([^\r\n]+)' }
+        @{ Category = 'ManualDownload';     HasVersion = $false; Regex = $notePrefix + 'This Group Policy path does not exist by default\.\s*An additional Group Policy template\s*\(\s*([A-Za-z0-9_.\-]+\.admx)/adml\s*\)\s*is required' }
+        @{ Category = 'ThirdParty';         HasVersion = $true;  Regex = $notePrefix + 'This Group Policy path is NOT provided by Microsoft\.\s*The Group Policy template\s+([A-Za-z0-9_.\-]+\.admx)/adml\s+is included with the\s+([^\r\n]+)' }
     )
 
     foreach ($p in $patterns) {

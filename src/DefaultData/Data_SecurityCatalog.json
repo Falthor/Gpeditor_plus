@@ -697,6 +697,39 @@
                                                "ValueName":  "LDAPClientIntegrity"
                                            },
                                            {
+                                               "Key":  "LDAPClientConfidentiality",
+                                               "ValueType":  "reg-enum",
+                                               "DisplayName":  "Network security: LDAP client encryption requirements",
+                                               "Description":  "Determines the level of data encryption (sealing) requested on behalf of clients issuing LDAP BIND requests.",
+                                               "Explain":  "This policy setting determines the level of data encryption, also called sealing, that is requested on behalf of client devices that issue LDAP BIND requests. Three levels are possible: None, where the LDAP BIND request is issued with only the caller-specified options; Negotiate sealing, where, if TLS/SSL has not been started, the request is initiated with the LDAP encryption option in addition to the caller-specified options (if TLS/SSL has been started, only the caller-specified options apply); and Require sealing, the same as Negotiate sealing except that the LDAP BIND request fails if the connection is not encrypted.\n\nDo not confuse this setting with \"Network security: LDAP client signing requirements\" (LDAPClientIntegrity), which covers signing (integrity) rather than encryption (confidentiality). They are two separate settings under the same registry key and are configured independently.\n\nSetting this to Require sealing may affect compatibility with clients, services and applications that cannot negotiate an encrypted LDAP connection.\n\nDefault: Negotiate sealing.",
+                                               "Choices":  [
+                                                               {
+                                                                   "Value":  0,
+                                                                   "DisplayName":  "None"
+                                                               },
+                                                               {
+                                                                   "Value":  1,
+                                                                   "DisplayName":  "Negotiate sealing"
+                                                               },
+                                                               {
+                                                                   "Value":  2,
+                                                                   "DisplayName":  "Require sealing"
+                                                               }
+                                                           ],
+                                               "RegistryPath":  "System\\CurrentControlSet\\Services\\LDAP",
+                                               "ValueName":  "LDAPClientConfidentiality"
+                                           },
+                                           {
+                                               "Key":  "RelaxMinimumPasswordLengthLimits",
+                                               "ValueType":  "reg-boolean",
+                                               "Category":  "Password Policy",
+                                               "DisplayName":  "Relax minimum password length limits",
+                                               "Description":  "Determines whether the \"Minimum password length\" setting can be raised above the legacy limit of 14 characters.",
+                                               "Explain":  "This security setting determines whether the \"Minimum password length\" setting can be configured above the legacy limit of 14 characters.\n\nWhen it is disabled, \"Minimum password length\" cannot be set higher than 14 characters, the maximum enforceable value in earlier Windows releases. When it is enabled, values up to 128 characters can be set and enforced.\n\nNote: this setting only exists in the built-in security template of Windows 10 Release 2004 and Windows Server 2022 (or newer); it is not available on older releases, nor through downloadable Administrative Templates (ADMX/ADML). It has no effect on its own - it only unlocks the higher range for \"Minimum password length\", which must be raised separately.\n\nDefault: Disabled (the 14-character limit applies).",
+                                               "RegistryPath":  "System\\CurrentControlSet\\Control\\SAM",
+                                               "ValueName":  "RelaxMinimumPasswordLengthLimits"
+                                           },
+                                           {
                                                "Key":  "NTLMMinClientSec",
                                                "ValueType":  "reg-flags",
                                                "DisplayName":  "Network security: Minimum session security for NTLM SSP based (including secure RPC) clients",

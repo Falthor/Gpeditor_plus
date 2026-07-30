@@ -148,9 +148,20 @@ if (-not (Test-Path -LiteralPath $script:AppSettings.paths.indexDir)) { New-Item
 # SecurityCatalog.ps1 was dot-sourced earlier with a repo-relative fallback
 # (AppSettings not loaded yet then) - reassign and reload here. Self-heals
 # from the bundled template if missing.
+$script:BundledSecurityCatalogPath = Join-Path $PSScriptRoot 'DefaultData\Data_SecurityCatalog.json'
 $script:SecurityCatalogDataPath = Join-Path $script:AppSettings.paths.indexDir 'Data_SecurityCatalog.json'
 if (-not (Test-Path -LiteralPath $script:SecurityCatalogDataPath)) {
-    Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'DefaultData\Data_SecurityCatalog.json') -Destination $script:SecurityCatalogDataPath -Force
+    Copy-Item -LiteralPath $script:BundledSecurityCatalogPath -Destination $script:SecurityCatalogDataPath -Force
+}
+else {
+    # The copy above only runs on a first run, so settings added to the
+    # bundled catalog by a later app version would otherwise never reach a
+    # machine that already has one. Append the missing ones without touching
+    # anything already there (the user may have edited DisplayName/Explain).
+    $addedCatalogEntries = Merge-SecurityCatalogBundledEntries -BundledPath $script:BundledSecurityCatalogPath -UserPath $script:SecurityCatalogDataPath
+    if ($addedCatalogEntries -gt 0) {
+        Write-Host "Security catalog: $addedCatalogEntries new setting(s) added from the bundled catalog."
+    }
 }
 Import-SecurityCatalogData
 

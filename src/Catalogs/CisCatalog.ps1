@@ -29,6 +29,12 @@ $script:CisPasswordLockoutKeyMap = @{
     LockoutBadCount            = @{ Bucket = 'byLockoutPolicy'; Key = 'LOCKOUT_THRESHOLD' }
     ResetLockoutCount          = @{ Bucket = 'byLockoutPolicy'; Key = 'LOCKOUT_RESET' }
     ForceLogoffWhenHourExpire  = @{ Bucket = 'byPasswordPolicy'; Key = 'FORCE_LOGOFF' }
+    # CIS routes this one through PASSWORD_POLICY (bucket byPasswordPolicy)
+    # even though the app files it under Account Lockout Policy - the .audit
+    # type is what picks the bucket, not the console category. Without this
+    # row the setting could never match: byPasswordPolicy/byLockoutPolicy
+    # entries never reach the byTitle fallback below.
+    AllowAdministratorLockout  = @{ Bucket = 'byPasswordPolicy'; Key = 'LOCKOUT_ADMINS' }
 }
 
 function Import-CisIndex {
@@ -796,7 +802,10 @@ function Resolve-CisSecurityWrite {
     if ([string]::IsNullOrEmpty($RecommendedValue)) {
         switch ($Setting.valueType) {
             'principal-list'  { return [pscustomobject]@{ Value = '' } }
-            'reg-multistring' { return [pscustomobject]@{ Value = (ConvertTo-RegistryValuesEncoding -RegType $Setting.regType -Data '') } }
+            # RegType 7 (REG_MULTI_SZ) hardcoded, exactly like the interactive
+            # write path in EditDialogs.ps1 - see Get-CisRegistryValueType below
+            # for why the catalog's own regType cannot be used bare here.
+            'reg-multistring' { return [pscustomobject]@{ Value = (ConvertTo-RegistryValuesEncoding -RegType 7 -Data '') } }
             default           { return $null }
         }
     }
@@ -843,22 +852,44 @@ function Resolve-CisSecurityWrite {
         'reg-boolean' {
             $b = ConvertTo-CisBooleanValue -Text $value
             if ($null -eq $b) { return $null }
-            return [pscustomobject]@{ Value = (ConvertTo-RegistryValuesEncoding -RegType $Setting.regType -Data "$b") }
+            return [pscustomobject]@{ Value = (ConvertTo-RegistryValuesEncoding -RegType (Get-CisRegistryValueType -Setting $Setting -Default 4) -Data "$b") }
         }
         'reg-number' {
-            if ($value -match '(?<n>-?\d+)') { return [pscustomobject]@{ Value = (ConvertTo-RegistryValuesEncoding -RegType $Setting.regType -Data $Matches['n']) } }
+            if ($value -match '(?<n>-?\d+)') { return [pscustomobject]@{ Value = (ConvertTo-RegistryValuesEncoding -RegType (Get-CisRegistryValueType -Setting $Setting -Default 4) -Data $Matches['n']) } }
             return $null
         }
         'reg-enum' {
             $choice = @($Setting.choices) | Where-Object { $value -match [regex]::Escape($_.displayName) -or "$($_.value)" -eq $value } | Select-Object -First 1
             if (-not $choice) { return $null }
-            return [pscustomobject]@{ Value = (ConvertTo-RegistryValuesEncoding -RegType $Setting.regType -Data "$($choice.value)") }
+            # RegType 4 (REG_DWORD) hardcoded, like EditDialogs.ps1: an enum
+            # choice is always a numeric value.
+            return [pscustomobject]@{ Value = (ConvertTo-RegistryValuesEncoding -RegType 4 -Data "$($choice.value)") }
         }
         # reg-string / reg-multistring / reg-flags: free-text/bitmask values
         # too ambiguous to auto-fill reliably from CIS wording - out of
         # scope for this pass (listed as "not covered" in the summary).
         default { return $null }
     }
+}
+
+function Get-CisRegistryValueType {
+    <#
+        REG_* type to encode a [Registry Values] setting with: the catalog's
+        own RegType when it declares one, otherwise $Default.
+
+        Most catalog entries carry no RegType at all (77 of 97 today) - the
+        field only exists for the handful of settings Windows stores as
+        REG_SZ instead of the expected REG_DWORD (AllocateFloppies,
+        AllocateCDRoms...). Passing $Setting.regType straight through, as
+        this file used to, made PowerShell bind $null to the [int] parameter
+        as 0, writing "0,<data>" (REG_NONE) instead of "4,<data>" for every
+        one of those entries - a malformed line the interactive write path
+        never produced, because EditDialogs.ps1 applies this same default.
+    #>
+    param($Setting, [int]$Default)
+
+    if ($Setting.regType) { return [int]$Setting.regType }
+    return $Default
 }
 
 function Get-CisProfileCoverageMaps {

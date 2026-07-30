@@ -71,6 +71,64 @@ function ConvertTo-SecurityCatalogHashtable {
     return $result
 }
 
+function Merge-SecurityCatalogBundledEntries {
+    <#
+        Adds entries that exist in the app-bundled catalog but not (yet) in
+        the user's writable copy, and writes the result back.
+
+        Needed because GpEdit.ps1 only seeds DefaultData\Data_SecurityCatalog.json
+        into indexDir when the file is ABSENT - it must not overwrite a copy
+        the live catalog editor may have edited (DisplayName/Explain). Without
+        this merge, any setting added to the bundled catalog after a first
+        run would stay invisible forever on that machine.
+
+        Append-only, keyed by "Key" per catalog: an entry the user already
+        has is never touched, whatever the bundled version now says. Same
+        rule as cis-fallback-map.json's write-back.
+
+        Returns the number of entries added (0 = file left untouched).
+    #>
+    param(
+        [Parameter(Mandatory)][string]$BundledPath,
+        [Parameter(Mandatory)][string]$UserPath
+    )
+
+    if (-not (Test-Path -LiteralPath $UserPath) -or -not (Test-Path -LiteralPath $BundledPath)) { return 0 }
+
+    try {
+        $bundled = Get-Content -Raw -Encoding UTF8 -LiteralPath $BundledPath | ConvertFrom-Json
+        $user = Get-Content -Raw -Encoding UTF8 -LiteralPath $UserPath | ConvertFrom-Json
+    }
+    catch {
+        Write-Warning "Security catalog merge skipped ($($_.Exception.Message)) - the bundled copy stays unused."
+        return 0
+    }
+
+    $added = 0
+    foreach ($catalogProp in $bundled.PSObject.Properties) {
+        $catalogName = $catalogProp.Name
+        # A whole catalog missing from the user copy (older layout): take it as-is.
+        if ($null -eq $user.PSObject.Properties[$catalogName]) {
+            $user | Add-Member -NotePropertyName $catalogName -NotePropertyValue $catalogProp.Value
+            $added += @($catalogProp.Value).Count
+            continue
+        }
+        $existingKeys = @{}
+        foreach ($e in @($user.$catalogName)) { $existingKeys[$e.Key] = $true }
+
+        $missing = @($catalogProp.Value | Where-Object { -not $existingKeys.ContainsKey($_.Key) })
+        if ($missing.Count -eq 0) { continue }
+        $user.$catalogName = @($user.$catalogName) + $missing
+        $added += $missing.Count
+    }
+
+    if ($added -gt 0) {
+        # UTF8 with BOM, like every other file this project writes.
+        [System.IO.File]::WriteAllText($UserPath, ($user | ConvertTo-Json -Depth 8), (New-Object System.Text.UTF8Encoding($true)))
+    }
+    return $added
+}
+
 function Import-SecurityCatalogData {
     # (Re)loads the 6 catalogs from disk - called once below, and again by
     # every Set-SecurityCatalogEntryField caller re-dot-sourcing this file
@@ -96,6 +154,11 @@ $script:SecurityCatalogVariableByCategorySection = @(
     @{ Category = 'Account Lockout Policy'; Section = 'System Access'; Variable = 'AccountLockoutPolicyCatalog' }
     @{ Category = 'Security Options'; Section = 'System Access'; Variable = 'OtherSystemAccessCatalog' }
     @{ Category = 'Security Options'; Section = 'Registry Values'; Variable = 'SecurityOptionsRegistryCatalog' }
+    # Same source catalog, reachable under another category because of the
+    # per-entry Category override in Get-SecurityCatalogEntries - without
+    # this row the live catalog editor's pencil could not resolve the
+    # source catalog for those entries.
+    @{ Category = 'Password Policy'; Section = 'Registry Values'; Variable = 'SecurityOptionsRegistryCatalog' }
     @{ Category = 'Audit Policy'; Section = 'Event Audit'; Variable = 'AuditPolicyCatalog' }
     @{ Category = 'User Rights Assignment'; Section = 'Privilege Rights'; Variable = 'UserRightsCatalog' }
 )
@@ -200,8 +263,15 @@ function Get-SecurityCatalogEntries {
         $regType = if ($c.ContainsKey('RegType')) { $c.RegType } else { $null }
         $alwaysConfigured = if ($c.ContainsKey('AlwaysConfigured')) { $c.AlwaysConfigured } else { $false }
         $description = $c.Description
+        # Almost every [Registry Values] setting shows up under Security
+        # Options, so that stays the default - but a few are registry-backed
+        # while the real console files them elsewhere (e.g. "Relax minimum
+        # password length limits" sits under Account Policies > Password
+        # Policy). An optional per-entry Category overrides the tree
+        # placement only; the write path still keys off section.
+        $category = if ($c.ContainsKey('Category')) { $c.Category } else { 'Security Options' }
         $list.Add([ordered]@{
-            category    = 'Security Options'
+            category    = $category
             section     = 'Registry Values'
             name        = "MACHINE\$($c.RegistryPath)\$($c.ValueName)"
             catalogKey  = $key

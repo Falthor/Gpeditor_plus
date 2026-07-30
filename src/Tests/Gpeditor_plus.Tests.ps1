@@ -308,6 +308,80 @@ Revision=1
         It 'categorizes MinimumPasswordLength as Password Policy' {
             ($entries | Where-Object { $_.name -eq 'MinimumPasswordLength' }).category | Should -Be 'Password Policy'
         }
+
+        # plan-gpedit-cis-admx-check.md §3.2/§3.4 - two settings that were
+        # missing from the catalog entirely, hence unreachable anywhere.
+        It 'ships the two settings added for the CIS catalog gaps, with the right shape' -Tag 'Regression' {
+            $relax = $entries | Where-Object catalogKey -eq 'RelaxMinimumPasswordLengthLimits'
+            $relax | Should -Not -BeNullOrEmpty
+            $relax.valueType | Should -Be 'reg-boolean'
+            $relax.section | Should -Be 'Registry Values'
+            # Registry-backed, but the real console shows it under Password
+            # Policy - per-entry Category override.
+            $relax.category | Should -Be 'Password Policy'
+
+            $sealing = $entries | Where-Object catalogKey -eq 'LDAPClientConfidentiality'
+            $sealing | Should -Not -BeNullOrEmpty
+            $sealing.valueType | Should -Be 'reg-enum'
+            $sealing.category | Should -Be 'Security Options'
+            @($sealing.choices).Count | Should -Be 3
+        }
+
+        It 'keeps the live catalog editor able to resolve an overridden category' -Tag 'Regression' {
+            # Without a matching row in SecurityCatalogVariableByCategorySection,
+            # the pencil button could not find the source catalog to patch.
+            Get-SecurityCatalogVariableName -Category 'Password Policy' -Section 'Registry Values' | Should -Be 'SecurityOptionsRegistryCatalog'
+        }
+    }
+
+    Context 'Merge-SecurityCatalogBundledEntries' -Tag 'Regression' {
+
+        # GpEdit.ps1 only copies the bundled catalog into indexDir when the
+        # file is absent (it must never clobber catalog-editor edits), so a
+        # setting added by a later app version would otherwise stay invisible
+        # on any machine that already ran the app once.
+
+        BeforeEach {
+            $script:bundledPath = Join-Path $SrcRoot 'DefaultData\Data_SecurityCatalog.json'
+            $script:userPath = Join-Path $TestDrive 'user-catalog.json'
+
+            # A stale copy: two known settings removed, one entry edited by
+            # "the user", and a whole catalog missing (older file layout).
+            $stale = Get-Content -Raw -Encoding UTF8 -LiteralPath $bundledPath | ConvertFrom-Json
+            $stale.SecurityOptionsRegistryCatalog = @($stale.SecurityOptionsRegistryCatalog | Where-Object { $_.Key -notin @('LDAPClientConfidentiality', 'RelaxMinimumPasswordLengthLimits') })
+            ($stale.SecurityOptionsRegistryCatalog | Where-Object Key -eq 'LDAPClientIntegrity').DisplayName = 'EDITED BY USER'
+            $stale.PSObject.Properties.Remove('AuditPolicyCatalog')
+            [System.IO.File]::WriteAllText($userPath, ($stale | ConvertTo-Json -Depth 8), (New-Object System.Text.UTF8Encoding($true)))
+        }
+
+        It 'adds missing settings and missing catalogs without touching existing entries' {
+            $added = Merge-SecurityCatalogBundledEntries -BundledPath $bundledPath -UserPath $userPath
+            $added | Should -Be 11   # 2 new settings + the 9 restored audit-policy entries
+
+            $merged = Get-Content -Raw -Encoding UTF8 -LiteralPath $userPath | ConvertFrom-Json
+            @($merged.SecurityOptionsRegistryCatalog | Where-Object { $_.Key -in @('LDAPClientConfidentiality', 'RelaxMinimumPasswordLengthLimits') }).Count | Should -Be 2
+            @($merged.AuditPolicyCatalog).Count | Should -Be 9
+            # Append-only: a user edit always wins over the bundled text.
+            ($merged.SecurityOptionsRegistryCatalog | Where-Object Key -eq 'LDAPClientIntegrity').DisplayName | Should -Be 'EDITED BY USER'
+        }
+
+        It 'is idempotent and leaves an up-to-date file untouched' {
+            Merge-SecurityCatalogBundledEntries -BundledPath $bundledPath -UserPath $userPath | Out-Null
+            $before = [System.IO.File]::ReadAllBytes($userPath)
+            Merge-SecurityCatalogBundledEntries -BundledPath $bundledPath -UserPath $userPath | Should -Be 0
+            [System.IO.File]::ReadAllBytes($userPath) | Should -Be $before
+        }
+
+        It 'writes UTF-8 with BOM' {
+            Merge-SecurityCatalogBundledEntries -BundledPath $bundledPath -UserPath $userPath | Out-Null
+            $bytes = [System.IO.File]::ReadAllBytes($userPath)
+            @($bytes[0], $bytes[1], $bytes[2]) | Should -Be @(239, 187, 191)
+        }
+
+        It 'does nothing when either file is missing, instead of throwing' {
+            Merge-SecurityCatalogBundledEntries -BundledPath $bundledPath -UserPath (Join-Path $TestDrive 'does-not-exist.json') | Should -Be 0
+            Merge-SecurityCatalogBundledEntries -BundledPath (Join-Path $TestDrive 'no-bundle.json') -UserPath $userPath | Should -Be 0
+        }
     }
 }
 
@@ -744,6 +818,10 @@ Describe 'CisCatalog' -Tag 'Integration' {
 
     BeforeAll {
         . (Join-Path $SrcRoot 'Catalogs\CisCatalog.ps1')
+        # Resolve-CisSecurityWrite encodes [Registry Values] through
+        # ConvertTo-RegistryValuesEncoding, which lives in PolicyState.ps1
+        # (dot-sourced before CisCatalog.ps1 by GpEdit.ps1 at runtime).
+        . (Join-Path $SrcRoot 'Policy\PolicyState.ps1')
 
         $auditFilesPath = Join-Path $SrcRoot 'DefaultData\Audit'
         $outputPath = Join-Path $TestDrive 'cis-index.json'
@@ -803,6 +881,90 @@ Describe 'CisCatalog' -Tag 'Integration' {
 
         It 'finds SeTrustedCredManAccessPrivilege' {
             Get-CisRecommendationForSecuritySetting -CisIndex $cisIndex -Section 'Privilege Rights' -Name 'SeTrustedCredManAccessPrivilege' | Should -Not -BeNullOrEmpty
+        }
+    }
+
+    Context 'catalog gaps closed (plan-gpedit-cis-admx-check.md §3)' -Tag 'Regression' {
+
+        # The 3 settings that were covered by a CIS profile but reachable
+        # from nowhere in the app. Each failed for its own reason: a missing
+        # row in CisPasswordLockoutKeyMap, and two settings absent from
+        # Data_SecurityCatalog.json entirely.
+
+        It 'resolves "Allow Administrator account lockout" (LOCKOUT_ADMINS)' {
+            # Routed to byPasswordPolicy by the .audit type (PASSWORD_POLICY),
+            # even though the app files it under Account Lockout Policy.
+            $rec = Get-CisRecommendationForSecuritySetting -CisIndex $cisIndex -Section 'System Access' -Name 'AllowAdministratorLockout' -DisplayName 'Allow Administrator account lockout'
+            $rec | Should -Not -BeNullOrEmpty
+            $rec.title | Should -BeLike "*Allow Administrator account lockout*"
+        }
+
+        It 'resolves "Relax minimum password length limits"' {
+            $rec = Get-CisRecommendationForSecuritySetting -CisIndex $cisIndex -Section 'Registry Values' -Name 'MACHINE\System\CurrentControlSet\Control\SAM\RelaxMinimumPasswordLengthLimits' -DisplayName 'Relax minimum password length limits'
+            $rec | Should -Not -BeNullOrEmpty
+            $rec.title | Should -BeLike "*Relax minimum password length limits*"
+        }
+
+        It 'resolves LDAP client ENCRYPTION separately from LDAP client SIGNING' {
+            # Two real, distinct Windows settings under the same registry key
+            # with near-identical names - the whole point of this entry.
+            $sealing = Get-CisRecommendationForSecuritySetting -CisIndex $cisIndex -Section 'Registry Values' -Name 'MACHINE\System\CurrentControlSet\Services\LDAP\LDAPClientConfidentiality' -DisplayName 'Network security: LDAP client encryption requirements'
+            $signing = Get-CisRecommendationForSecuritySetting -CisIndex $cisIndex -Section 'Registry Values' -Name 'MACHINE\System\CurrentControlSet\Services\LDAP\LDAPClientIntegrity' -DisplayName 'Network security: LDAP client signing requirements'
+            $sealing | Should -Not -BeNullOrEmpty
+            $signing | Should -Not -BeNullOrEmpty
+            $sealing.title | Should -BeLike "*encryption requirements*"
+            $signing.title | Should -BeLike "*signing requirements*"
+            $sealing.key | Should -Not -Be $signing.key
+        }
+
+    }
+
+    Context 'Resolve-CisSecurityWrite REG_* type' -Tag 'Regression' {
+
+        # Found while adding the two catalog entries above: a catalog entry
+        # with no explicit RegType (77 of 97) bound $null to the [int]
+        # parameter as 0, so CIS Gap-fill/Full compliance wrote "0,<data>"
+        # (REG_NONE) where the interactive path writes "4,<data>".
+
+        It 'defaults a RegType-less reg-boolean to REG_DWORD' {
+            $setting = [pscustomobject]@{ valueType = 'reg-boolean'; regType = $null; choices = $null }
+            (Resolve-CisSecurityWrite -Setting $setting -RecommendedValue 'Enabled').Value | Should -Be '4,1'
+        }
+
+        It 'defaults a RegType-less reg-number to REG_DWORD' {
+            $setting = [pscustomobject]@{ valueType = 'reg-number'; regType = $null; choices = $null }
+            (Resolve-CisSecurityWrite -Setting $setting -RecommendedValue '900').Value | Should -Be '4,900'
+        }
+
+        It 'honours an explicit RegType (REG_SZ settings such as AllocateFloppies)' {
+            $setting = [pscustomobject]@{ valueType = 'reg-boolean'; regType = 1; choices = $null }
+            (Resolve-CisSecurityWrite -Setting $setting -RecommendedValue 'Enabled').Value | Should -Be '1,"1"'
+        }
+
+        It 'encodes a reg-enum choice as REG_DWORD' {
+            $setting = [pscustomobject]@{ valueType = 'reg-enum'; regType = $null; choices = @([pscustomobject]@{ value = 2; displayName = 'Require sealing' }) }
+            (Resolve-CisSecurityWrite -Setting $setting -RecommendedValue 'Require sealing').Value | Should -Be '4,2'
+        }
+
+        It 'encodes an explicitly empty reg-multistring as REG_MULTI_SZ' {
+            $setting = [pscustomobject]@{ valueType = 'reg-multistring'; regType = $null; choices = $null }
+            (Resolve-CisSecurityWrite -Setting $setting -RecommendedValue '').Value | Should -Be '7,'
+        }
+    }
+
+    Context 'ADMX requirement note numbered "Note #N:" (plan-gpedit-cis-admx-check.md §3.3)' -Tag 'Regression' {
+
+        It 'detects the SecGuide.admx dependency of NetBT NodeType configuration' {
+            # This control is NOT a catalog gap: it is an Administrative
+            # Templates setting needing a template Windows does not ship.
+            # Its "solution" numbers the note ("Note #2:"), which the four
+            # phrasing patterns used to miss - so it was misreported as an
+            # unexplained gap instead of a missing template.
+            $netbt = Get-CisRecommendationForRegistry -CisIndex $cisIndex -RegistryKey 'System\CurrentControlSet\Services\NetBT\Parameters' -ValueName 'NodeType'
+            $netbt | Should -Not -BeNullOrEmpty
+            $netbt.requiredAdmx | Should -Not -BeNullOrEmpty
+            $netbt.requiredAdmx.file | Should -Be 'SecGuide.admx'
+            $netbt.requiredAdmx.category | Should -Be 'ManualDownload'
         }
     }
 
