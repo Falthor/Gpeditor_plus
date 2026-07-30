@@ -77,3 +77,39 @@ function Open-GpEditLogFile {
         Start-Process -FilePath $script:LogFilePath
     }
 }
+
+# Separate error log: every terminating error caught by the script-level
+# trap in GpEdit.ps1 is appended here, independent from the activity log
+# above. Hardcoded default path (rather than $AppSettings.paths.logDir) so
+# it still works if error-triggering code runs before/without AppSettings.
+$script:ErrorLogFilePath = $null
+
+function Initialize-GpEditErrorLog {
+    param([string]$LogDir = 'C:\Windows\Logs\Gpeditor_plus')
+
+    if (-not (Test-Path -LiteralPath $LogDir)) {
+        New-Item -ItemType Directory -Path $LogDir -Force | Out-Null
+    }
+    $script:ErrorLogFilePath = Join-Path $LogDir 'Gpeditor_Error.log'
+    if (-not (Test-Path -LiteralPath $script:ErrorLogFilePath)) {
+        New-Item -ItemType File -Path $script:ErrorLogFilePath -Force | Out-Null
+    }
+    return $script:ErrorLogFilePath
+}
+
+function Write-GpEditErrorLog {
+    param([Parameter(Mandatory)]$ErrorRecord)
+
+    if (-not $script:ErrorLogFilePath) { Initialize-GpEditErrorLog | Out-Null }
+    $timestamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
+    $inv = $ErrorRecord.InvocationInfo
+    $stack = if ($ErrorRecord.ScriptStackTrace) { ($ErrorRecord.ScriptStackTrace -replace '\r?\n', ' | ') } else { '(none)' }
+    $lines = @(
+        "[$timestamp] ERROR: $($ErrorRecord.Exception.Message)"
+        "    Category: $($ErrorRecord.CategoryInfo.Category) ($($ErrorRecord.FullyQualifiedErrorId))"
+        "    At: $($inv.ScriptName):$($inv.ScriptLineNumber) char:$($inv.OffsetInLine)"
+        "    Line: $($inv.Line.Trim())"
+        "    Stack: $stack"
+    )
+    Add-Content -LiteralPath $script:ErrorLogFilePath -Value $lines -Encoding UTF8
+}

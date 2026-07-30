@@ -30,6 +30,16 @@ $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase, System.Xaml, System.Windows.Forms | Out-Null
 
 . (Join-Path $PSScriptRoot 'Core\AppLog.ps1')
+
+# Every terminating error anywhere below (dot-sourced module code, startup,
+# and WPF event handlers - the Dispatcher rethrows handler exceptions back
+# up through the ShowDialog() call at the bottom of this script, so they
+# reach this same trap) is appended to Gpeditor_Error.log before propagating
+# with its normal (uncaught) behavior.
+Initialize-GpEditErrorLog | Out-Null
+trap {
+    Write-GpEditErrorLog -ErrorRecord $_
+}
 . (Join-Path $PSScriptRoot 'Core\AppSettings.ps1')
 . (Join-Path $PSScriptRoot 'Parsers\PolFile.ps1')
 . (Join-Path $PSScriptRoot 'Parsers\GptIniFile.ps1')
@@ -2036,6 +2046,47 @@ $policyList.Add_SelectionChanged({
     param($EventSender, $e)
     Update-DetailPanel
 })
+
+# Click-to-sort: clicking a GridViewColumnHeader sorts PolicyList by the
+# bound property for that column, toggling direction on repeat clicks.
+# The click event bubbles up from the header, so it's handled at the
+# ListView level rather than wired per-column.
+$script:PolicyListSortProperty = $null
+$script:PolicyListSortAscending = $true
+# GridViewColumn has no CLR "Name" property (x:Name only registers it in the
+# window's NameScope), so columns are matched by object reference rather
+# than by name.
+$policyListSortPropertyByColumn = [System.Collections.Generic.Dictionary[object, string]]::new()
+$policyListSortPropertyByColumn[$columnName] = 'DisplayName'
+$policyListSortPropertyByColumn[$columnCategory] = 'CategoryLabel'
+$policyListSortPropertyByColumn[$columnState] = 'StateLabel'
+$policyListSortPropertyByColumn[$columnCis] = 'CisLabel'
+$policyListSortPropertyByColumn[$columnScope] = 'ScopeLabel'
+$policyListSortPropertyByColumn[$columnRecommendedState] = 'RecommendedStateLabel'
+$policyListSortPropertyByColumn[$columnCisStates] = 'CisStatesLabel'
+$policyList.AddHandler(
+    [System.Windows.Controls.GridViewColumnHeader]::ClickEvent,
+    [System.Windows.RoutedEventHandler]{
+        param($EventSender, $e)
+        $header = $e.OriginalSource -as [System.Windows.Controls.GridViewColumnHeader]
+        if ($null -eq $header -or $null -eq $header.Column) { return }
+        $sortProperty = $null
+        if (-not $policyListSortPropertyByColumn.TryGetValue($header.Column, [ref]$sortProperty)) { return }
+        $view = [System.Windows.Data.CollectionViewSource]::GetDefaultView($policyList.ItemsSource)
+        if ($null -eq $view) { return }
+        if ($script:PolicyListSortProperty -eq $sortProperty) {
+            $script:PolicyListSortAscending = -not $script:PolicyListSortAscending
+        }
+        else {
+            $script:PolicyListSortProperty = $sortProperty
+            $script:PolicyListSortAscending = $true
+        }
+        $direction = if ($script:PolicyListSortAscending) { [System.ComponentModel.ListSortDirection]::Ascending } else { [System.ComponentModel.ListSortDirection]::Descending }
+        $view.SortDescriptions.Clear()
+        $view.SortDescriptions.Add((New-Object System.ComponentModel.SortDescription($sortProperty, $direction)))
+        $view.Refresh()
+    }
+)
 
 # ---------------------------------------------------------------------------
 # Global search (name + explanation), across ADMX policies and security

@@ -47,7 +47,9 @@ projects, built-in release notes.
 - **Built-in release notes**: the right pane shows the latest
   `CHANGELOG.md` entries while no category or search is active.
 - **Persistent logging** under `%LocalAppData%\Gpeditor_plus` /
-  `C:\Windows\Logs\Gpeditor_plus`.
+  `C:\Windows\Logs\Gpeditor_plus`: `gpedit.log` records every setting change
+  and GPO project action, `Gpeditor_Error.log` records every unhandled
+  script error (message, category, source line, call stack).
 
 ## Requirements
 
@@ -71,25 +73,6 @@ On first launch, the app automatically creates its working folders
 (`%LocalAppData%\Gpeditor_plus`, `C:\ProgramData\Gpeditor_plus\...`) and
 populates the CIS audit files folder from `src\DefaultData\Audit\*.audit`.
 
-### Launch parameters (advanced)
-
-`GpEdit.ps1` accepts alternate paths to target an environment other than the
-real system (tests, non-production machine):
-
-| Parameter | Role | Default |
-|---|---|---|
-| `-MachinePolPath` | Computer `registry.pol` | `...\GroupPolicy\Machine\registry.pol` |
-| `-UserPolPath` | User `registry.pol` | `...\GroupPolicy\User\registry.pol` |
-| `-GptIniPath` | `GPT.ini` | `...\GroupPolicy\GPT.ini` |
-| `-AuditCsvPath` | Advanced Audit Policy | `...\Audit\audit.csv` |
-| `-PolicyDefinitionsPath` | Source ADMX/ADML folder | `%WinDir%\PolicyDefinitions` |
-| `-DataPath` | Generated index folder | `..\data` |
-| `-BackupRoot` | Backup root | `%AppSettings%.paths.backupRoot` |
-
-Other locations (logs, temp, export, CIS audit files, index) are
-configurable from **File > Options** and persisted in
-`%LocalAppData%\Gpeditor_plus\settings.json`.
-
 ## Architecture
 
 ```
@@ -97,7 +80,7 @@ src/
 ├── GpEdit.ps1              # Entry point: WPF window, orchestration
 ├── Core/                    # App infrastructure (settings, logging, import)
 │   ├── AppSettings.ps1         # Configurable paths + Editor Mode (settings.json)
-│   ├── AppLog.ps1              # File logging
+│   ├── AppLog.ps1              # Activity log (gpedit.log) + error log (Gpeditor_Error.log)
 │   └── ImportGpoProjectFiles.ps1
 ├── Catalogs/                # Per-domain setting definitions
 │   ├── SecurityCatalog.ps1     # Account/Local Policies, Security Options
@@ -124,7 +107,7 @@ src/
 │   ├── EditDialogs.ps1
 │   ├── OptionsDialog.ps1
 │   ├── SelectPrincipalsDialog.ps1
-│   ├── UiStrings.ps1           # FR/EN strings
+│   ├── UiStrings.ps1           # EN strings
 │   └── Styles/ModernStyle.xaml
 ├── DefaultData/               # Bundled templates and CIS audit files
 └── Tests/                     # Pester regression suite (Gpeditor_plus.Tests.ps1)
@@ -176,7 +159,8 @@ for the `? > Patch note` window — every notable change must be logged there.
 | Item | Location |
 |---|---|
 | `settings.json` (paths, Editor Mode) | `%LocalAppData%\Gpeditor_plus\settings.json` |
-| Logs | `C:\Windows\Logs\Gpeditor_plus\` |
+| Activity log | `C:\Windows\Logs\Gpeditor_plus\gpedit.log` |
+| Error log | `C:\Windows\Logs\Gpeditor_plus\Gpeditor_Error.log` |
 | Backups | `C:\ProgramData\Gpeditor_plus\Backup\` |
 | Import/Export | `C:\ProgramData\Gpeditor_plus\export\` |
 | CIS audit files | `C:\ProgramData\Gpeditor_plus\audit\` |

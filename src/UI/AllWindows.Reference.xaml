@@ -160,7 +160,7 @@
                             <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
 
-                        <Border Grid.Row="0" Margin="0,0,0,6" Padding="8,6" CornerRadius="6"
+                        <Border Grid.Row="0" Margin="0,0,0,3" Padding="8,4" CornerRadius="6"
                                 Background="{DynamicResource AccentLightBrush}">
                             <TextBlock x:Name="CategoryPathLabel" FontWeight="Bold"
                                        Text="Select a category in the tree" />
