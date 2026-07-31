@@ -683,11 +683,16 @@ function Get-CisField {
     # current field and silently truncates real text (real bug: "The
     # recommended state for this setting is:" went missing from "info" for
     # ~20 entries).
-    param([string]$BlockText, [string]$FieldName)
+    # -NoQuoteTrim: skips the blind whole-string Trim('"') - needed for
+    # value_data, where a USER_RIGHT field can be several quoted names
+    # joined by "&&" (see Resolve-CisValueData) and stripping only the
+    # outermost pair would strand the inner names' quotes mid-string.
+    param([string]$BlockText, [string]$FieldName, [switch]$NoQuoteTrim)
 
     $pattern = "(?ms)^\s*$FieldName\s*:\s*(.+?)(?=\r?\n[ \t]+[a-zA-Z_]+\s*:|\z)"
     $m = [regex]::Match($BlockText, $pattern)
     if (-not $m.Success) { return $null }
+    if ($NoQuoteTrim) { return $m.Groups[1].Value.Trim() }
     return $m.Groups[1].Value.Trim().Trim('"').Trim()
 }
 
@@ -730,6 +735,16 @@ function Resolve-CisValueData {
     # "A" || "B" value by stripping the quotes around each segment while
     # keeping the "||" separator: turning that into readable text ("A or B")
     # is the UI's job, so no language gets baked into the index.
+    #
+    # A USER_RIGHT segment isn't a single quoted value though - it's
+    # "Name1" && "Name2" (see Get-CisAndJoinedQuotedValues, CisCatalog.ps1),
+    # possibly several names deep. Blindly Trim('"')-ing the whole segment
+    # only strips the OUTERMOST pair, leaving the inner names' quotes
+    # stranded mid-string (e.g. 'Administrators" && "LOCAL SERVICE" && ...')
+    # - unparseable at generation time, since the surviving quote pairs no
+    # longer bracket the actual names. Only strip when the segment IS
+    # exactly one quoted token (no embedded quotes) so multi-name segments
+    # are left fully quoted, as CisCatalog.ps1's runtime parser expects.
     [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSReviewUnusedParameter', 'Variables', Justification = 'Used inside the nested MatchEvaluator scriptblock, invisible to this analyzer rule.')]
     param([string]$Raw, [hashtable]$Variables)
 
@@ -740,7 +755,15 @@ function Resolve-CisValueData {
         if ($Variables.ContainsKey($name)) { return $Variables[$name] }
         return $m.Value
     })
-    $segments = $resolved -split '\s*\|\|\s*' | ForEach-Object { $_.Trim().Trim('"').Trim() }
+    $segments = $resolved -split '\s*\|\|\s*' | ForEach-Object {
+        $s = $_.Trim()
+        if ($s.Length -ge 2 -and $s.StartsWith('"') -and $s.EndsWith('"') -and ($s.Substring(1, $s.Length - 2) -notmatch '"')) {
+            $s.Substring(1, $s.Length - 2)
+        }
+        else {
+            $s
+        }
+    }
     return ($segments -join ' || ')
 }
 
@@ -1085,7 +1108,7 @@ function Read-CisAuditFile {
         # empty valueData as "no recommendation for this profile") - use this
         # profile's own recommendedStateText ("Disabled"/"Enabled") instead.
         $valueData = if ($isRegCheck) { $recommendedStateText } else {
-            Resolve-CisValueData -Raw (Get-CisField -BlockText $body -FieldName 'value_data') -Variables $variables
+            Resolve-CisValueData -Raw (Get-CisField -BlockText $body -FieldName 'value_data' -NoQuoteTrim) -Variables $variables
         }
 
         $bucket[$matchKey.key].profiles.Add([ordered]@{

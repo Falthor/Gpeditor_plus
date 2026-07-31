@@ -102,6 +102,32 @@ function New-LabeledControl {
     }
 }
 
+function Set-ClipboardTextSafe {
+    <#
+        Wraps Clipboard.SetText with a few retries: the Windows clipboard is
+        a single, system-wide resource, and any other process briefly
+        holding it open (another app's own copy, a clipboard manager, even
+        Windows itself mid-update) makes SetText throw COMException
+        0x800401D0 (CLIPBRD_E_CANT_OPEN) - transient, not a real failure,
+        but left unhandled it crashed the whole app (unhandled exception
+        propagating out of a WPF event handler, surfacing at the
+        ShowDialog() call up the stack). Retries briefly since the lock is
+        normally released within milliseconds; still fails after that,
+        it's swallowed - a lost clipboard copy isn't worth crashing the app
+        over.
+    #>
+    param([string]$Text)
+    for ($i = 0; $i -lt 5; $i++) {
+        try {
+            [System.Windows.Clipboard]::SetText($Text)
+            return
+        }
+        catch {
+            Start-Sleep -Milliseconds 50
+        }
+    }
+}
+
 function Register-DataGridClipboardCopy {
     <#
         Generic wiring shared by every DataGrid/ListView in the app:
@@ -211,7 +237,7 @@ function Register-DataGridClipboardCopy {
             $lines.Add(($cells -join "`t"))
         }
         if ($lines.Count -gt 0) {
-            [System.Windows.Clipboard]::SetText(($lines -join "`r`n"))
+            Set-ClipboardTextSafe -Text ($lines -join "`r`n")
         }
     }.GetNewClosure()
 
@@ -223,7 +249,7 @@ function Register-DataGridClipboardCopy {
         if ($clickContext.Mode -ne 'cell' -or $null -eq $clickContext.Path) { return }
         $lines = New-Object System.Collections.Generic.List[string]
         foreach ($item in @($Control.SelectedItems)) { $lines.Add([string]$item.($clickContext.Path)) }
-        if ($lines.Count -gt 0) { [System.Windows.Clipboard]::SetText(($lines -join "`r`n")) }
+        if ($lines.Count -gt 0) { Set-ClipboardTextSafe -Text ($lines -join "`r`n") }
     }.GetNewClosure()
 
     $copyColumnAllRows = {
@@ -232,7 +258,7 @@ function Register-DataGridClipboardCopy {
         if ($clickContext.Mode -ne 'header' -or $null -eq $clickContext.Path) { return }
         $lines = New-Object System.Collections.Generic.List[string]
         foreach ($item in @($Control.Items)) { $lines.Add([string]$item.($clickContext.Path)) }
-        if ($lines.Count -gt 0) { [System.Windows.Clipboard]::SetText(($lines -join "`r`n")) }
+        if ($lines.Count -gt 0) { Set-ClipboardTextSafe -Text ($lines -join "`r`n") }
     }.GetNewClosure()
 
     $Control.Add_KeyDown({

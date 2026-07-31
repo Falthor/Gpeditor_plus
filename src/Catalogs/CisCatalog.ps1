@@ -672,6 +672,107 @@ function Get-CisFirstAlternativeValue {
     return $first
 }
 
+# CIS .audit text is always in English ("Administrators", "Guests"...),
+# but NTAccount("Administrators").Translate() only works when the LIVE
+# machine's display name happens to match - it fails on any non-English
+# Windows (the actual group is "Administrateurs" on French Windows) and
+# would be equally fooled if the group itself were ever renamed. These
+# principals are Windows well-known groups/authorities with a SID that's
+# fixed by RID regardless of display language or renaming (renaming the
+# default Administrator/Guest USER account, RID 500/501, doesn't touch
+# these GROUP SIDs, RID 544/546) - so resolve them by SID directly,
+# bypassing name translation entirely. Keys matched case-insensitively.
+# Covers every distinct principal seen across the bundled .audit files
+# except ones with no fixed SID (Exchange Servers - domain/install
+# dependent) or per-machine dynamic ones (NT SERVICE\<svc>,
+# WDAGUtilityAccount) - those still fall back to NTAccount.Translate.
+$script:CisWellKnownPrincipalSids = @{
+    'administrators'  = 'S-1-5-32-544'
+    'users'           = 'S-1-5-32-545'
+    'guests'          = 'S-1-5-32-546'
+    'power users'     = 'S-1-5-32-547'
+    'backup operators' = 'S-1-5-32-551'
+    'remote desktop users' = 'S-1-5-32-555'
+    'iis_iusrs'       = 'S-1-5-32-568'
+    'authenticated users' = 'S-1-5-11'
+    'everyone'        = 'S-1-1-0'
+    'local service'   = 'S-1-5-19'
+    'network service' = 'S-1-5-20'
+    'service'         = 'S-1-5-6'
+    'anonymous logon' = 'S-1-5-7'
+    'enterprise domain controllers' = 'S-1-5-9'
+    'local account'   = 'S-1-5-113'
+    'local account and member of administrators group' = 'S-1-5-114'
+    'virtual machines' = 'S-1-5-83-0'
+    'nt virtual machine\virtual machines' = 'S-1-5-83-0'
+    'window manager group' = 'S-1-5-90-0'
+    'window manager\window manager group' = 'S-1-5-90-0'
+}
+
+function Resolve-CisPrincipalNameToSid {
+    # SID for a single CIS principal-list name: well-known table first
+    # (locale/rename-proof), NTAccount.Translate as a fallback for anything
+    # not in that table (service virtual accounts, local-only accounts...).
+    # $null if neither resolves - caller drops the name silently, same as
+    # before this function existed.
+    param([string]$Name)
+    $key = $Name.Trim().ToLowerInvariant()
+    if ($script:CisWellKnownPrincipalSids.ContainsKey($key)) { return $script:CisWellKnownPrincipalSids[$key] }
+    try {
+        $account = New-Object System.Security.Principal.NTAccount($Name)
+        return $account.Translate([System.Security.Principal.SecurityIdentifier]).Value
+    }
+    catch { return $null }
+}
+
+function Get-CisAndJoinedQuotedValues {
+    <#
+        Parses a "Name1" && "Name2" value_data into its list of individual
+        quoted values. Two .audit value_types use this exact grammar (ALL
+        listed values required for that alternative), never a single quoted
+        string: USER_RIGHTS_POLICY (account names, e.g. "Administrators" &&
+        "LOCAL SERVICE") and POLICY_MULTI_TEXT (registry path lists, e.g.
+        "System\...\ProductOptions" && "Software\...\CurrentVersion" -
+        "Network access: Remotely accessible registry paths"). Optionally
+        wrapped in parens, with "||" alternatives at the top level - e.g.
+        ("Administrators" && "Local Service") || ("Administrators" &&
+        "IIS_IUSRS" && "Local Service"). Passing this through
+        Get-CisFirstAlternativeValue (as Resolve-CisSecurityWrite used to
+        for every value_type alike) corrupts it: that function's
+        whole-string quote-stripping only strips the outermost pair,
+        leaving stray quotes/&&/parens in the middle, which then fails to
+        resolve as a single value and the whole entry was silently dropped
+        as "not covered".
+
+        Reuses Get-CisFirstAlternativeValue's first-alternative "||" split
+        (same documented simplification), then extracts every quoted name
+        from that first alternative directly via regex - once alternatives
+        are resolved, "&&"/parens are just structural noise, since every
+        remaining quoted name is a required member of the same list.
+    #>
+    param([string]$RawValueData)
+    # Every path below returns via ",<array>" (not a bare "return <array>"):
+    # Write-Output enumerates whatever a function returns, so an ARRAY
+    # emitted directly collapses on the caller's "$x = Get-Foo" assignment
+    # - a 0-element array vanishes to $null and a 1-element array collapses
+    # to its lone scalar, either of which breaks a later "$x.Count" under
+    # Set-StrictMode. The single leading comma wraps the array as ONE
+    # pipeline object, so it survives Write-Output's one level of
+    # unwrapping intact regardless of element count (same idiom as
+    # Get-CisOrgValueEntry's "return , $result" above).
+    if ([string]::IsNullOrWhiteSpace($RawValueData)) { return , @() }
+    $first = ($RawValueData -split '\|\|')[0]
+    $nameMatches = [regex]::Matches($first, '"([^"]*)"')
+    if ($nameMatches.Count -eq 0) {
+        # No quoted names found - e.g. a bare "No One" without quotes.
+        # Fall back to the trimmed raw text as a single name.
+        $t = $first.Trim()
+        if ($t) { return , @($t) }
+        return , @()
+    }
+    return , @($nameMatches | ForEach-Object { $_.Groups[1].Value })
+}
+
 function ConvertTo-CisBooleanValue {
     # 'Enabled'/'1'/'true' -> 1, 'Disabled'/'0'/'false' -> 0, else $null.
     param([string]$Text)
@@ -833,22 +934,25 @@ function Resolve-CisSecurityWrite {
             return $null
         }
         'principal-list' {
-            # "No One" (any casing) => explicitly configured, empty list.
-            # Otherwise best-effort NTAccount.Translate per comma-separated
-            # name; a name that fails to resolve (unknown/renamed built-in,
-            # non-English OS) is dropped silently rather than failing the
-            # whole entry - unresolved ($null) only if NOTHING translated.
-            if ($value.Trim().ToLowerInvariant() -eq 'no one') { return [pscustomobject]@{ Value = '' } }
+            # Parsed from $RecommendedValue directly, NOT $value: the
+            # "&&"-joined USER_RIGHTS_POLICY grammar (see
+            # Get-CisAndJoinedQuotedValues) is a different shape from every
+            # other value_type and $value's whole-string quote-stripping
+            # mangles it. "No One" (any casing) => explicitly configured,
+            # empty list. Otherwise resolves each required name via
+            # Resolve-CisPrincipalNameToSid (well-known SID first, so it
+            # works regardless of display language/renaming, falling back
+            # to NTAccount.Translate); a name that resolves neither way is
+            # dropped silently rather than failing the whole entry -
+            # unresolved ($null) only if NOTHING resolved.
+            $names = Get-CisAndJoinedQuotedValues -RawValueData $RecommendedValue
+            if ($names.Count -eq 1 -and $names[0].Trim().ToLowerInvariant() -eq 'no one') { return [pscustomobject]@{ Value = '' } }
             $tokens = New-Object System.Collections.Generic.List[string]
-            foreach ($name in ($value -split ',')) {
+            foreach ($name in $names) {
                 $trimmed = $name.Trim()
                 if (-not $trimmed) { continue }
-                try {
-                    $account = New-Object System.Security.Principal.NTAccount($trimmed)
-                    $sid = $account.Translate([System.Security.Principal.SecurityIdentifier]).Value
-                    $tokens.Add("*$sid")
-                }
-                catch { continue }
+                $sid = Resolve-CisPrincipalNameToSid -Name $trimmed
+                if ($sid) { $tokens.Add("*$sid") }
             }
             if ($tokens.Count -eq 0) { return $null }
             return [pscustomobject]@{ Value = (ConvertFrom-PrivilegeMemberList -Members $tokens) }
@@ -869,9 +973,26 @@ function Resolve-CisSecurityWrite {
             # choice is always a numeric value.
             return [pscustomobject]@{ Value = (ConvertTo-RegistryValuesEncoding -RegType 4 -Data "$($choice.value)") }
         }
-        # reg-string / reg-multistring / reg-flags: free-text/bitmask values
-        # too ambiguous to auto-fill reliably from CIS wording - out of
-        # scope for this pass (listed as "not covered" in the summary).
+        'reg-multistring' {
+            # Parsed from $RecommendedValue directly, NOT $value, same
+            # reason as principal-list: POLICY_MULTI_TEXT checks (e.g.
+            # "Network access: Remotely accessible registry paths") use the
+            # same "&&"-joined-quoted-values grammar
+            # (Get-CisAndJoinedQuotedValues), not a single free-text blob -
+            # unlike reg-string/reg-flags below, these ARE a clean,
+            # unambiguous list once parsed, so worth resolving rather than
+            # leaving "not covered".
+            $paths = Get-CisAndJoinedQuotedValues -RawValueData $RecommendedValue
+            $trimmed = @($paths | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+            if ($trimmed.Count -eq 0) { return $null }
+            # RegType 7 (REG_MULTI_SZ) hardcoded, comma-joined - matches the
+            # interactive write path (EditDialogs.ps1) and the empty-list
+            # case above.
+            return [pscustomobject]@{ Value = (ConvertTo-RegistryValuesEncoding -RegType 7 -Data ($trimmed -join ',')) }
+        }
+        # reg-string / reg-flags: free-text/bitmask values too ambiguous to
+        # auto-fill reliably from CIS wording - out of scope for this pass
+        # (listed as "not covered" in the summary).
         default { return $null }
     }
 }
