@@ -695,6 +695,7 @@ $activeProfileLabel = $window.FindName('ActiveProfileLabel')
 $activeProjectLabel = $window.FindName('ActiveProjectLabel')
 $logPathLabel      = $window.FindName('LogPathLabel')
 $saveNowButton     = $window.FindName('SaveNowButton')
+$gpUpdateNowButton = $window.FindName('GpUpdateNowButton')
 $detailGroupBox    = $window.FindName('DetailGroupBox')
 $detailTextBox     = $window.FindName('DetailTextBox')
 $fileMenu          = $window.FindName('FileMenu')
@@ -748,6 +749,7 @@ function Update-StaticUiText {
     $columnRecommendedState.Header = $Ui.ColumnRecommendedState
     $columnCisStates.Header = $Ui.ColumnCisStates
     $saveNowButton.Content = $Ui.SaveNowButton
+    $gpUpdateNowButton.Content = $Ui.GpUpdateNowButton
     $logPathLabel.Text = ($Ui.LogPathFormat -f $script:LogFilePath)
     $categoryPathLabel.Text = $Ui.SelectCategoryPrompt
     $statusLabel.Text = ($Ui.StatusIndexSummary -f $admxIndex.policies.Count, $admxIndex.categories.Count, $securityIndex.settings.Count)
@@ -1546,7 +1548,12 @@ function Invoke-CisProfileOverlay {
     $appliedKeys = @{}
     $alreadyOkKeys = @{}
     $skippedTitles = New-Object System.Collections.Generic.List[string]
-    $securitySettings = Get-SecurityCatalogEntry
+    # $script:securityIndex.settings, not the raw Get-SecurityCatalogEntry
+    # catalog: same fields (category/section/name/catalogKey/...) plus the
+    # synthesized "id" the CIS recommendation cache (New-CisRecommendationCache)
+    # is keyed by - every other consumer in this file already uses the index
+    # for exactly this reason (see Update-PolicyList/New-CisRecommendationCache).
+    $securitySettings = $script:securityIndex.settings
 
     foreach ($activeProfile in $Profiles) {
 
@@ -1593,7 +1600,11 @@ function Invoke-CisProfileOverlay {
         }
 
         # --- Advanced Audit Policy Configuration ---
-        foreach ($sub in (Get-AdvancedAuditCatalogEntry)) {
+        # $script:advancedAuditIndex.settings, not the raw
+        # Get-AdvancedAuditCatalogEntry catalog - same reasoning as
+        # $script:securityIndex.settings above (the CIS recommendation cache
+        # is keyed by the index's synthesized "id", absent from the catalog).
+        foreach ($sub in $script:advancedAuditIndex.settings) {
             $cisRec = Get-CachedCisRecommendationForAuditSubcategory -Setting $sub
             if (-not $cisRec) { continue }
             $recValue = Get-CisRecommendationValueForProfile -CisEntry $cisRec -ActiveProfile $activeProfile
@@ -2350,18 +2361,25 @@ function Exit-SearchCategoryColumnMode {
 # --- Set-ColumnsDisplay ignores it (absent from Get-ColumnByKeyMap).
 $script:CisStatesColumnWidth = 260
 
-# Shows/hides the "CIS States" column and re-appends it at the end of the
-# grid every time, since Set-ColumnsDisplay's reorder logic ignores it.
+# Shows/hides the "CIS States" column, re-appending it at the end of the
+# grid every time it's shown, since Set-ColumnsDisplay's reorder logic
+# ignores it. Hidden means actually removed from the columns collection -
+# a Width=0 GridViewColumn left in place still renders a header sliver
+# (splitter grip), which doesn't read as "hidden" to the user.
 function Set-CisStatesColumnVisible {
         [CmdletBinding(SupportsShouldProcess)]
     param([bool]$Visible)
     if ($PSCmdlet.ShouldProcess('Set-CisStatesColumnVisible', 'Invoke')) {
 
-    $columnCisStates.Width = if ($Visible) { $script:CisStatesColumnWidth } else { 0 }
-
     $columns = $policyList.View.Columns
     if ($columns.Contains($columnCisStates)) { [void]$columns.Remove($columnCisStates) }
-    [void]$columns.Add($columnCisStates)
+    if ($Visible) {
+        $columnCisStates.Width = $script:CisStatesColumnWidth
+        [void]$columns.Add($columnCisStates)
+    }
+    else {
+        $columnCisStates.Width = 0
+    }
 
     }
 }
@@ -2406,6 +2424,13 @@ $helpLogsMenuItem.Add_Click({
 
 New-CisRecommendationCache
 Update-StaticUiText -Ui (Get-CurrentUi)
+# The optional columns (Scope/RecommendedState/Category) start at
+# Width="0" in XAML, but a Width=0 GridViewColumn left in the columns
+# collection still renders a visible header sliver - not truly hidden.
+# Apply the default order once at startup so they're actually removed
+# from the grid, matching what Set-ColumnsDisplay does when the user
+# saves a selection via View > Add/remove columns.
+Set-ColumnsDisplay -OrderedKeys $script:CurrentColumnOrder
 Update-Tree -Ui (Get-CurrentUi)
 Update-ActiveProfileLabel
 
@@ -3481,6 +3506,48 @@ $saveNowButton.Add_Click({
         Save-GpoProjectCopy
     }
 })
+
+# --- Update Group Policy now (manual gpupdate /force trigger) --------------
+# File > Import used to run this automatically after every import - moved
+# here as an explicit, user-triggered action instead: gpupdate /force
+# reapplies ALL machine+user policy (not just what changed) and can take a
+# while on a large ADMX footprint, so importing a big project no longer pays
+# that cost unconditionally. registry.pol/GPT.ini writes alone are enough
+# for Windows to pick the change up on its own schedule; this button is only
+# for when the user wants it reflected immediately.
+function Invoke-GpUpdateNow {
+    [CmdletBinding(SupportsShouldProcess)]
+    param()
+
+    if ($PSCmdlet.ShouldProcess('Invoke-GpUpdateNow', 'Invoke')) {
+
+    $ui = Get-CurrentUi
+    $mainBusyOverlay = $window.FindName('MainBusyOverlay')
+    $window.FindName('MainBusyOverlayLabel').Text = $ui.GpUpdateRunningLabel
+    $mainBusyOverlay.Visibility = 'Visible'
+    [System.Windows.Input.Mouse]::OverrideCursor = [System.Windows.Input.Cursors]::Wait
+    $window.Dispatcher.Invoke([action]{}, [System.Windows.Threading.DispatcherPriority]::Render) | Out-Null
+    try {
+        $output = & gpupdate.exe /force 2>&1 | Out-String
+        if ($LASTEXITCODE -ne 0) {
+            Write-GpEditLogLine -Message "GPUPDATE FAILED (exit $LASTEXITCODE)"
+            Write-GpEditLogDetailLine -Message $output.Trim()
+            [System.Windows.MessageBox]::Show(($ui.GpUpdateFailedMessage -f $output), $ui.WriteErrorTitle, 'OK', 'Error') | Out-Null
+        }
+        else {
+            Write-GpEditLogLine -Message 'GPUPDATE COMPLETED'
+            [System.Windows.MessageBox]::Show($ui.GpUpdateSuccessMessage, $ui.InfoTitle, 'OK', 'Information') | Out-Null
+        }
+    }
+    finally {
+        [System.Windows.Input.Mouse]::OverrideCursor = $null
+        $mainBusyOverlay.Visibility = 'Collapsed'
+    }
+
+    }
+}
+
+$gpUpdateNowButton.Add_Click({ Invoke-GpUpdateNow })
 
 # --- Closing the main window (X button/Alt+F4) -----------------------------
 # Two independent steps:

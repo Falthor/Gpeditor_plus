@@ -2,10 +2,16 @@
     "File > Import" - reads an exported Group Policy project folder (same
     layout Export-GpoProjectFile writes, see GpEdit.ps1) and applies it FOR
     REAL, IMMEDIATELY, to the live machine (secedit.sdb, real registry.pol
-    paths + gpupdate /force, real audit.csv + auditpol /restore) -
-    independent of $script:ActiveProject, unlike every other File-menu
-    action. See plan-gpedit-import.md (decision log) for the design
-    rationale confirmed with the user.
+    paths, real audit.csv + auditpol /restore) - independent of
+    $script:ActiveProject, unlike every other File-menu action. See
+    plan-gpedit-import.md (decision log) for the design rationale confirmed
+    with the user.
+
+    Does NOT run gpupdate /force: registry.pol/GPT.ini writes are enough for
+    Windows to pick the change up on its own schedule. Forcing an immediate
+    refresh is a separate, user-triggered action (the "Update Group Policy
+    now" button, GpEdit.ps1) so importing a large project isn't also stuck
+    waiting on a full client-side policy refresh.
 
     Always targets the real system via $script:Real*Path (GpEdit.ps1,
     captured once at launch, never reassigned) - never the mutable
@@ -655,15 +661,14 @@ function Invoke-ImportSecEditApply {
 function Invoke-ImportAdmxApply {
     # NEW - no live-apply path exists for .pol anywhere else in the app
     # (every other write just writes the file, real application is implicit
-    # via Windows' own gpsvc polling, never forced). Writes to the REAL
-    # $script:RealMachinePolPath/$script:RealUserPolPath, bumps the real
-    # GPT.ini, then forces gpupdate so it takes effect immediately - per the
-    # user's explicit choice (accepted side effect: reapplies ALL machine+
-    # user policy, not just the imported subset). /wait:0 tells gpupdate not
-    # to block on policy processing finishing (its default is to wait up to
-    # 600s) - the command still triggers the refresh, it just returns as soon
-    # as it has been kicked off instead of hanging the import for however
-    # long the full client-side processing takes.
+    # via Windows' own gpsvc polling). Writes to the REAL
+    # $script:RealMachinePolPath/$script:RealUserPolPath and bumps the real
+    # GPT.ini. Does NOT force gpupdate: that used to run here automatically
+    # (accepted side effect: reapplies ALL machine+user policy, not just the
+    # imported subset) but made every import pay its cost, which can be slow
+    # on a large ADMX footprint - the user now triggers it explicitly and on
+    # their own schedule via the "Update Group Policy now" button
+    # (Invoke-GpUpdateNow, GpEdit.ps1) instead.
     # AllowEmptyCollection: a Mandatory List[object] parameter otherwise
     # rejects a real, valid empty list (e.g. no User-scope policies exported)
     # with "Cannot bind argument ... because it is an empty collection" - a
@@ -681,8 +686,7 @@ function Invoke-ImportAdmxApply {
     Step-GptIniVersion -GptIni $gptIni -IncrementMachine -IncrementUser | Out-Null
     Write-GptIni -Path $script:RealGptIniPath -GptIni $gptIni
 
-    $output = & gpupdate.exe /force /wait:0 2>&1 | Out-String
-    return [pscustomobject]@{ ExitCode = $LASTEXITCODE; Output = $output }
+    return [pscustomobject]@{ ExitCode = 0; Output = '' }
 }
 
 function Invoke-ImportAuditCsvApply {

@@ -202,11 +202,12 @@
             </Grid>
         </Grid>
 
-        <!-- Status bar: status text, active profile/project, log file path, Save now button (project mode only) -->
+        <!-- Status bar: status text, active profile/project, log file path, Save now button (project mode only), Update Group Policy now button (always available - manual gpupdate /force trigger) -->
         <Border Grid.Row="3" Background="#F3F3F3" BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="0,1,0,0" Padding="12,6">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
@@ -216,7 +217,8 @@
                 <TextBlock x:Name="ActiveProfileLabel" Grid.Column="1" Text="" VerticalAlignment="Center" Margin="0,0,12,0" Foreground="#666666" />
                 <TextBlock x:Name="ActiveProjectLabel" Grid.Column="2" Text="" VerticalAlignment="Center" Margin="0,0,12,0" Foreground="#666666" />
                 <TextBlock x:Name="LogPathLabel" Grid.Column="3" Text="" VerticalAlignment="Center" Margin="0,0,12,0" Foreground="#666666" />
-                <Button x:Name="SaveNowButton" Grid.Column="4" Content="Save now" Visibility="Collapsed" />
+                <Button x:Name="SaveNowButton" Grid.Column="4" Content="Save now" Visibility="Collapsed" Margin="0,0,8,0" />
+                <Button x:Name="GpUpdateNowButton" Grid.Column="5" Content="Update Group Policy now" />
             </Grid>
         </Border>
 

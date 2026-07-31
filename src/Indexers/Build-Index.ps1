@@ -263,8 +263,13 @@ function Convert-AdmxElement {
             $item.maxStrings = $ElementNode.maxStrings
         }
         'boolean' {
-            if ($ElementNode.trueValue)  { $item.trueValue  = Get-AdmxPolicyValue $ElementNode.trueValue }
-            if ($ElementNode.falseValue) { $item.falseValue = Get-AdmxPolicyValue $ElementNode.falseValue }
+            # Present with $null rather than omitted when the ADMX doesn't
+            # define one (a boolean element isn't required to have both) -
+            # every element shares the same shape under the app's
+            # Set-StrictMode -Version Latest, where a missing property
+            # throws but a $null one does not (PolicyWriter.ps1 checks both).
+            $item.trueValue  = if ($ElementNode.trueValue)  { Get-AdmxPolicyValue $ElementNode.trueValue }  else { $null }
+            $item.falseValue = if ($ElementNode.falseValue) { Get-AdmxPolicyValue $ElementNode.falseValue } else { $null }
         }
         'enum' {
             $enumItems = New-Object System.Collections.Generic.List[object]
