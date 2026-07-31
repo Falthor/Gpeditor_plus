@@ -27,7 +27,7 @@ function Get-DefaultAppPaths {
         importExportDir = 'C:\ProgramData\Gpeditor_plus\export\'
         auditFilesDir   = 'C:\ProgramData\Gpeditor_plus\audit\'
         indexDir        = (Join-Path $env:LOCALAPPDATA 'Gpeditor_plus\Index\')
-        projectsDir     = (Join-Path $env:LOCALAPPDATA 'Gpeditor_plus\')
+        projectsDir     = 'C:\ProgramData\Gpeditor_plus\project\'
     }
 }
 

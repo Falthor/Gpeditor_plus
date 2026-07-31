@@ -720,6 +720,8 @@ function Show-ImportConfirmationDialog {
     $addSelectAllCheck.Content = $Ui.SelectAllLabel
     $changeGrid = $window.FindName('ImportChangeGrid')
     $addGrid = $window.FindName('ImportAddGrid')
+    Register-DataGridClipboardCopy -Control $changeGrid -Ui $Ui
+    Register-DataGridClipboardCopy -Control $addGrid -Ui $Ui
 
     $changeList = New-Object System.Collections.ObjectModel.ObservableCollection[object]
     foreach ($row in @($ChangeRows)) { $changeList.Add($row) }

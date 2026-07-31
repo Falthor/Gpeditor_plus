@@ -11,6 +11,7 @@ $script:UiStrings = @{
     SearchPlaceholder         = 'Search for a setting (name, description)...'
     SearchButton              = 'Search'
     ClearSearchButton         = 'Clear'
+    ClearSearchHereMenuItem   = 'Exit Search Here'
     ColumnName                = 'Name'
     ColumnCategory            = 'Location'
     ColumnState                = 'State'
@@ -62,6 +63,9 @@ $script:UiStrings = @{
     SupportedOnPrefix         = 'Supported on: '
     OkButton                  = 'OK'
     CancelButton              = 'Cancel'
+    CopyRowMenuItem           = 'Copy row'
+    CopyCellMenuItem          = 'Copy cell'
+    CopyColumnMenuItem        = 'Copy column'
     DefineThisSetting         = 'Define this policy setting'
     RequiredSuffix            = ' (required)'
     MultiValueHint            = ' (one value per line)'
@@ -279,7 +283,7 @@ $script:UiStrings = @{
 
     OptionsWindowTitle         = 'Options'
     OptionsNavPath             = 'Path'
-    OptionsNavFile             = 'File'
+    OptionsNavFile             = 'Audit File'
     OptionsNavEditor           = 'Others'
     OptionsNavClose            = 'Close'
     PathTabLogLabel            = 'Log path'
@@ -308,6 +312,12 @@ $script:UiStrings = @{
     OthersGroupImportHeader    = 'Import'
     OthersImportExplanation    = "Classic - Applies every setting with no review at all.`r`n`r`nStandard - Imports every file as-is. Only Security Options settings that would become Not Defined are flagged for review.`r`n`r`nAdvanced - Reviews every category's changes and additions before applying anything, letting you select exactly what gets imported."
     DefaultImportModeLabel     = 'Default import mode:'
+    OthersGroupClearDataHeader = 'Clear Data'
+    ClearDataExplanation       = "Deletes every file under $env:LOCALAPPDATA\Gpeditor_plus\ - application settings, cached CIS/ADMX indexes, and any project files still stored at the old default location. The application will restart afterwards with everything reset to a clean state.`r`n`r`nThis cannot be undone."
+    ClearDataButton            = 'Clear Data'
+    ClearDataConfirmTitle      = 'Clear application data'
+    ClearDataConfirmMessage    = "This will permanently delete every file under $env:LOCALAPPDATA\Gpeditor_plus\, including your saved settings and cached indexes. This cannot be undone.`r`n`r`nContinue?"
+    ClearDataErrorFormat       = 'Could not clear application data: {0}'
 }
 
 function Get-UiStrings {

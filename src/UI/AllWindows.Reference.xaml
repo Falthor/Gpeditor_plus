@@ -1346,6 +1346,14 @@
                         </StackPanel>
                     </StackPanel>
                 </GroupBox>
+
+                <GroupBox x:Name="ClearDataGroupBox" Header="Clear Data" Margin="0,0,0,10">
+                    <StackPanel Margin="4">
+                        <TextBlock x:Name="ClearDataExplanationLabel" TextWrapping="Wrap" Margin="0,0,0,10"
+                                   Text="Deletes every file under %LocalAppData%\Gpeditor_plus\ - application settings, cached CIS/ADMX indexes, and any project files still stored there. The application will restart afterwards. This cannot be undone." />
+                        <Button x:Name="ClearDataButton" Content="Clear Data" Foreground="Red" HorizontalAlignment="Left" Padding="10,4" />
+                    </StackPanel>
+                </GroupBox>
             </StackPanel>
         </Grid>
 

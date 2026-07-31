@@ -98,6 +98,237 @@ function New-LabeledControl {
     return $panel
 }
 
+function Register-DataGridClipboardCopy {
+    <#
+        Generic wiring shared by every DataGrid/ListView in the app:
+          - Ctrl+C, or right-click on a row/cell > "Copy row": copies the
+            selected row(s) to the clipboard as tab-separated text (one
+            line per row, Excel-paste friendly), using only the columns
+            currently visible on screen and their on-screen order.
+          - right-click on a row/cell > "Copy cell": copies just that
+            column's value - one line per row - for every currently
+            selected row (a single row if only one is selected).
+          - right-click on a column HEADER > "Copy column": copies that
+            column's value for every row currently shown in the table
+            (ignores selection - matches whatever filter/search is active).
+        Also turns on multi-row (Extended) selection, and - standard
+        Explorer/DataGrid behavior - right-clicking a row outside the
+        current selection replaces the selection with just that row, while
+        right-clicking a row that's already part of a multi-selection
+        leaves the whole selection (and "Copy row"/"Copy cell") untouched.
+
+        Column values are read from each row's bound property (DataGrid's
+        Binding, or ListView's DisplayMemberBinding). A GridViewColumn with
+        neither (e.g. PolicyList's "Name" column, which uses a CellTemplate
+        for the icon+text) needs its property name supplied via
+        -TemplateColumnProperties, keyed by the column's Header text.
+    #>
+    param(
+        [Parameter(Mandatory)]$Control,
+        [Parameter(Mandatory)][hashtable]$Ui,
+        [hashtable]$TemplateColumnProperties = @{}
+    )
+
+    $Control.SelectionMode = 'Extended'
+
+    # $clickContext is a hashtable (reference type) precisely so every
+    # closure below shares the SAME live object - .GetNewClosure() gives
+    # each scriptblock its own snapshot of the *variable*, so a plain
+    # scalar written by one handler would never be seen by another; a
+    # shared mutable object is the only way to pass state between them.
+    # Mode is 'cell' (right-click landed on a row/cell), 'header'
+    # (right-click landed on a column header) or 'none' (neither, e.g. the
+    # empty area below the last row).
+    $clickContext = @{ Mode = 'none'; Row = $null; Path = $null }
+
+    # Plain scriptblock variable, not a top-level function and not itself
+    # .GetNewClosure()'d: a function defined outside would be "not
+    # recognized" once called from inside one of the GetNewClosure() event
+    # handlers below (confirmed elsewhere in this app - see
+    # $updateProfileLevelAvailability in AppDialogs.ps1's
+    # Show-ProfileSelectionDialog) - only captured plain-scriptblock
+    # variables remain callable from a closure after this function returns.
+    # Walks up from $Element (typically e.OriginalSource of a routed event)
+    # looking for the nearest ancestor of type $Type, falling back to the
+    # logical tree for non-Visual nodes (e.g. a Run inside a TextBlock has
+    # no visual parent of its own).
+    $findVisualAncestor = {
+        param($Element, [type]$Type)
+        $current = $Element
+        while ($current -and $current -isnot $Type) {
+            $current = if ($current -is [System.Windows.Media.Visual]) {
+                [System.Windows.Media.VisualTreeHelper]::GetParent($current)
+            } else {
+                [System.Windows.LogicalTreeHelper]::GetParent($current)
+            }
+        }
+        return $current
+    }
+
+    # .GetNewClosure() throughout: this function returns right after wiring
+    # the events, so its parameters/locals no longer exist on the call
+    # stack by the time WPF fires KeyDown/Click/MouseDown later - same
+    # reasoning as Enable-CatalogFieldEditToggle above.
+    $getVisibleColumnPaths = {
+        # Returns an ordered list of @{ Column = ...; Path = ... } for the
+        # currently visible columns, in on-screen order.
+        $isDataGrid = $Control -is [System.Windows.Controls.DataGrid]
+        $columns = if ($isDataGrid) { @($Control.Columns) } else { @($Control.View.Columns) }
+
+        $result = New-Object System.Collections.Generic.List[object]
+        foreach ($col in $columns) {
+            $path = $null
+            if ($isDataGrid) {
+                if ($col -isnot [System.Windows.Controls.DataGridBoundColumn] -or $col.Visibility -ne 'Visible') { continue }
+                $path = $col.Binding.Path.Path
+            }
+            else {
+                # GridViewColumn has no Visibility property - this app's
+                # convention (Set-ColumnsDisplay/Enter-SearchCategoryColumnMode
+                # in GpEdit.ps1) is Width=0 for a hidden column, so that's
+                # the signal to skip it here too.
+                if ($col.Width -le 0) { continue }
+                if ($col.DisplayMemberBinding) { $path = $col.DisplayMemberBinding.Path.Path }
+                elseif ($TemplateColumnProperties.ContainsKey([string]$col.Header)) { $path = $TemplateColumnProperties[[string]$col.Header] }
+                else { continue }
+            }
+            $result.Add([pscustomobject]@{ Column = $col; Path = $path })
+        }
+        return $result
+    }.GetNewClosure()
+
+    $copySelectedRows = {
+        $lines = New-Object System.Collections.Generic.List[string]
+        $visibleColumns = & $getVisibleColumnPaths
+        foreach ($item in @($Control.SelectedItems)) {
+            $cells = New-Object System.Collections.Generic.List[string]
+            foreach ($col in $visibleColumns) { $cells.Add([string]$item.($col.Path)) }
+            $lines.Add(($cells -join "`t"))
+        }
+        if ($lines.Count -gt 0) {
+            [System.Windows.Clipboard]::SetText(($lines -join "`r`n"))
+        }
+    }.GetNewClosure()
+
+    $copySelectedCellsInColumn = {
+        # "Copy cell": that column's value for every currently selected
+        # row (just the one clicked row when the selection is a single
+        # row) - see -Mode 'cell' in the PreviewMouseRightButtonDown
+        # handler below.
+        if ($clickContext.Mode -ne 'cell' -or $null -eq $clickContext.Path) { return }
+        $lines = New-Object System.Collections.Generic.List[string]
+        foreach ($item in @($Control.SelectedItems)) { $lines.Add([string]$item.($clickContext.Path)) }
+        if ($lines.Count -gt 0) { [System.Windows.Clipboard]::SetText(($lines -join "`r`n")) }
+    }.GetNewClosure()
+
+    $copyColumnAllRows = {
+        # "Copy column" (header right-click): that column's value for
+        # every row currently shown in the table, selection ignored.
+        if ($clickContext.Mode -ne 'header' -or $null -eq $clickContext.Path) { return }
+        $lines = New-Object System.Collections.Generic.List[string]
+        foreach ($item in @($Control.Items)) { $lines.Add([string]$item.($clickContext.Path)) }
+        if ($lines.Count -gt 0) { [System.Windows.Clipboard]::SetText(($lines -join "`r`n")) }
+    }.GetNewClosure()
+
+    $Control.Add_KeyDown({
+        param($EventSender, $e)
+        if ($e.Key -eq [System.Windows.Input.Key]::C -and
+            ($e.KeyboardDevice.Modifiers -band [System.Windows.Input.ModifierKeys]::Control)) {
+            & $copySelectedRows
+            $e.Handled = $true
+        }
+    }.GetNewClosure())
+
+    # Resolves what's under the mouse pointer (a column header, or a
+    # row/cell) and updates $clickContext accordingly, before the
+    # ContextMenu opens so all three menu items act on the right target.
+    # A header hit skips the row-selection step entirely (right-clicking a
+    # header shouldn't change which rows are selected). A row/cell hit
+    # applies the Explorer-style right-click-to-select behavior described
+    # above.
+    $Control.Add_PreviewMouseRightButtonDown({
+        param($EventSender, $e)
+        $isDataGrid = $Control -is [System.Windows.Controls.DataGrid]
+        $headerType = if ($isDataGrid) { [System.Windows.Controls.Primitives.DataGridColumnHeader] } else { [System.Windows.Controls.GridViewColumnHeader] }
+        $header = & $findVisualAncestor -Element $e.OriginalSource -Type $headerType
+
+        if ($header -and $header.Column) {
+            $visibleColumns = & $getVisibleColumnPaths
+            $match = $visibleColumns | Where-Object { $_.Column -eq $header.Column } | Select-Object -First 1
+            $clickContext.Mode = 'header'
+            $clickContext.Row = $null
+            $clickContext.Path = if ($match) { $match.Path } else { $null }
+            return
+        }
+
+        $rowItem = $null
+        $matchedPath = $null
+        if ($isDataGrid) {
+            $cell = & $findVisualAncestor -Element $e.OriginalSource -Type ([System.Windows.Controls.DataGridCell])
+            if ($cell) {
+                $rowItem = $cell.DataContext
+                $visibleColumns = & $getVisibleColumnPaths
+                $match = $visibleColumns | Where-Object { $_.Column -eq $cell.Column } | Select-Object -First 1
+                if ($match) { $matchedPath = $match.Path }
+            }
+        }
+        else {
+            $rowContainer = & $findVisualAncestor -Element $e.OriginalSource -Type ([System.Windows.Controls.ListViewItem])
+            if ($rowContainer) {
+                $rowItem = $rowContainer.DataContext
+                $x = ($e.GetPosition($rowContainer)).X
+                $offset = 0.0
+                foreach ($col in (& $getVisibleColumnPaths)) {
+                    $width = $col.Column.ActualWidth
+                    if ($x -ge $offset -and $x -lt ($offset + $width)) { $matchedPath = $col.Path; break }
+                    $offset += $width
+                }
+            }
+        }
+
+        $clickContext.Mode = if ($rowItem) { 'cell' } else { 'none' }
+        $clickContext.Row = $rowItem
+        $clickContext.Path = $matchedPath
+
+        if ($rowItem -and -not $Control.SelectedItems.Contains($rowItem)) {
+            $Control.SelectedItems.Clear()
+            [void]$Control.SelectedItems.Add($rowItem)
+        }
+    }.GetNewClosure())
+
+    $copyRowMenuItem = New-Object System.Windows.Controls.MenuItem
+    $copyRowMenuItem.Header = $Ui.CopyRowMenuItem
+    $copyRowMenuItem.Add_Click({ param($EventSender, $e) & $copySelectedRows }.GetNewClosure())
+
+    $copyCellMenuItem = New-Object System.Windows.Controls.MenuItem
+    $copyCellMenuItem.Header = $Ui.CopyCellMenuItem
+    $copyCellMenuItem.Add_Click({ param($EventSender, $e) & $copySelectedCellsInColumn }.GetNewClosure())
+
+    $copyColumnMenuItem = New-Object System.Windows.Controls.MenuItem
+    $copyColumnMenuItem.Header = $Ui.CopyColumnMenuItem
+    $copyColumnMenuItem.Add_Click({ param($EventSender, $e) & $copyColumnAllRows }.GetNewClosure())
+
+    $contextMenu = New-Object System.Windows.Controls.ContextMenu
+    $contextMenu.Add_Opened({
+        param($EventSender, $e)
+        $isCellMode = $clickContext.Mode -eq 'cell'
+        $isHeaderMode = $clickContext.Mode -eq 'header'
+
+        $copyRowMenuItem.Visibility = if ($isCellMode) { 'Visible' } else { 'Collapsed' }
+        $copyRowMenuItem.IsEnabled = $isCellMode -and $Control.SelectedItems.Count -gt 0
+
+        $copyCellMenuItem.Visibility = if ($isCellMode) { 'Visible' } else { 'Collapsed' }
+        $copyCellMenuItem.IsEnabled = $isCellMode -and $null -ne $clickContext.Path
+
+        $copyColumnMenuItem.Visibility = if ($isHeaderMode) { 'Visible' } else { 'Collapsed' }
+        $copyColumnMenuItem.IsEnabled = $isHeaderMode -and $null -ne $clickContext.Path
+    }.GetNewClosure())
+    [void]$contextMenu.Items.Add($copyRowMenuItem)
+    [void]$contextMenu.Items.Add($copyCellMenuItem)
+    [void]$contextMenu.Items.Add($copyColumnMenuItem)
+    $Control.ContextMenu = $contextMenu
+}
+
 function Add-CisInfoParagraph {
     # Adds a paragraph to a RichTextBox's FlowDocument, bold only if it
     # matches the CIS "recommended state" sentence - the only formatting
@@ -312,6 +543,7 @@ function Set-CisRecommendationTab {
     # via "return", which PowerShell unwraps to a single object (not
     # IEnumerable, crashes on ItemsSource) once it holds just one row.
     $CisProfilesGrid.ItemsSource = @(ConvertTo-CisProfileRows -Profiles $CisRecommendation.profiles -Ui $Ui)
+    Register-DataGridClipboardCopy -Control $CisProfilesGrid -Ui $Ui
 }
 
 function Show-AdmxEditDialog {

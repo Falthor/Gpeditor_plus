@@ -1,308 +1,339 @@
 ﻿<?xml version="1.0" encoding="utf-8" standalone="no"?>
-<test-results xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="nunit_schema_2.5.xsd" name="Pester" total="115" errors="0" failures="0" not-run="0" inconclusive="0" ignored="0" skipped="0" invalid="0" date="2026-07-31" time="00:12:29">
+<test-results xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="nunit_schema_2.5.xsd" name="Pester" total="130" errors="0" failures="0" not-run="0" inconclusive="0" ignored="0" skipped="0" invalid="0" date="2026-07-31" time="08:36:14">
   <environment clr-version="4.0.30319.42000" user-domain="FALTHOR-PC" cwd="D:\Coding\Github\Gpeditor_plus\Gpeditor_plus" platform="Microsoft Windows 11 Pro|C:\WINDOWS|\Device\Harddisk2\Partition3" machine-name="FALTHOR-PC" nunit-version="2.5.8.0" os-version="10.0.26200" user="Falthor" />
   <culture-info current-culture="en-US" current-uiculture="en-US" />
-  <test-suite type="TestFixture" name="Pester" executed="True" result="Success" success="True" time="28.8353" asserts="0" description="Pester">
+  <test-suite type="TestFixture" name="Pester" executed="True" result="Success" success="True" time="54.8086" asserts="0" description="Pester">
     <results>
-      <test-suite type="TestFixture" name="D:\Coding\Github\Gpeditor_plus\Gpeditor_plus\src\Tests\Gpeditor_plus.Tests.ps1" executed="True" result="Success" success="True" time="28.8353" asserts="0" description="D:\Coding\Github\Gpeditor_plus\Gpeditor_plus\src\Tests\Gpeditor_plus.Tests.ps1">
+      <test-suite type="TestFixture" name="D:\Coding\Github\Gpeditor_plus\Gpeditor_plus\src\Tests\Gpeditor_plus.Tests.ps1" executed="True" result="Success" success="True" time="54.8086" asserts="0" description="D:\Coding\Github\Gpeditor_plus\Gpeditor_plus\src\Tests\Gpeditor_plus.Tests.ps1">
         <results>
-          <test-suite type="TestFixture" name="PolFile" executed="True" result="Success" success="True" time="2.7213" asserts="0" description="PolFile">
+          <test-suite type="TestFixture" name="PolFile" executed="True" result="Success" success="True" time="2.7821" asserts="0" description="PolFile">
             <results>
-              <test-suite type="TestFixture" name="PolFile.round-trip of value types" executed="True" result="Success" success="True" time="2.334" asserts="0" description="PolFile.round-trip of value types">
+              <test-suite type="TestFixture" name="PolFile.round-trip of value types" executed="True" result="Success" success="True" time="2.3727" asserts="0" description="PolFile.round-trip of value types">
                 <results>
-                  <test-case description="reads back the same number of entries" name="PolFile.round-trip of value types.reads back the same number of entries" time="1.1531" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="preserves REG_SZ with accents/unicode" name="PolFile.round-trip of value types.preserves REG_SZ with accents/unicode" time="0.0091" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="preserves REG_EXPAND_SZ" name="PolFile.round-trip of value types.preserves REG_EXPAND_SZ" time="0.0147" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="preserves a simple REG_DWORD value" name="PolFile.round-trip of value types.preserves a simple REG_DWORD value" time="0.0079" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="preserves the maximum REG_DWORD value (uint32)" name="PolFile.round-trip of value types.preserves the maximum REG_DWORD value (uint32)" time="0.0074" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="preserves REG_QWORD" name="PolFile.round-trip of value types.preserves REG_QWORD" time="0.0059" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="preserves REG_MULTI_SZ" name="PolFile.round-trip of value types.preserves REG_MULTI_SZ" time="0.0033" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="preserves REG_BINARY" name="PolFile.round-trip of value types.preserves REG_BINARY" time="0.0071" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="preserves an empty REG_SZ" name="PolFile.round-trip of value types.preserves an empty REG_SZ" time="0.0046" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="writes a value-deletion marker" name="PolFile.round-trip of value types.writes a value-deletion marker" time="0.0043" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="detects the **del. marker" name="PolFile.round-trip of value types.detects the **del. marker" time="0.0568" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="detects the **delvals. marker" name="PolFile.round-trip of value types.detects the **delvals. marker" time="0.0033" asserts="0" success="True" result="Success" executed="True" />
-                  <test-suite type="ParameterizedTest" name="PolFile.round-trip of value types.preserves KeyName/ValueName/Type for entry &lt;_&gt;" executed="True" result="Success" success="True" time="0.3854" asserts="0" description="preserves KeyName/ValueName/Type for entry &lt;_&gt;">
+                  <test-case description="reads back the same number of entries" name="PolFile.round-trip of value types.reads back the same number of entries" time="1.1749" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="preserves REG_SZ with accents/unicode" name="PolFile.round-trip of value types.preserves REG_SZ with accents/unicode" time="0.0097" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="preserves REG_EXPAND_SZ" name="PolFile.round-trip of value types.preserves REG_EXPAND_SZ" time="0.0051" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="preserves a simple REG_DWORD value" name="PolFile.round-trip of value types.preserves a simple REG_DWORD value" time="0.0086" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="preserves the maximum REG_DWORD value (uint32)" name="PolFile.round-trip of value types.preserves the maximum REG_DWORD value (uint32)" time="0.0078" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="preserves REG_QWORD" name="PolFile.round-trip of value types.preserves REG_QWORD" time="0.0089" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="preserves REG_MULTI_SZ" name="PolFile.round-trip of value types.preserves REG_MULTI_SZ" time="0.0052" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="preserves REG_BINARY" name="PolFile.round-trip of value types.preserves REG_BINARY" time="0.0099" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="preserves an empty REG_SZ" name="PolFile.round-trip of value types.preserves an empty REG_SZ" time="0.0052" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="writes a value-deletion marker" name="PolFile.round-trip of value types.writes a value-deletion marker" time="0.0052" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="detects the **del. marker" name="PolFile.round-trip of value types.detects the **del. marker" time="0.0614" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="detects the **delvals. marker" name="PolFile.round-trip of value types.detects the **delvals. marker" time="0.0038" asserts="0" success="True" result="Success" executed="True" />
+                  <test-suite type="ParameterizedTest" name="PolFile.round-trip of value types.preserves KeyName/ValueName/Type for entry &lt;_&gt;" executed="True" result="Success" success="True" time="0.4006" asserts="0" description="preserves KeyName/ValueName/Type for entry &lt;_&gt;">
                     <results>
-                      <test-case description="preserves KeyName/ValueName/Type for entry 0" name="PolFile.round-trip of value types.preserves KeyName/ValueName/Type for entry 0" time="0.2872" asserts="0" success="True" result="Success" executed="True" />
-                      <test-case description="preserves KeyName/ValueName/Type for entry 1" name="PolFile.round-trip of value types.preserves KeyName/ValueName/Type for entry 1" time="0.0052" asserts="0" success="True" result="Success" executed="True" />
-                      <test-case description="preserves KeyName/ValueName/Type for entry 2" name="PolFile.round-trip of value types.preserves KeyName/ValueName/Type for entry 2" time="0.0052" asserts="0" success="True" result="Success" executed="True" />
-                      <test-case description="preserves KeyName/ValueName/Type for entry 3" name="PolFile.round-trip of value types.preserves KeyName/ValueName/Type for entry 3" time="0.0062" asserts="0" success="True" result="Success" executed="True" />
-                      <test-case description="preserves KeyName/ValueName/Type for entry 4" name="PolFile.round-trip of value types.preserves KeyName/ValueName/Type for entry 4" time="0.0083" asserts="0" success="True" result="Success" executed="True" />
-                      <test-case description="preserves KeyName/ValueName/Type for entry 5" name="PolFile.round-trip of value types.preserves KeyName/ValueName/Type for entry 5" time="0.0062" asserts="0" success="True" result="Success" executed="True" />
-                      <test-case description="preserves KeyName/ValueName/Type for entry 6" name="PolFile.round-trip of value types.preserves KeyName/ValueName/Type for entry 6" time="0.0116" asserts="0" success="True" result="Success" executed="True" />
-                      <test-case description="preserves KeyName/ValueName/Type for entry 7" name="PolFile.round-trip of value types.preserves KeyName/ValueName/Type for entry 7" time="0.0068" asserts="0" success="True" result="Success" executed="True" />
-                      <test-case description="preserves KeyName/ValueName/Type for entry 8" name="PolFile.round-trip of value types.preserves KeyName/ValueName/Type for entry 8" time="0.0293" asserts="0" success="True" result="Success" executed="True" />
-                      <test-case description="preserves KeyName/ValueName/Type for entry 9" name="PolFile.round-trip of value types.preserves KeyName/ValueName/Type for entry 9" time="0.0194" asserts="0" success="True" result="Success" executed="True" />
+                      <test-case description="preserves KeyName/ValueName/Type for entry 0" name="PolFile.round-trip of value types.preserves KeyName/ValueName/Type for entry 0" time="0.2957" asserts="0" success="True" result="Success" executed="True" />
+                      <test-case description="preserves KeyName/ValueName/Type for entry 1" name="PolFile.round-trip of value types.preserves KeyName/ValueName/Type for entry 1" time="0.0086" asserts="0" success="True" result="Success" executed="True" />
+                      <test-case description="preserves KeyName/ValueName/Type for entry 2" name="PolFile.round-trip of value types.preserves KeyName/ValueName/Type for entry 2" time="0.0072" asserts="0" success="True" result="Success" executed="True" />
+                      <test-case description="preserves KeyName/ValueName/Type for entry 3" name="PolFile.round-trip of value types.preserves KeyName/ValueName/Type for entry 3" time="0.0078" asserts="0" success="True" result="Success" executed="True" />
+                      <test-case description="preserves KeyName/ValueName/Type for entry 4" name="PolFile.round-trip of value types.preserves KeyName/ValueName/Type for entry 4" time="0.0088" asserts="0" success="True" result="Success" executed="True" />
+                      <test-case description="preserves KeyName/ValueName/Type for entry 5" name="PolFile.round-trip of value types.preserves KeyName/ValueName/Type for entry 5" time="0.0087" asserts="0" success="True" result="Success" executed="True" />
+                      <test-case description="preserves KeyName/ValueName/Type for entry 6" name="PolFile.round-trip of value types.preserves KeyName/ValueName/Type for entry 6" time="0.0134" asserts="0" success="True" result="Success" executed="True" />
+                      <test-case description="preserves KeyName/ValueName/Type for entry 7" name="PolFile.round-trip of value types.preserves KeyName/ValueName/Type for entry 7" time="0.0078" asserts="0" success="True" result="Success" executed="True" />
+                      <test-case description="preserves KeyName/ValueName/Type for entry 8" name="PolFile.round-trip of value types.preserves KeyName/ValueName/Type for entry 8" time="0.0323" asserts="0" success="True" result="Success" executed="True" />
+                      <test-case description="preserves KeyName/ValueName/Type for entry 9" name="PolFile.round-trip of value types.preserves KeyName/ValueName/Type for entry 9" time="0.0104" asserts="0" success="True" result="Success" executed="True" />
                     </results>
                   </test-suite>
                 </results>
               </test-suite>
-              <test-suite type="TestFixture" name="PolFile.binary stability (write -&gt; read -&gt; write)" executed="True" result="Success" success="True" time="2.3626" asserts="0" description="PolFile.binary stability (write -&gt; read -&gt; write)">
+              <test-suite type="TestFixture" name="PolFile.binary stability (write -&gt; read -&gt; write)" executed="True" result="Success" success="True" time="2.4052" asserts="0" description="PolFile.binary stability (write -&gt; read -&gt; write)">
                 <results>
-                  <test-case description="produces byte-identical output after a second write" name="PolFile.binary stability (write -&gt; read -&gt; write).produces byte-identical output after a second write" time="0.0224" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="produces byte-identical output after a second write" name="PolFile.binary stability (write -&gt; read -&gt; write).produces byte-identical output after a second write" time="0.0259" asserts="0" success="True" result="Success" executed="True" />
                 </results>
               </test-suite>
-              <test-suite type="TestFixture" name="PolFile.PReg header" executed="True" result="Success" success="True" time="2.376" asserts="0" description="PolFile.PReg header">
+              <test-suite type="TestFixture" name="PolFile.PReg header" executed="True" result="Success" success="True" time="2.4199" asserts="0" description="PolFile.PReg header">
                 <results>
-                  <test-case description="writes the correct signature and version" name="PolFile.PReg header.writes the correct signature and version" time="0.0081" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="writes the correct signature and version" name="PolFile.PReg header.writes the correct signature and version" time="0.0085" asserts="0" success="True" result="Success" executed="True" />
                 </results>
               </test-suite>
-              <test-suite type="TestFixture" name="PolFile.empty file (0 entries)" executed="True" result="Success" success="True" time="2.4031" asserts="0" description="PolFile.empty file (0 entries)">
+              <test-suite type="TestFixture" name="PolFile.empty file (0 entries)" executed="True" result="Success" success="True" time="2.4502" asserts="0" description="PolFile.empty file (0 entries)">
                 <results>
-                  <test-case description="writes an 8-byte file containing only the header" name="PolFile.empty file (0 entries).writes an 8-byte file containing only the header" time="0.0141" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="reads back zero entries" name="PolFile.empty file (0 entries).reads back zero entries" time="0.007" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="writes an 8-byte file containing only the header" name="PolFile.empty file (0 entries).writes an 8-byte file containing only the header" time="0.0157" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="reads back zero entries" name="PolFile.empty file (0 entries).reads back zero entries" time="0.0075" asserts="0" success="True" result="Success" executed="True" />
                 </results>
               </test-suite>
-              <test-suite type="TestFixture" name="PolFile.invalid signature" executed="True" result="Success" success="True" time="2.5708" asserts="0" description="PolFile.invalid signature">
+              <test-suite type="TestFixture" name="PolFile.invalid signature" executed="True" result="Success" success="True" time="2.6165" asserts="0" description="PolFile.invalid signature">
                 <results>
-                  <test-case description="throws when the signature is not recognized" name="PolFile.invalid signature.throws when the signature is not recognized" time="0.1599" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="throws when the signature is not recognized" name="PolFile.invalid signature.throws when the signature is not recognized" time="0.1592" asserts="0" success="True" result="Success" executed="True" />
                 </results>
               </test-suite>
             </results>
           </test-suite>
-          <test-suite type="TestFixture" name="GptTmplFile &amp; SecurityCatalog" executed="True" result="Success" success="True" time="3.19" asserts="0" description="GptTmplFile &amp; SecurityCatalog">
+          <test-suite type="TestFixture" name="GptTmplFile &amp; SecurityCatalog" executed="True" result="Success" success="True" time="25.596" asserts="0" description="GptTmplFile &amp; SecurityCatalog">
             <results>
-              <test-suite type="TestFixture" name="GptTmplFile &amp; SecurityCatalog.parsing a realistic GptTmpl.inf" executed="True" result="Success" success="True" time="0.1503" asserts="0" description="GptTmplFile &amp; SecurityCatalog.parsing a realistic GptTmpl.inf">
+              <test-suite type="TestFixture" name="GptTmplFile &amp; SecurityCatalog.parsing a realistic GptTmpl.inf" executed="True" result="Success" success="True" time="0.1653" asserts="0" description="GptTmplFile &amp; SecurityCatalog.parsing a realistic GptTmpl.inf">
                 <results>
-                  <test-case description="detects Unicode (UTF-16LE with BOM) encoding" name="GptTmplFile &amp; SecurityCatalog.parsing a realistic GptTmpl.inf.detects Unicode (UTF-16LE with BOM) encoding" time="0.0057" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="reads MinimumPasswordAge" name="GptTmplFile &amp; SecurityCatalog.parsing a realistic GptTmpl.inf.reads MinimumPasswordAge" time="0.0052" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="reads MaximumPasswordAge" name="GptTmplFile &amp; SecurityCatalog.parsing a realistic GptTmpl.inf.reads MaximumPasswordAge" time="0.0028" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="detects Unicode (UTF-16LE with BOM) encoding" name="GptTmplFile &amp; SecurityCatalog.parsing a realistic GptTmpl.inf.detects Unicode (UTF-16LE with BOM) encoding" time="0.0076" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="reads MinimumPasswordAge" name="GptTmplFile &amp; SecurityCatalog.parsing a realistic GptTmpl.inf.reads MinimumPasswordAge" time="0.0072" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="reads MaximumPasswordAge" name="GptTmplFile &amp; SecurityCatalog.parsing a realistic GptTmpl.inf.reads MaximumPasswordAge" time="0.003" asserts="0" success="True" result="Success" executed="True" />
                   <test-case description="reads LockoutDuration = -1 (manual unlock)" name="GptTmplFile &amp; SecurityCatalog.parsing a realistic GptTmpl.inf.reads LockoutDuration = -1 (manual unlock)" time="0.0029" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="preserves quoted strings (NewAdministratorName)" name="GptTmplFile &amp; SecurityCatalog.parsing a realistic GptTmpl.inf.preserves quoted strings (NewAdministratorName)" time="0.0028" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="reads AuditSystemEvents = 3 (success+failure)" name="GptTmplFile &amp; SecurityCatalog.parsing a realistic GptTmpl.inf.reads AuditSystemEvents = 3 (success+failure)" time="0.0092" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="passes through Registry Values verbatim" name="GptTmplFile &amp; SecurityCatalog.parsing a realistic GptTmpl.inf.passes through Registry Values verbatim" time="0.0067" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="reads a SID list (SeNetworkLogonRight)" name="GptTmplFile &amp; SecurityCatalog.parsing a realistic GptTmpl.inf.reads a SID list (SeNetworkLogonRight)" time="0.0056" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="distinguishes an explicitly empty list from not-configured" name="GptTmplFile &amp; SecurityCatalog.parsing a realistic GptTmpl.inf.distinguishes an explicitly empty list from not-configured" time="0.0036" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="returns $null for an unconfigured privilege" name="GptTmplFile &amp; SecurityCatalog.parsing a realistic GptTmpl.inf.returns $null for an unconfigured privilege" time="0.0757" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="splits a SID list into an array" name="GptTmplFile &amp; SecurityCatalog.parsing a realistic GptTmpl.inf.splits a SID list into an array" time="0.0098" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="preserves quoted strings (NewAdministratorName)" name="GptTmplFile &amp; SecurityCatalog.parsing a realistic GptTmpl.inf.preserves quoted strings (NewAdministratorName)" time="0.0026" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="reads AuditSystemEvents = 3 (success+failure)" name="GptTmplFile &amp; SecurityCatalog.parsing a realistic GptTmpl.inf.reads AuditSystemEvents = 3 (success+failure)" time="0.0069" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="passes through Registry Values verbatim" name="GptTmplFile &amp; SecurityCatalog.parsing a realistic GptTmpl.inf.passes through Registry Values verbatim" time="0.0097" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="reads a SID list (SeNetworkLogonRight)" name="GptTmplFile &amp; SecurityCatalog.parsing a realistic GptTmpl.inf.reads a SID list (SeNetworkLogonRight)" time="0.0057" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="distinguishes an explicitly empty list from not-configured" name="GptTmplFile &amp; SecurityCatalog.parsing a realistic GptTmpl.inf.distinguishes an explicitly empty list from not-configured" time="0.0049" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="returns $null for an unconfigured privilege" name="GptTmplFile &amp; SecurityCatalog.parsing a realistic GptTmpl.inf.returns $null for an unconfigured privilege" time="0.0929" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="splits a SID list into an array" name="GptTmplFile &amp; SecurityCatalog.parsing a realistic GptTmpl.inf.splits a SID list into an array" time="0.0115" asserts="0" success="True" result="Success" executed="True" />
                 </results>
               </test-suite>
-              <test-suite type="TestFixture" name="GptTmplFile &amp; SecurityCatalog.semantic round-trip (write -&gt; read)" executed="True" result="Success" success="True" time="0.1869" asserts="0" description="GptTmplFile &amp; SecurityCatalog.semantic round-trip (write -&gt; read)">
+              <test-suite type="TestFixture" name="GptTmplFile &amp; SecurityCatalog.semantic round-trip (write -&gt; read)" executed="True" result="Success" success="True" time="0.2125" asserts="0" description="GptTmplFile &amp; SecurityCatalog.semantic round-trip (write -&gt; read)">
                 <results>
-                  <test-case description="preserves every section/key value after a round-trip" name="GptTmplFile &amp; SecurityCatalog.semantic round-trip (write -&gt; read).preserves every section/key value after a round-trip" time="0.0296" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="preserves every section/key value after a round-trip" name="GptTmplFile &amp; SecurityCatalog.semantic round-trip (write -&gt; read).preserves every section/key value after a round-trip" time="0.0394" asserts="0" success="True" result="Success" executed="True" />
                 </results>
               </test-suite>
-              <test-suite type="TestFixture" name="GptTmplFile &amp; SecurityCatalog.modification then rewrite" executed="True" result="Success" success="True" time="0.2089" asserts="0" description="GptTmplFile &amp; SecurityCatalog.modification then rewrite">
+              <test-suite type="TestFixture" name="GptTmplFile &amp; SecurityCatalog.modification then rewrite" executed="True" result="Success" success="True" time="0.2348" asserts="0" description="GptTmplFile &amp; SecurityCatalog.modification then rewrite">
                 <results>
                   <test-case description="persists a modified value" name="GptTmplFile &amp; SecurityCatalog.modification then rewrite.persists a modified value" time="0.0043" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="persists a newly added key" name="GptTmplFile &amp; SecurityCatalog.modification then rewrite.persists a newly added key" time="0.0037" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="persists a newly added key" name="GptTmplFile &amp; SecurityCatalog.modification then rewrite.persists a newly added key" time="0.0035" asserts="0" success="True" result="Success" executed="True" />
                 </results>
               </test-suite>
-              <test-suite type="TestFixture" name="GptTmplFile &amp; SecurityCatalog.missing file" executed="True" result="Success" success="True" time="0.2225" asserts="0" description="GptTmplFile &amp; SecurityCatalog.missing file">
+              <test-suite type="TestFixture" name="GptTmplFile &amp; SecurityCatalog.missing file" executed="True" result="Success" success="True" time="0.2507" asserts="0" description="GptTmplFile &amp; SecurityCatalog.missing file">
                 <results>
-                  <test-case description="returns a valid default structure" name="GptTmplFile &amp; SecurityCatalog.missing file.returns a valid default structure" time="0.009" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="returns a valid default structure" name="GptTmplFile &amp; SecurityCatalog.missing file.returns a valid default structure" time="0.0098" asserts="0" success="True" result="Success" executed="True" />
                 </results>
               </test-suite>
-              <test-suite type="TestFixture" name="GptTmplFile &amp; SecurityCatalog.security catalog" executed="True" result="Success" success="True" time="0.3342" asserts="0" description="GptTmplFile &amp; SecurityCatalog.security catalog">
+              <test-suite type="TestFixture" name="GptTmplFile &amp; SecurityCatalog.security catalog" executed="True" result="Success" success="True" time="0.4093" asserts="0" description="GptTmplFile &amp; SecurityCatalog.security catalog">
                 <results>
-                  <test-case description="contains a plausible number of entries" name="GptTmplFile &amp; SecurityCatalog.security catalog.contains a plausible number of entries" time="0.0498" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="categorizes SeNetworkLogonRight as User Rights Assignment" name="GptTmplFile &amp; SecurityCatalog.security catalog.categorizes SeNetworkLogonRight as User Rights Assignment" time="0.0125" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="categorizes MinimumPasswordLength as Password Policy" name="GptTmplFile &amp; SecurityCatalog.security catalog.categorizes MinimumPasswordLength as Password Policy" time="0.0068" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="contains a plausible number of entries" name="GptTmplFile &amp; SecurityCatalog.security catalog.contains a plausible number of entries" time="0.0563" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="categorizes SeNetworkLogonRight as User Rights Assignment" name="GptTmplFile &amp; SecurityCatalog.security catalog.categorizes SeNetworkLogonRight as User Rights Assignment" time="0.0105" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="categorizes MinimumPasswordLength as Password Policy" name="GptTmplFile &amp; SecurityCatalog.security catalog.categorizes MinimumPasswordLength as Password Policy" time="0.0075" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="ships the two settings added for the CIS catalog gaps, with the right shape" name="GptTmplFile &amp; SecurityCatalog.security catalog.ships the two settings added for the CIS catalog gaps, with the right shape" time="0.019" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="keeps the live catalog editor able to resolve an overridden category" name="GptTmplFile &amp; SecurityCatalog.security catalog.keeps the live catalog editor able to resolve an overridden category" time="0.0122" asserts="0" success="True" result="Success" executed="True" />
+                </results>
+              </test-suite>
+              <test-suite type="TestFixture" name="GptTmplFile &amp; SecurityCatalog.Merge-SecurityCatalogBundledEntries" executed="True" result="Success" success="True" time="22.6643" asserts="0" description="GptTmplFile &amp; SecurityCatalog.Merge-SecurityCatalogBundledEntries">
+                <results>
+                  <test-case description="adds missing settings and missing catalogs without touching existing entries" name="GptTmplFile &amp; SecurityCatalog.Merge-SecurityCatalogBundledEntries.adds missing settings and missing catalogs without touching existing entries" time="0.1653" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="is idempotent and leaves an up-to-date file untouched" name="GptTmplFile &amp; SecurityCatalog.Merge-SecurityCatalogBundledEntries.is idempotent and leaves an up-to-date file untouched" time="21.9919" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="writes UTF-8 with BOM" name="GptTmplFile &amp; SecurityCatalog.Merge-SecurityCatalogBundledEntries.writes UTF-8 with BOM" time="0.0695" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="does nothing when either file is missing, instead of throwing" name="GptTmplFile &amp; SecurityCatalog.Merge-SecurityCatalogBundledEntries.does nothing when either file is missing, instead of throwing" time="0.0226" asserts="0" success="True" result="Success" executed="True" />
                 </results>
               </test-suite>
             </results>
           </test-suite>
-          <test-suite type="TestFixture" name="AuditCsvFile &amp; AdvancedAuditCatalog" executed="True" result="Success" success="True" time="3.3239" asserts="0" description="AuditCsvFile &amp; AdvancedAuditCatalog">
+          <test-suite type="TestFixture" name="AuditCsvFile &amp; AdvancedAuditCatalog" executed="True" result="Success" success="True" time="25.7306" asserts="0" description="AuditCsvFile &amp; AdvancedAuditCatalog">
             <results>
-              <test-suite type="TestFixture" name="AuditCsvFile &amp; AdvancedAuditCatalog.missing file" executed="True" result="Success" success="True" time="0.0098" asserts="0" description="AuditCsvFile &amp; AdvancedAuditCatalog.missing file">
+              <test-suite type="TestFixture" name="AuditCsvFile &amp; AdvancedAuditCatalog.missing file" executed="True" result="Success" success="True" time="0.011" asserts="0" description="AuditCsvFile &amp; AdvancedAuditCatalog.missing file">
                 <results>
-                  <test-case description="returns no rows" name="AuditCsvFile &amp; AdvancedAuditCatalog.missing file.returns no rows" time="0.0057" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="returns no rows" name="AuditCsvFile &amp; AdvancedAuditCatalog.missing file.returns no rows" time="0.006" asserts="0" success="True" result="Success" executed="True" />
                 </results>
               </test-suite>
-              <test-suite type="TestFixture" name="AuditCsvFile &amp; AdvancedAuditCatalog.write, reread, match by GUID" executed="True" result="Success" success="True" time="0.0817" asserts="0" description="AuditCsvFile &amp; AdvancedAuditCatalog.write, reread, match by GUID">
+              <test-suite type="TestFixture" name="AuditCsvFile &amp; AdvancedAuditCatalog.write, reread, match by GUID" executed="True" result="Success" success="True" time="0.0772" asserts="0" description="AuditCsvFile &amp; AdvancedAuditCatalog.write, reread, match by GUID">
                 <results>
                   <test-case description="rereads two rows" name="AuditCsvFile &amp; AdvancedAuditCatalog.write, reread, match by GUID.rereads two rows" time="0.0033" asserts="0" success="True" result="Success" executed="True" />
                   <test-case description="reads back Setting Value and Inclusion Setting for Logon (3)" name="AuditCsvFile &amp; AdvancedAuditCatalog.write, reread, match by GUID.reads back Setting Value and Inclusion Setting for Logon (3)" time="0.0068" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="reads back Setting Value and Inclusion Setting for Logoff (1)" name="AuditCsvFile &amp; AdvancedAuditCatalog.write, reread, match by GUID.reads back Setting Value and Inclusion Setting for Logoff (1)" time="0.008" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="matches GUIDs case-insensitively" name="AuditCsvFile &amp; AdvancedAuditCatalog.write, reread, match by GUID.matches GUIDs case-insensitively" time="0.0058" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="removes a value" name="AuditCsvFile &amp; AdvancedAuditCatalog.write, reread, match by GUID.removes a value" time="0.0054" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="preserves row count through a full round-trip (write -&gt; reread -&gt; rewrite)" name="AuditCsvFile &amp; AdvancedAuditCatalog.write, reread, match by GUID.preserves row count through a full round-trip (write -&gt; reread -&gt; rewrite)" time="0.0145" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="reads back Setting Value and Inclusion Setting for Logoff (1)" name="AuditCsvFile &amp; AdvancedAuditCatalog.write, reread, match by GUID.reads back Setting Value and Inclusion Setting for Logoff (1)" time="0.0092" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="matches GUIDs case-insensitively" name="AuditCsvFile &amp; AdvancedAuditCatalog.write, reread, match by GUID.matches GUIDs case-insensitively" time="0.0032" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="removes a value" name="AuditCsvFile &amp; AdvancedAuditCatalog.write, reread, match by GUID.removes a value" time="0.006" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="preserves row count through a full round-trip (write -&gt; reread -&gt; rewrite)" name="AuditCsvFile &amp; AdvancedAuditCatalog.write, reread, match by GUID.preserves row count through a full round-trip (write -&gt; reread -&gt; rewrite)" time="0.0074" asserts="0" success="True" result="Success" executed="True" />
                 </results>
               </test-suite>
-              <test-suite type="TestFixture" name="AuditCsvFile &amp; AdvancedAuditCatalog.subcategory catalog" executed="True" result="Success" success="True" time="0.1104" asserts="0" description="AuditCsvFile &amp; AdvancedAuditCatalog.subcategory catalog">
+              <test-suite type="TestFixture" name="AuditCsvFile &amp; AdvancedAuditCatalog.subcategory catalog" executed="True" result="Success" success="True" time="0.1095" asserts="0" description="AuditCsvFile &amp; AdvancedAuditCatalog.subcategory catalog">
                 <results>
-                  <test-case description="contains 59 subcategories" name="AuditCsvFile &amp; AdvancedAuditCatalog.subcategory catalog.contains 59 subcategories" time="0.0032" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="has no duplicate GUIDs" name="AuditCsvFile &amp; AdvancedAuditCatalog.subcategory catalog.has no duplicate GUIDs" time="0.0087" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="has the correct displayName for 'Logon'" name="AuditCsvFile &amp; AdvancedAuditCatalog.subcategory catalog.has the correct displayName for 'Logon'" time="0.0064" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="contains 59 subcategories" name="AuditCsvFile &amp; AdvancedAuditCatalog.subcategory catalog.contains 59 subcategories" time="0.0041" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="has no duplicate GUIDs" name="AuditCsvFile &amp; AdvancedAuditCatalog.subcategory catalog.has no duplicate GUIDs" time="0.0093" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="has the correct displayName for 'Logon'" name="AuditCsvFile &amp; AdvancedAuditCatalog.subcategory catalog.has the correct displayName for 'Logon'" time="0.008" asserts="0" success="True" result="Success" executed="True" />
                 </results>
               </test-suite>
             </results>
           </test-suite>
-          <test-suite type="TestFixture" name="PolicyWriter" executed="True" result="Success" success="True" time="3.6373" asserts="0" description="PolicyWriter">
+          <test-suite type="TestFixture" name="PolicyWriter" executed="True" result="Success" success="True" time="26.0722" asserts="0" description="PolicyWriter">
             <results>
-              <test-suite type="TestFixture" name="PolicyWriter.NotConfigured -&gt; Enabled (simple, no elements)" executed="True" result="Success" success="True" time="0.042" asserts="0" description="PolicyWriter.NotConfigured -&gt; Enabled (simple, no elements)">
+              <test-suite type="TestFixture" name="PolicyWriter.NotConfigured -&gt; Enabled (simple, no elements)" executed="True" result="Success" success="True" time="0.0357" asserts="0" description="PolicyWriter.NotConfigured -&gt; Enabled (simple, no elements)">
                 <results>
-                  <test-case description="adds a single entry with the enabledValue and inferred REG_DWORD type" name="PolicyWriter.NotConfigured -&gt; Enabled (simple, no elements).adds a single entry with the enabledValue and inferred REG_DWORD type" time="0.0372" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="adds a single entry with the enabledValue and inferred REG_DWORD type" name="PolicyWriter.NotConfigured -&gt; Enabled (simple, no elements).adds a single entry with the enabledValue and inferred REG_DWORD type" time="0.0304" asserts="0" success="True" result="Success" executed="True" />
                 </results>
               </test-suite>
-              <test-suite type="TestFixture" name="PolicyWriter.Enabled -&gt; NotConfigured (existing value -&gt; delete marker)" executed="True" result="Success" success="True" time="0.0545" asserts="0" description="PolicyWriter.Enabled -&gt; NotConfigured (existing value -&gt; delete marker)">
+              <test-suite type="TestFixture" name="PolicyWriter.Enabled -&gt; NotConfigured (existing value -&gt; delete marker)" executed="True" result="Success" success="True" time="0.0485" asserts="0" description="PolicyWriter.Enabled -&gt; NotConfigured (existing value -&gt; delete marker)">
                 <results>
-                  <test-case description="replaces the value with a deletion marker" name="PolicyWriter.Enabled -&gt; NotConfigured (existing value -&gt; delete marker).replaces the value with a deletion marker" time="0.0078" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="replaces the value with a deletion marker" name="PolicyWriter.Enabled -&gt; NotConfigured (existing value -&gt; delete marker).replaces the value with a deletion marker" time="0.0076" asserts="0" success="True" result="Success" executed="True" />
                 </results>
               </test-suite>
-              <test-suite type="TestFixture" name="PolicyWriter.NotConfigured -&gt; Disabled (never had a value)" executed="True" result="Success" success="True" time="0.0653" asserts="0" description="PolicyWriter.NotConfigured -&gt; Disabled (never had a value)">
+              <test-suite type="TestFixture" name="PolicyWriter.NotConfigured -&gt; Disabled (never had a value)" executed="True" result="Success" success="True" time="0.0664" asserts="0" description="PolicyWriter.NotConfigured -&gt; Disabled (never had a value)">
                 <results>
-                  <test-case description="writes the disabledValue" name="PolicyWriter.NotConfigured -&gt; Disabled (never had a value).writes the disabledValue" time="0.0065" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="writes the disabledValue" name="PolicyWriter.NotConfigured -&gt; Disabled (never had a value).writes the disabledValue" time="0.013" asserts="0" success="True" result="Success" executed="True" />
                 </results>
               </test-suite>
-              <test-suite type="TestFixture" name="PolicyWriter.Disabled with no disabledValue set" executed="True" result="Success" success="True" time="0.0785" asserts="0" description="PolicyWriter.Disabled with no disabledValue set">
+              <test-suite type="TestFixture" name="PolicyWriter.Disabled with no disabledValue set" executed="True" result="Success" success="True" time="0.0821" asserts="0" description="PolicyWriter.Disabled with no disabledValue set">
                 <results>
-                  <test-case description="removes an existing value via a deletion marker" name="PolicyWriter.Disabled with no disabledValue set.removes an existing value via a deletion marker" time="0.0053" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="writes nothing when never configured" name="PolicyWriter.Disabled with no disabledValue set.writes nothing when never configured" time="0.0035" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="removes an existing value via a deletion marker" name="PolicyWriter.Disabled with no disabledValue set.removes an existing value via a deletion marker" time="0.0056" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="writes nothing when never configured" name="PolicyWriter.Disabled with no disabledValue set.writes nothing when never configured" time="0.0046" asserts="0" success="True" result="Success" executed="True" />
                 </results>
               </test-suite>
-              <test-suite type="TestFixture" name="PolicyWriter.Elements (enum, decimal, text, multiText, boolean)" executed="True" result="Success" success="True" time="0.1348" asserts="0" description="PolicyWriter.Elements (enum, decimal, text, multiText, boolean)">
+              <test-suite type="TestFixture" name="PolicyWriter.Elements (enum, decimal, text, multiText, boolean)" executed="True" result="Success" success="True" time="0.1444" asserts="0" description="PolicyWriter.Elements (enum, decimal, text, multiText, boolean)">
                 <results>
-                  <test-case description="writes the correct enum value" name="PolicyWriter.Elements (enum, decimal, text, multiText, boolean).writes the correct enum value" time="0.0036" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="writes the correct decimal value" name="PolicyWriter.Elements (enum, decimal, text, multiText, boolean).writes the correct decimal value" time="0.0041" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="writes the correct text value" name="PolicyWriter.Elements (enum, decimal, text, multiText, boolean).writes the correct text value" time="0.0037" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="writes the correct multiText values" name="PolicyWriter.Elements (enum, decimal, text, multiText, boolean).writes the correct multiText values" time="0.0036" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="writes DWORD 1 for a checked boolean without trueValue" name="PolicyWriter.Elements (enum, decimal, text, multiText, boolean).writes DWORD 1 for a checked boolean without trueValue" time="0.0033" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="writes a deletion marker for an unchecked boolean that had a value" name="PolicyWriter.Elements (enum, decimal, text, multiText, boolean).writes a deletion marker for an unchecked boolean that had a value" time="0.0032" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="survives a round-trip via Write-PolFile/Read-PolFile" name="PolicyWriter.Elements (enum, decimal, text, multiText, boolean).survives a round-trip via Write-PolFile/Read-PolFile" time="0.018" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="writes the correct enum value" name="PolicyWriter.Elements (enum, decimal, text, multiText, boolean).writes the correct enum value" time="0.0045" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="writes the correct decimal value" name="PolicyWriter.Elements (enum, decimal, text, multiText, boolean).writes the correct decimal value" time="0.004" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="writes the correct text value" name="PolicyWriter.Elements (enum, decimal, text, multiText, boolean).writes the correct text value" time="0.0039" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="writes the correct multiText values" name="PolicyWriter.Elements (enum, decimal, text, multiText, boolean).writes the correct multiText values" time="0.0048" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="writes DWORD 1 for a checked boolean without trueValue" name="PolicyWriter.Elements (enum, decimal, text, multiText, boolean).writes DWORD 1 for a checked boolean without trueValue" time="0.0037" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="writes a deletion marker for an unchecked boolean that had a value" name="PolicyWriter.Elements (enum, decimal, text, multiText, boolean).writes a deletion marker for an unchecked boolean that had a value" time="0.0031" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="survives a round-trip via Write-PolFile/Read-PolFile" name="PolicyWriter.Elements (enum, decimal, text, multiText, boolean).survives a round-trip via Write-PolFile/Read-PolFile" time="0.0153" asserts="0" success="True" result="Success" executed="True" />
                 </results>
               </test-suite>
-              <test-suite type="TestFixture" name="PolicyWriter.GPT.ini version increment (independent Machine/User)" executed="True" result="Success" success="True" time="0.1945" asserts="0" description="PolicyWriter.GPT.ini version increment (independent Machine/User)">
+              <test-suite type="TestFixture" name="PolicyWriter.GPT.ini version increment (independent Machine/User)" executed="True" result="Success" success="True" time="0.2025" asserts="0" description="PolicyWriter.GPT.ini version increment (independent Machine/User)">
                 <results>
-                  <test-case description="reads the initial version (65537 = machine=1,user=1)" name="PolicyWriter.GPT.ini version increment (independent Machine/User).reads the initial version (65537 = machine=1,user=1)" time="0.0127" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="increments Machine and User independently, then persists across write/reread" name="PolicyWriter.GPT.ini version increment (independent Machine/User).increments Machine and User independently, then persists across write/reread" time="0.0406" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="reads the initial version (65537 = machine=1,user=1)" name="PolicyWriter.GPT.ini version increment (independent Machine/User).reads the initial version (65537 = machine=1,user=1)" time="0.0156" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="increments Machine and User independently, then persists across write/reread" name="PolicyWriter.GPT.ini version increment (independent Machine/User).increments Machine and User independently, then persists across write/reread" time="0.0346" asserts="0" success="True" result="Success" executed="True" />
                 </results>
               </test-suite>
-              <test-suite type="TestFixture" name="PolicyWriter.GPT.ini missing" executed="True" result="Success" success="True" time="0.2026" asserts="0" description="PolicyWriter.GPT.ini missing">
+              <test-suite type="TestFixture" name="PolicyWriter.GPT.ini missing" executed="True" result="Success" success="True" time="0.2147" asserts="0" description="PolicyWriter.GPT.ini missing">
                 <results>
-                  <test-case description="defaults Version to 0" name="PolicyWriter.GPT.ini missing.defaults Version to 0" time="0.0039" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="defaults Version to 0" name="PolicyWriter.GPT.ini missing.defaults Version to 0" time="0.0037" asserts="0" success="True" result="Success" executed="True" />
                 </results>
               </test-suite>
-              <test-suite type="TestFixture" name="PolicyWriter.timestamped backup" executed="True" result="Success" success="True" time="0.2435" asserts="0" description="PolicyWriter.timestamped backup">
+              <test-suite type="TestFixture" name="PolicyWriter.timestamped backup" executed="True" result="Success" success="True" time="0.2559" asserts="0" description="PolicyWriter.timestamped backup">
                 <results>
-                  <test-case description="backs up files into a fresh timestamped folder without name collisions" name="PolicyWriter.timestamped backup.backs up files into a fresh timestamped folder without name collisions" time="0.0317" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="backs up files into a fresh timestamped folder without name collisions" name="PolicyWriter.timestamped backup.backs up files into a fresh timestamped folder without name collisions" time="0.0312" asserts="0" success="True" result="Success" executed="True" />
                 </results>
               </test-suite>
-              <test-suite type="TestFixture" name="PolicyWriter.applying security changes to GptTmpl.inf" executed="True" result="Success" success="True" time="0.2584" asserts="0" description="PolicyWriter.applying security changes to GptTmpl.inf">
+              <test-suite type="TestFixture" name="PolicyWriter.applying security changes to GptTmpl.inf" executed="True" result="Success" success="True" time="0.2725" asserts="0" description="PolicyWriter.applying security changes to GptTmpl.inf">
                 <results>
-                  <test-case description="removes an unconfigured setting and writes a configured one" name="PolicyWriter.applying security changes to GptTmpl.inf.removes an unconfigured setting and writes a configured one" time="0.0104" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="removes an unconfigured setting and writes a configured one" name="PolicyWriter.applying security changes to GptTmpl.inf.removes an unconfigured setting and writes a configured one" time="0.0119" asserts="0" success="True" result="Success" executed="True" />
                 </results>
               </test-suite>
-              <test-suite type="TestFixture" name="PolicyWriter.Apply-AdmxChangesToEntries (multi-policy orchestration)" executed="True" result="Success" success="True" time="0.2804" asserts="0" description="PolicyWriter.Apply-AdmxChangesToEntries (multi-policy orchestration)">
+              <test-suite type="TestFixture" name="PolicyWriter.Apply-AdmxChangesToEntries (multi-policy orchestration)" executed="True" result="Success" success="True" time="0.2967" asserts="0" description="PolicyWriter.Apply-AdmxChangesToEntries (multi-policy orchestration)">
                 <results>
-                  <test-case description="applies only Machine-scoped policies for scope Machine" name="PolicyWriter.Apply-AdmxChangesToEntries (multi-policy orchestration).applies only Machine-scoped policies for scope Machine" time="0.0108" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="applies only User-scoped policies for scope User" name="PolicyWriter.Apply-AdmxChangesToEntries (multi-policy orchestration).applies only User-scoped policies for scope User" time="0.0048" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="applies only Machine-scoped policies for scope Machine" name="PolicyWriter.Apply-AdmxChangesToEntries (multi-policy orchestration).applies only Machine-scoped policies for scope Machine" time="0.0114" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="applies only User-scoped policies for scope User" name="PolicyWriter.Apply-AdmxChangesToEntries (multi-policy orchestration).applies only User-scoped policies for scope User" time="0.0056" asserts="0" success="True" result="Success" executed="True" />
                 </results>
               </test-suite>
             </results>
           </test-suite>
-          <test-suite type="TestFixture" name="AppSettings" executed="True" result="Success" success="True" time="3.9845" asserts="0" description="AppSettings">
+          <test-suite type="TestFixture" name="AppSettings" executed="True" result="Success" success="True" time="26.456" asserts="0" description="AppSettings">
             <results>
-              <test-suite type="TestFixture" name="AppSettings.Get-DefaultAppPaths" executed="True" result="Success" success="True" time="0.0289" asserts="0" description="AppSettings.Get-DefaultAppPaths">
+              <test-suite type="TestFixture" name="AppSettings.Get-DefaultAppPaths" executed="True" result="Success" success="True" time="0.0337" asserts="0" description="AppSettings.Get-DefaultAppPaths">
                 <results>
-                  <test-case description="contains all 6 configurable paths" name="AppSettings.Get-DefaultAppPaths.contains all 6 configurable paths" time="0.0097" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="defaults logDir to C:\Windows\Logs\Gpeditor_plus\" name="AppSettings.Get-DefaultAppPaths.defaults logDir to C:\Windows\Logs\Gpeditor_plus\" time="0.0042" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="defaults backupRoot to C:\ProgramData\Gpeditor_plus\Backup\" name="AppSettings.Get-DefaultAppPaths.defaults backupRoot to C:\ProgramData\Gpeditor_plus\Backup\" time="0.0088" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="contains all 6 configurable paths" name="AppSettings.Get-DefaultAppPaths.contains all 6 configurable paths" time="0.0137" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="defaults logDir to C:\Windows\Logs\Gpeditor_plus\" name="AppSettings.Get-DefaultAppPaths.defaults logDir to C:\Windows\Logs\Gpeditor_plus\" time="0.0056" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="defaults backupRoot to C:\ProgramData\Gpeditor_plus\Backup\" name="AppSettings.Get-DefaultAppPaths.defaults backupRoot to C:\ProgramData\Gpeditor_plus\Backup\" time="0.0054" asserts="0" success="True" result="Success" executed="True" />
                 </results>
               </test-suite>
-              <test-suite type="TestFixture" name="AppSettings.Get-AppSettings without an existing file" executed="True" result="Success" success="True" time="0.0452" asserts="0" description="AppSettings.Get-AppSettings without an existing file">
+              <test-suite type="TestFixture" name="AppSettings.Get-AppSettings without an existing file" executed="True" result="Success" success="True" time="0.0574" asserts="0" description="AppSettings.Get-AppSettings without an existing file">
                 <results>
-                  <test-case description="falls back to defaults" name="AppSettings.Get-AppSettings without an existing file.falls back to defaults" time="0.0105" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="falls back to defaults" name="AppSettings.Get-AppSettings without an existing file.falls back to defaults" time="0.0138" asserts="0" success="True" result="Success" executed="True" />
                 </results>
               </test-suite>
-              <test-suite type="TestFixture" name="AppSettings.Save-AppSettings / Get-AppSettings round-trip" executed="True" result="Success" success="True" time="0.1657" asserts="0" description="AppSettings.Save-AppSettings / Get-AppSettings round-trip">
+              <test-suite type="TestFixture" name="AppSettings.Save-AppSettings / Get-AppSettings round-trip" executed="True" result="Success" success="True" time="0.1999" asserts="0" description="AppSettings.Save-AppSettings / Get-AppSettings round-trip">
                 <results>
-                  <test-case description="persists modified values and preserves untouched keys" name="AppSettings.Save-AppSettings / Get-AppSettings round-trip.persists modified values and preserves untouched keys" time="0.1126" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="persists modified values and preserves untouched keys" name="AppSettings.Save-AppSettings / Get-AppSettings round-trip.persists modified values and preserves untouched keys" time="0.1312" asserts="0" success="True" result="Success" executed="True" />
                 </results>
               </test-suite>
-              <test-suite type="TestFixture" name="AppSettings.tolerant merge of a partial settings.json" executed="True" result="Success" success="True" time="0.1978" asserts="0" description="AppSettings.tolerant merge of a partial settings.json">
+              <test-suite type="TestFixture" name="AppSettings.tolerant merge of a partial settings.json" executed="True" result="Success" success="True" time="0.2218" asserts="0" description="AppSettings.tolerant merge of a partial settings.json">
                 <results>
-                  <test-case description="keeps the present key and falls back on the absent ones" name="AppSettings.tolerant merge of a partial settings.json.keeps the present key and falls back on the absent ones" time="0.0144" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="keeps the present key and falls back on the absent ones" name="AppSettings.tolerant merge of a partial settings.json.keeps the present key and falls back on the absent ones" time="0.0112" asserts="0" success="True" result="Success" executed="True" />
                 </results>
               </test-suite>
-              <test-suite type="TestFixture" name="AppSettings.Set-AppSettingPath" executed="True" result="Success" success="True" time="0.2397" asserts="0" description="AppSettings.Set-AppSettingPath">
+              <test-suite type="TestFixture" name="AppSettings.Set-AppSettingPath" executed="True" result="Success" success="True" time="0.2642" asserts="0" description="AppSettings.Set-AppSettingPath">
                 <results>
-                  <test-case description="persists a single path immediately" name="AppSettings.Set-AppSettingPath.persists a single path immediately" time="0.0323" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="persists a single path immediately" name="AppSettings.Set-AppSettingPath.persists a single path immediately" time="0.0301" asserts="0" success="True" result="Success" executed="True" />
                 </results>
               </test-suite>
-              <test-suite type="TestFixture" name="AppSettings.Initialize-AppSettingsFirstRun" executed="True" result="Success" success="True" time="0.3088" asserts="0" description="AppSettings.Initialize-AppSettingsFirstRun">
+              <test-suite type="TestFixture" name="AppSettings.Initialize-AppSettingsFirstRun" executed="True" result="Success" success="True" time="0.3498" asserts="0" description="AppSettings.Initialize-AppSettingsFirstRun">
                 <results>
-                  <test-case description="creates settings.json on first run" name="AppSettings.Initialize-AppSettingsFirstRun.creates settings.json on first run" time="0.0044" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="creates every configured path folder" name="AppSettings.Initialize-AppSettingsFirstRun.creates every configured path folder" time="0.0122" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="seeds auditFilesDir with the 3 bundled .audit files" name="AppSettings.Initialize-AppSettingsFirstRun.seeds auditFilesDir with the 3 bundled .audit files" time="0.004" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="never re-seeds once settings.json already exists" name="AppSettings.Initialize-AppSettingsFirstRun.never re-seeds once settings.json already exists" time="0.0067" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="creates settings.json on first run" name="AppSettings.Initialize-AppSettingsFirstRun.creates settings.json on first run" time="0.0046" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="creates every configured path folder" name="AppSettings.Initialize-AppSettingsFirstRun.creates every configured path folder" time="0.0115" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="seeds auditFilesDir with the 3 bundled .audit files" name="AppSettings.Initialize-AppSettingsFirstRun.seeds auditFilesDir with the 3 bundled .audit files" time="0.005" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="never re-seeds once settings.json already exists" name="AppSettings.Initialize-AppSettingsFirstRun.never re-seeds once settings.json already exists" time="0.0068" asserts="0" success="True" result="Success" executed="True" />
                 </results>
               </test-suite>
             </results>
           </test-suite>
-          <test-suite type="TestFixture" name="CisCatalog" executed="True" result="Success" success="True" time="25.8219" asserts="0" description="CisCatalog">
+          <test-suite type="TestFixture" name="CisCatalog" executed="True" result="Success" success="True" time="51.8743" asserts="0" description="CisCatalog">
             <results>
-              <test-suite type="TestFixture" name="CisCatalog.REGISTRY_SETTING match (NTP Client)" executed="True" result="Success" success="True" time="0.0445" asserts="0" description="CisCatalog.REGISTRY_SETTING match (NTP Client)">
+              <test-suite type="TestFixture" name="CisCatalog.REGISTRY_SETTING match (NTP Client)" executed="True" result="Success" success="True" time="0.0405" asserts="0" description="CisCatalog.REGISTRY_SETTING match (NTP Client)">
                 <results>
                   <test-case description="finds an entry for NtpClient\Enabled" name="CisCatalog.REGISTRY_SETTING match (NTP Client).finds an entry for NtpClient\Enabled" time="0.0032" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="has the correct title" name="CisCatalog.REGISTRY_SETTING match (NTP Client).has the correct title" time="0.0043" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="renumbers the CIS number between the 2016 and 2019 benchmarks" name="CisCatalog.REGISTRY_SETTING match (NTP Client).renumbers the CIS number between the 2016 and 2019 benchmarks" time="0.0117" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="extracts 'Enabled' via Get-CisRecommendationStateText" name="CisCatalog.REGISTRY_SETTING match (NTP Client).extracts 'Enabled' via Get-CisRecommendationStateText" time="0.0048" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="has the correct title" name="CisCatalog.REGISTRY_SETTING match (NTP Client).has the correct title" time="0.0038" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="renumbers the CIS number between the 2016 and 2019 benchmarks" name="CisCatalog.REGISTRY_SETTING match (NTP Client).renumbers the CIS number between the 2016 and 2019 benchmarks" time="0.0121" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="extracts 'Enabled' via Get-CisRecommendationStateText" name="CisCatalog.REGISTRY_SETTING match (NTP Client).extracts 'Enabled' via Get-CisRecommendationStateText" time="0.0045" asserts="0" success="True" result="Success" executed="True" />
                 </results>
               </test-suite>
-              <test-suite type="TestFixture" name="CisCatalog.case and HKLM prefix ignored (admx-style registryKey)" executed="True" result="Success" success="True" time="0.0544" asserts="0" description="CisCatalog.case and HKLM prefix ignored (admx-style registryKey)">
+              <test-suite type="TestFixture" name="CisCatalog.case and HKLM prefix ignored (admx-style registryKey)" executed="True" result="Success" success="True" time="0.0492" asserts="0" description="CisCatalog.case and HKLM prefix ignored (admx-style registryKey)">
                 <results>
-                  <test-case description="matches case-insensitively" name="CisCatalog.case and HKLM prefix ignored (admx-style registryKey).matches case-insensitively" time="0.0045" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="matches case-insensitively" name="CisCatalog.case and HKLM prefix ignored (admx-style registryKey).matches case-insensitively" time="0.0039" asserts="0" success="True" result="Success" executed="True" />
                 </results>
               </test-suite>
-              <test-suite type="TestFixture" name="CisCatalog.PASSWORD_POLICY match (via manual table)" executed="True" result="Success" success="True" time="0.0707" asserts="0" description="CisCatalog.PASSWORD_POLICY match (via manual table)">
+              <test-suite type="TestFixture" name="CisCatalog.PASSWORD_POLICY match (via manual table)" executed="True" result="Success" success="True" time="0.0662" asserts="0" description="CisCatalog.PASSWORD_POLICY match (via manual table)">
                 <results>
-                  <test-case description="resolves the @PASSWORD_HISTORY@ variable to [24..MAX]" name="CisCatalog.PASSWORD_POLICY match (via manual table).resolves the @PASSWORD_HISTORY@ variable to [24..MAX]" time="0.0112" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="resolves the @PASSWORD_HISTORY@ variable to [24..MAX]" name="CisCatalog.PASSWORD_POLICY match (via manual table).resolves the @PASSWORD_HISTORY@ variable to [24..MAX]" time="0.0117" asserts="0" success="True" result="Success" executed="True" />
                 </results>
               </test-suite>
-              <test-suite type="TestFixture" name="CisCatalog.USER_RIGHTS_POLICY match (direct name)" executed="True" result="Success" success="True" time="0.0786" asserts="0" description="CisCatalog.USER_RIGHTS_POLICY match (direct name)">
+              <test-suite type="TestFixture" name="CisCatalog.USER_RIGHTS_POLICY match (direct name)" executed="True" result="Success" success="True" time="0.0743" asserts="0" description="CisCatalog.USER_RIGHTS_POLICY match (direct name)">
                 <results>
-                  <test-case description="finds SeTrustedCredManAccessPrivilege" name="CisCatalog.USER_RIGHTS_POLICY match (direct name).finds SeTrustedCredManAccessPrivilege" time="0.0035" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="finds SeTrustedCredManAccessPrivilege" name="CisCatalog.USER_RIGHTS_POLICY match (direct name).finds SeTrustedCredManAccessPrivilege" time="0.0037" asserts="0" success="True" result="Success" executed="True" />
                 </results>
               </test-suite>
-              <test-suite type="TestFixture" name="CisCatalog.AUDIT_POLICY_SUBCATEGORY match" executed="True" result="Success" success="True" time="0.0875" asserts="0" description="CisCatalog.AUDIT_POLICY_SUBCATEGORY match">
+              <test-suite type="TestFixture" name="CisCatalog.catalog gaps closed (plan-gpedit-cis-admx-check.md §3)" executed="True" result="Success" success="True" time="0.1445" asserts="0" description="CisCatalog.catalog gaps closed (plan-gpedit-cis-admx-check.md §3)">
                 <results>
-                  <test-case description="finds 'Security Group Management' and normalizes the A||B alternative" name="CisCatalog.AUDIT_POLICY_SUBCATEGORY match.finds 'Security Group Management' and normalizes the A||B alternative" time="0.0045" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="resolves &quot;Allow Administrator account lockout&quot; (LOCKOUT_ADMINS)" name="CisCatalog.catalog gaps closed (plan-gpedit-cis-admx-check.md §3).resolves &quot;Allow Administrator account lockout&quot; (LOCKOUT_ADMINS)" time="0.0516" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="resolves &quot;Relax minimum password length limits&quot;" name="CisCatalog.catalog gaps closed (plan-gpedit-cis-admx-check.md §3).resolves &quot;Relax minimum password length limits&quot;" time="0.0058" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="resolves LDAP client ENCRYPTION separately from LDAP client SIGNING" name="CisCatalog.catalog gaps closed (plan-gpedit-cis-admx-check.md §3).resolves LDAP client ENCRYPTION separately from LDAP client SIGNING" time="0.0078" asserts="0" success="True" result="Success" executed="True" />
                 </results>
               </test-suite>
-              <test-suite type="TestFixture" name="CisCatalog.settings with no CIS match" executed="True" result="Success" success="True" time="0.0991" asserts="0" description="CisCatalog.settings with no CIS match">
+              <test-suite type="TestFixture" name="CisCatalog.Resolve-CisSecurityWrite REG_* type" executed="True" result="Success" success="True" time="0.1867" asserts="0" description="CisCatalog.Resolve-CisSecurityWrite REG_* type">
                 <results>
-                  <test-case description="returns $null instead of throwing" name="CisCatalog.settings with no CIS match.returns $null instead of throwing" time="0.0069" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="defaults a RegType-less reg-boolean to REG_DWORD" name="CisCatalog.Resolve-CisSecurityWrite REG_* type.defaults a RegType-less reg-boolean to REG_DWORD" time="0.0156" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="defaults a RegType-less reg-number to REG_DWORD" name="CisCatalog.Resolve-CisSecurityWrite REG_* type.defaults a RegType-less reg-number to REG_DWORD" time="0.0045" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="honours an explicit RegType (REG_SZ settings such as AllocateFloppies)" name="CisCatalog.Resolve-CisSecurityWrite REG_* type.honours an explicit RegType (REG_SZ settings such as AllocateFloppies)" time="0.0046" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="encodes a reg-enum choice as REG_DWORD" name="CisCatalog.Resolve-CisSecurityWrite REG_* type.encodes a reg-enum choice as REG_DWORD" time="0.0091" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="encodes an explicitly empty reg-multistring as REG_MULTI_SZ" name="CisCatalog.Resolve-CisSecurityWrite REG_* type.encodes an explicitly empty reg-multistring as REG_MULTI_SZ" time="0.0033" asserts="0" success="True" result="Success" executed="True" />
                 </results>
               </test-suite>
-              <test-suite type="TestFixture" name="CisCatalog.Get-CisRecommendationStateText ('CIS States' column)" executed="True" result="Success" success="True" time="0.1167" asserts="0" description="CisCatalog.Get-CisRecommendationStateText ('CIS States' column)">
+              <test-suite type="TestFixture" name="CisCatalog.ADMX requirement note numbered &quot;Note #N:&quot; (plan-gpedit-cis-admx-check.md §3.3)" executed="True" result="Success" success="True" time="0.1996" asserts="0" description="CisCatalog.ADMX requirement note numbered &quot;Note #N:&quot; (plan-gpedit-cis-admx-check.md §3.3)">
                 <results>
-                  <test-case description="strips the equivalence clause even without punctuation (NetBIOS)" name="CisCatalog.Get-CisRecommendationStateText ('CIS States' column).strips the equivalence clause even without punctuation (NetBIOS)" time="0.0057" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="works outside Administrative Templates (byUserRight)" name="CisCatalog.Get-CisRecommendationStateText ('CIS States' column).works outside Administrative Templates (byUserRight)" time="0.0037" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="does not throw on $null and returns $null" name="CisCatalog.Get-CisRecommendationStateText ('CIS States' column).does not throw on $null and returns $null" time="0.0033" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="detects the SecGuide.admx dependency of NetBT NodeType configuration" name="CisCatalog.ADMX requirement note numbered &quot;Note #N:&quot; (plan-gpedit-cis-admx-check.md §3.3).detects the SecGuide.admx dependency of NetBT NodeType configuration" time="0.0084" asserts="0" success="True" result="Success" executed="True" />
                 </results>
               </test-suite>
-              <test-suite type="TestFixture" name="CisCatalog.Get-CisRecommendationValueForProfile - no fallback across OS families" executed="True" result="Success" success="True" time="0.1865" asserts="0" description="CisCatalog.Get-CisRecommendationValueForProfile - no fallback across OS families">
+              <test-suite type="TestFixture" name="CisCatalog.AUDIT_POLICY_SUBCATEGORY match" executed="True" result="Success" success="True" time="0.2099" asserts="0" description="CisCatalog.AUDIT_POLICY_SUBCATEGORY match">
                 <results>
-                  <test-case description="never borrows a Server profile recommendation for a Windows 11 profile that NoLMHash does not cover" name="CisCatalog.Get-CisRecommendationValueForProfile - no fallback across OS families.never borrows a Server profile recommendation for a Windows 11 profile that NoLMHash does not cover" time="0.065" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="finds 'Security Group Management' and normalizes the A||B alternative" name="CisCatalog.AUDIT_POLICY_SUBCATEGORY match.finds 'Security Group Management' and normalizes the A||B alternative" time="0.0055" asserts="0" success="True" result="Success" executed="True" />
                 </results>
               </test-suite>
-              <test-suite type="TestFixture" name="CisCatalog.byTitle fallback (ANONYMOUS_SID_SETTING via cis-fallback-map.json)" executed="True" result="Success" success="True" time="10.9509" asserts="0" description="CisCatalog.byTitle fallback (ANONYMOUS_SID_SETTING via cis-fallback-map.json)">
+              <test-suite type="TestFixture" name="CisCatalog.settings with no CIS match" executed="True" result="Success" success="True" time="0.2202" asserts="0" description="CisCatalog.settings with no CIS match">
                 <results>
-                  <test-case description="resolves a System Access setting with no registry backing via DisplayName" name="CisCatalog.byTitle fallback (ANONYMOUS_SID_SETTING via cis-fallback-map.json).resolves a System Access setting with no registry backing via DisplayName" time="0.0085" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="still returns $null for a System Access setting with no match anywhere" name="CisCatalog.byTitle fallback (ANONYMOUS_SID_SETTING via cis-fallback-map.json).still returns $null for a System Access setting with no match anywhere" time="0.0041" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="primary matches (Registry Values / Privilege Rights) still win over the byTitle fallback" name="CisCatalog.byTitle fallback (ANONYMOUS_SID_SETTING via cis-fallback-map.json).primary matches (Registry Values / Privilege Rights) still win over the byTitle fallback" time="0.0041" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="returns $null instead of throwing" name="CisCatalog.settings with no CIS match.returns $null instead of throwing" time="0.0057" asserts="0" success="True" result="Success" executed="True" />
                 </results>
               </test-suite>
-              <test-suite type="TestFixture" name="CisCatalog.Get-CisMissingAdmxReport / Get-CisCatalogGapsReport (plan-gpedit-cis-admx-check.md)" executed="True" result="Success" success="True" time="11.4806" asserts="0" description="CisCatalog.Get-CisMissingAdmxReport / Get-CisCatalogGapsReport (plan-gpedit-cis-admx-check.md)">
+              <test-suite type="TestFixture" name="CisCatalog.Get-CisRecommendationStateText ('CIS States' column)" executed="True" result="Success" success="True" time="0.2348" asserts="0" description="CisCatalog.Get-CisRecommendationStateText ('CIS States' column)">
                 <results>
-                  <test-case description="builds the fixture index with the expected Skipped/needsManualReview counts" name="CisCatalog.Get-CisMissingAdmxReport / Get-CisCatalogGapsReport (plan-gpedit-cis-admx-check.md).builds the fixture index with the expected Skipped/needsManualReview counts" time="0.0084" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="never flags a setting reachable via a real ADMX policy (byRegistry)" name="CisCatalog.Get-CisMissingAdmxReport / Get-CisCatalogGapsReport (plan-gpedit-cis-admx-check.md).never flags a setting reachable via a real ADMX policy (byRegistry)" time="0.0078" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="never flags a setting reachable via a real Security Options &quot;Registry Values&quot; entry (REG_CHECK)" name="CisCatalog.Get-CisMissingAdmxReport / Get-CisCatalogGapsReport (plan-gpedit-cis-admx-check.md).never flags a setting reachable via a real Security Options &quot;Registry Values&quot; entry (REG_CHECK)" time="0.0053" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="never flags a setting reachable via CisPasswordLockoutKeyMap (Password/Lockout Policy)" name="CisCatalog.Get-CisMissingAdmxReport / Get-CisCatalogGapsReport (plan-gpedit-cis-admx-check.md).never flags a setting reachable via CisPasswordLockoutKeyMap (Password/Lockout Policy)" time="0.0048" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="never flags a setting reachable via a real User Right / Advanced Audit subcategory" name="CisCatalog.Get-CisMissingAdmxReport / Get-CisCatalogGapsReport (plan-gpedit-cis-admx-check.md).never flags a setting reachable via a real User Right / Advanced Audit subcategory" time="0.0044" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="reports an unreached REGISTRY_SETTING/REG_CHECK with no requiredAdmx note as a Catalog gap, not Missing ADMX" name="CisCatalog.Get-CisMissingAdmxReport / Get-CisCatalogGapsReport (plan-gpedit-cis-admx-check.md).reports an unreached REGISTRY_SETTING/REG_CHECK with no requiredAdmx note as a Catalog gap, not Missing ADMX" time="0.0057" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="reports an unreached REGISTRY_SETTING WITH a requiredAdmx note as Missing ADMX, not a Catalog gap" name="CisCatalog.Get-CisMissingAdmxReport / Get-CisCatalogGapsReport (plan-gpedit-cis-admx-check.md).reports an unreached REGISTRY_SETTING WITH a requiredAdmx note as Missing ADMX, not a Catalog gap" time="0.0041" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="reports an unreached Password/Lockout/User Right/Audit Subcategory entry as a Catalog gap (the real 1.2.3-style bug this report exists for)" name="CisCatalog.Get-CisMissingAdmxReport / Get-CisCatalogGapsReport (plan-gpedit-cis-admx-check.md).reports an unreached Password/Lockout/User Right/Audit Subcategory entry as a Catalog gap (the real 1.2.3-style bug this report exists for)" time="0.0052" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="never reports a Catalog gap row with the wrong bucket label" name="CisCatalog.Get-CisMissingAdmxReport / Get-CisCatalogGapsReport (plan-gpedit-cis-admx-check.md).never reports a Catalog gap row with the wrong bucket label" time="0.0107" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="never surfaces organization-specific (byOrgValue) entries in either report" name="CisCatalog.Get-CisMissingAdmxReport / Get-CisCatalogGapsReport (plan-gpedit-cis-admx-check.md).never surfaces organization-specific (byOrgValue) entries in either report" time="0.0036" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="never surfaces an unresolved title-fallback (needsManualReview) entry in either report" name="CisCatalog.Get-CisMissingAdmxReport / Get-CisCatalogGapsReport (plan-gpedit-cis-admx-check.md).never surfaces an unresolved title-fallback (needsManualReview) entry in either report" time="0.0026" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="never surfaces an unrecognized (Skipped) custom_item type in either report" name="CisCatalog.Get-CisMissingAdmxReport / Get-CisCatalogGapsReport (plan-gpedit-cis-admx-check.md).never surfaces an unrecognized (Skipped) custom_item type in either report" time="0.0027" asserts="0" success="True" result="Success" executed="True" />
-                  <test-case description="returns empty lists (not $null, does not throw) when no CIS profile is active" name="CisCatalog.Get-CisMissingAdmxReport / Get-CisCatalogGapsReport (plan-gpedit-cis-admx-check.md).returns empty lists (not $null, does not throw) when no CIS profile is active" time="0.0222" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="strips the equivalence clause even without punctuation (NetBIOS)" name="CisCatalog.Get-CisRecommendationStateText ('CIS States' column).strips the equivalence clause even without punctuation (NetBIOS)" time="0.0039" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="works outside Administrative Templates (byUserRight)" name="CisCatalog.Get-CisRecommendationStateText ('CIS States' column).works outside Administrative Templates (byUserRight)" time="0.0035" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="does not throw on $null and returns $null" name="CisCatalog.Get-CisRecommendationStateText ('CIS States' column).does not throw on $null and returns $null" time="0.0025" asserts="0" success="True" result="Success" executed="True" />
                 </results>
               </test-suite>
-              <test-case description="loads the generated CIS index" name="CisCatalog.loads the generated CIS index" time="0.0077" asserts="0" success="True" result="Success" executed="True" />
+              <test-suite type="TestFixture" name="CisCatalog.Get-CisRecommendationValueForProfile - no fallback across OS families" executed="True" result="Success" success="True" time="0.3702" asserts="0" description="CisCatalog.Get-CisRecommendationValueForProfile - no fallback across OS families">
+                <results>
+                  <test-case description="never borrows a Server profile recommendation for a Windows 11 profile that NoLMHash does not cover" name="CisCatalog.Get-CisRecommendationValueForProfile - no fallback across OS families.never borrows a Server profile recommendation for a Windows 11 profile that NoLMHash does not cover" time="0.1299" asserts="0" success="True" result="Success" executed="True" />
+                </results>
+              </test-suite>
+              <test-suite type="TestFixture" name="CisCatalog.byTitle fallback (ANONYMOUS_SID_SETTING via cis-fallback-map.json)" executed="True" result="Success" success="True" time="12.699" asserts="0" description="CisCatalog.byTitle fallback (ANONYMOUS_SID_SETTING via cis-fallback-map.json)">
+                <results>
+                  <test-case description="resolves a System Access setting with no registry backing via DisplayName" name="CisCatalog.byTitle fallback (ANONYMOUS_SID_SETTING via cis-fallback-map.json).resolves a System Access setting with no registry backing via DisplayName" time="0.0074" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="still returns $null for a System Access setting with no match anywhere" name="CisCatalog.byTitle fallback (ANONYMOUS_SID_SETTING via cis-fallback-map.json).still returns $null for a System Access setting with no match anywhere" time="0.0032" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="primary matches (Registry Values / Privilege Rights) still win over the byTitle fallback" name="CisCatalog.byTitle fallback (ANONYMOUS_SID_SETTING via cis-fallback-map.json).primary matches (Registry Values / Privilege Rights) still win over the byTitle fallback" time="0.0044" asserts="0" success="True" result="Success" executed="True" />
+                </results>
+              </test-suite>
+              <test-suite type="TestFixture" name="CisCatalog.Get-CisMissingAdmxReport / Get-CisCatalogGapsReport (plan-gpedit-cis-admx-check.md)" executed="True" result="Success" success="True" time="13.2161" asserts="0" description="CisCatalog.Get-CisMissingAdmxReport / Get-CisCatalogGapsReport (plan-gpedit-cis-admx-check.md)">
+                <results>
+                  <test-case description="builds the fixture index with the expected Skipped/needsManualReview counts" name="CisCatalog.Get-CisMissingAdmxReport / Get-CisCatalogGapsReport (plan-gpedit-cis-admx-check.md).builds the fixture index with the expected Skipped/needsManualReview counts" time="0.0088" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="never flags a setting reachable via a real ADMX policy (byRegistry)" name="CisCatalog.Get-CisMissingAdmxReport / Get-CisCatalogGapsReport (plan-gpedit-cis-admx-check.md).never flags a setting reachable via a real ADMX policy (byRegistry)" time="0.0079" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="never flags a setting reachable via a real Security Options &quot;Registry Values&quot; entry (REG_CHECK)" name="CisCatalog.Get-CisMissingAdmxReport / Get-CisCatalogGapsReport (plan-gpedit-cis-admx-check.md).never flags a setting reachable via a real Security Options &quot;Registry Values&quot; entry (REG_CHECK)" time="0.0047" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="never flags a setting reachable via CisPasswordLockoutKeyMap (Password/Lockout Policy)" name="CisCatalog.Get-CisMissingAdmxReport / Get-CisCatalogGapsReport (plan-gpedit-cis-admx-check.md).never flags a setting reachable via CisPasswordLockoutKeyMap (Password/Lockout Policy)" time="0.0046" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="never flags a setting reachable via a real User Right / Advanced Audit subcategory" name="CisCatalog.Get-CisMissingAdmxReport / Get-CisCatalogGapsReport (plan-gpedit-cis-admx-check.md).never flags a setting reachable via a real User Right / Advanced Audit subcategory" time="0.0043" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="reports an unreached REGISTRY_SETTING/REG_CHECK with no requiredAdmx note as a Catalog gap, not Missing ADMX" name="CisCatalog.Get-CisMissingAdmxReport / Get-CisCatalogGapsReport (plan-gpedit-cis-admx-check.md).reports an unreached REGISTRY_SETTING/REG_CHECK with no requiredAdmx note as a Catalog gap, not Missing ADMX" time="0.0053" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="reports an unreached REGISTRY_SETTING WITH a requiredAdmx note as Missing ADMX, not a Catalog gap" name="CisCatalog.Get-CisMissingAdmxReport / Get-CisCatalogGapsReport (plan-gpedit-cis-admx-check.md).reports an unreached REGISTRY_SETTING WITH a requiredAdmx note as Missing ADMX, not a Catalog gap" time="0.0034" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="reports an unreached Password/Lockout/User Right/Audit Subcategory entry as a Catalog gap (the real 1.2.3-style bug this report exists for)" name="CisCatalog.Get-CisMissingAdmxReport / Get-CisCatalogGapsReport (plan-gpedit-cis-admx-check.md).reports an unreached Password/Lockout/User Right/Audit Subcategory entry as a Catalog gap (the real 1.2.3-style bug this report exists for)" time="0.0062" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="never reports a Catalog gap row with the wrong bucket label" name="CisCatalog.Get-CisMissingAdmxReport / Get-CisCatalogGapsReport (plan-gpedit-cis-admx-check.md).never reports a Catalog gap row with the wrong bucket label" time="0.012" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="never surfaces organization-specific (byOrgValue) entries in either report" name="CisCatalog.Get-CisMissingAdmxReport / Get-CisCatalogGapsReport (plan-gpedit-cis-admx-check.md).never surfaces organization-specific (byOrgValue) entries in either report" time="0.0045" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="never surfaces an unresolved title-fallback (needsManualReview) entry in either report" name="CisCatalog.Get-CisMissingAdmxReport / Get-CisCatalogGapsReport (plan-gpedit-cis-admx-check.md).never surfaces an unresolved title-fallback (needsManualReview) entry in either report" time="0.0187" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="never surfaces an unrecognized (Skipped) custom_item type in either report" name="CisCatalog.Get-CisMissingAdmxReport / Get-CisCatalogGapsReport (plan-gpedit-cis-admx-check.md).never surfaces an unrecognized (Skipped) custom_item type in either report" time="0.0026" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description="returns empty lists (not $null, does not throw) when no CIS profile is active" name="CisCatalog.Get-CisMissingAdmxReport / Get-CisCatalogGapsReport (plan-gpedit-cis-admx-check.md).returns empty lists (not $null, does not throw) when no CIS profile is active" time="0.0073" asserts="0" success="True" result="Success" executed="True" />
+                </results>
+              </test-suite>
+              <test-case description="loads the generated CIS index" name="CisCatalog.loads the generated CIS index" time="0.0064" asserts="0" success="True" result="Success" executed="True" />
             </results>
           </test-suite>
         </results>

@@ -800,11 +800,18 @@ function Get-CisAdmxRequirementNote {
 
     # "Note:" or "Note #<n>:" - both introduce the same four phrasings.
     $notePrefix = 'Note(?:\s*#\d+)?:\s*'
+    # "included with the <version-specific text>" for a template new to a
+    # given OS/CIS revision, vs. "included with all versions of the <text>"
+    # for a template bundled since XP/2003 (Sharing.admx, AttachmentManager.admx...)
+    # - both phrasings appear verbatim across the bundled .audit files, so
+    # both must be accepted or the "all versions of" controls fall through
+    # to "CIS - Catalog gaps" as unexplained instead of "Missing ADMX templates".
+    $includedWith = 'included with (?:all versions of )?the\s+([^\r\n]+)'
     $patterns = @(
-        @{ Category = 'BundledConditional'; HasVersion = $true;  Regex = $notePrefix + 'This Group Policy path is provided by the Group Policy template\s+([A-Za-z0-9_.\-]+\.admx)/adml\s+that is included with the\s+([^\r\n]+)' }
-        @{ Category = 'BundledConditional'; HasVersion = $true;  Regex = $notePrefix + 'This Group Policy path may not exist by default\.\s*It is provided by the Group Policy template\s+([A-Za-z0-9_.\-]+\.admx)/adml\s+that is included with the\s+([^\r\n]+)' }
+        @{ Category = 'BundledConditional'; HasVersion = $true;  Regex = $notePrefix + 'This Group Policy path is provided by the Group Policy template\s+([A-Za-z0-9_.\-]+\.admx)/adml\s+that is ' + $includedWith }
+        @{ Category = 'BundledConditional'; HasVersion = $true;  Regex = $notePrefix + 'This Group Policy path may not exist by default\.\s*It is provided by the Group Policy template\s+([A-Za-z0-9_.\-]+\.admx)/adml\s+that is ' + $includedWith }
         @{ Category = 'ManualDownload';     HasVersion = $false; Regex = $notePrefix + 'This Group Policy path does not exist by default\.\s*An additional Group Policy template\s*\(\s*([A-Za-z0-9_.\-]+\.admx)/adml\s*\)\s*is required' }
-        @{ Category = 'ThirdParty';         HasVersion = $true;  Regex = $notePrefix + 'This Group Policy path is NOT provided by Microsoft\.\s*The Group Policy template\s+([A-Za-z0-9_.\-]+\.admx)/adml\s+is included with the\s+([^\r\n]+)' }
+        @{ Category = 'ThirdParty';         HasVersion = $true;  Regex = $notePrefix + 'This Group Policy path is NOT provided by Microsoft\.\s*The Group Policy template\s+([A-Za-z0-9_.\-]+\.admx)/adml\s+is ' + $includedWith }
     )
 
     foreach ($p in $patterns) {
@@ -843,7 +850,13 @@ function Get-CisMatchKey {
         # "DisableBkGndGroupPolicy").
         { $_ -in 'REGISTRY_SETTING', 'REG_CHECK' } {
             if (-not $RegKey -or -not $RegItem) { return $null }
-            $normKey = ($RegKey -replace '^HKLM\\', '').ToLowerInvariant()
+            # HKLM\ for Computer Configuration entries; HKU\...\S-1-5-21-*
+            # (see reg_include_hku_users) for User Configuration entries
+            # that can't be checked offline via a fixed HKCU hive - the ADMX
+            # index's registryKey (Build-Index.ps1 -Kind Admx, $pol.key) never
+            # carries a hive prefix either way, so both must be stripped for
+            # byRegistry to match Get-CisRecommendationForRegistry's key.
+            $normKey = ($RegKey -replace '^(HKLM|HKU)\\', '').ToLowerInvariant()
             return [ordered]@{ bucket = 'byRegistry'; key = "$normKey|$($RegItem.ToLowerInvariant())" }
         }
         'PASSWORD_POLICY' {

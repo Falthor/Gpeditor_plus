@@ -5,6 +5,15 @@ section per release date, most recent first. This file is the single
 source for the "Release Notes" panel in the right-hand pane and for
 ? > Patch note
 
+## 2026-07-31 — Copy rows to clipboard from any table
+
+- Added: every table in the app (the main policy list, CIS recommendation
+  grids, Import review grids, "CIS - Missing ADMX templates" and "CIS -
+  Catalog gaps") now supports selecting one or more rows and copying them
+  to the clipboard as tab-separated text (Ctrl+C or right-click > Copy),
+  using only the columns currently shown on screen. Multi-row selection
+  (click+Shift/Ctrl) is now enabled everywhere for this.
+
 ## 2026-07-31 — Four CIS controls the app could not reach
 
 - Added two missing Security Settings: "Relax minimum password length

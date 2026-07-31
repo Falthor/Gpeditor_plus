@@ -616,6 +616,7 @@ function Show-CisMissingAdmxDialog {
     }
 
     $grid = $window.FindName('CisMissingAdmxGrid')
+    Register-DataGridClipboardCopy -Control $grid -Ui $Ui
     $items = New-Object System.Collections.Generic.List[object]
     foreach ($row in @($Rows)) {
         $items.Add([pscustomobject]@{
@@ -661,6 +662,7 @@ function Show-CisCatalogGapsDialog {
     }
 
     $grid = $window.FindName('CisCatalogGapsGrid')
+    Register-DataGridClipboardCopy -Control $grid -Ui $Ui
     $items = New-Object System.Collections.Generic.List[object]
     foreach ($row in @($Rows)) {
         $items.Add([pscustomobject]@{

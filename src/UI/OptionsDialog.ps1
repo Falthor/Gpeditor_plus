@@ -39,6 +39,9 @@ function Show-OptionsDialog {
     $window.FindName('ImportGroupBox').Header = $Ui.OthersGroupImportHeader
     $window.FindName('OthersImportExplanationLabel').Text = $Ui.OthersImportExplanation
     $window.FindName('DefaultImportModeLabel').Text = $Ui.DefaultImportModeLabel
+    $window.FindName('ClearDataGroupBox').Header = $Ui.OthersGroupClearDataHeader
+    $window.FindName('ClearDataExplanationLabel').Text = $Ui.ClearDataExplanation
+    $window.FindName('ClearDataButton').Content = $Ui.ClearDataButton
     $window.FindName('DefaultImportModeClassicItem').Content = $Ui.ImportModeClassic
     $window.FindName('DefaultImportModeStandardItem').Content = $Ui.ImportModeStandard
     $window.FindName('DefaultImportModeAdvancedItem').Content = $Ui.ImportModeAdvanced
@@ -195,6 +198,38 @@ function Show-OptionsDialog {
         Save-AppSettings -Settings $script:AppSettings
     })
 
+    # --- Others tab: Clear Data - wipes %LocalAppData%\Gpeditor_plus\ (settings.json,
+    # cached CIS/ADMX indexes, any leftover project file from the old default
+    # location) and restarts, same relaunch pattern as Save (path changes). ---
+    $clearDataButton = $window.FindName('ClearDataButton')
+    $clearDataButton.Add_Click({
+        $confirm = [System.Windows.MessageBox]::Show($Ui.ClearDataConfirmMessage, $Ui.ClearDataConfirmTitle, 'YesNo', 'Warning')
+        if ($confirm -ne [System.Windows.MessageBoxResult]::Yes) { return }
+        try {
+            $localDataDir = Join-Path $env:LOCALAPPDATA 'Gpeditor_plus'
+            if (Test-Path -LiteralPath $localDataDir) {
+                Remove-Item -LiteralPath $localDataDir -Recurse -Force
+            }
+        }
+        catch {
+            [System.Windows.MessageBox]::Show(($Ui.ClearDataErrorFormat -f $_.Exception.Message), $Ui.ErrorTitle, 'OK', 'Warning') | Out-Null
+            return
+        }
+
+        try {
+            $hostExePath = (Get-Process -Id $PID).Path
+            $mainScriptPath = Join-Path $ScriptRoot 'GpEdit.ps1'
+            Start-Process -FilePath $hostExePath -ArgumentList @('-File', "`"$mainScriptPath`"") -Verb RunAs -ErrorAction Stop | Out-Null
+        }
+        catch {
+            [System.Windows.MessageBox]::Show(($Ui.RestartFailedFormat -f $_.Exception.Message), $Ui.ErrorTitle, 'OK', 'Warning') | Out-Null
+            return
+        }
+
+        $window.Close()
+        if (-not $window.IsVisible) { $Owner.Close() }
+    })
+
     $null = $window.ShowDialog()
 }
 
@@ -235,6 +270,10 @@ function Invoke-CisIndexRebuild {
         $fingerprint = Get-AuditFilesFingerprint -AuditFilesPath $AuditFilesPath
         & (Join-Path $ScriptRoot 'Indexers\Build-Index.ps1') -Kind Cis -AuditFilesPath $AuditFilesPath -OutputPath $outputPath -SourceFingerprint $fingerprint
         $script:CisIndex = Import-CisIndex -Path $outputPath
+        # $script:CisIndex just changed - every cached CIS resolution
+        # (Build-CisRecommendationCache, GpEdit.ps1) is now stale and must be
+        # recomputed against the new index.
+        Build-CisRecommendationCache
     }
     catch {
         [System.Windows.MessageBox]::Show(($Ui.CisIndexRebuildErrorFormat -f $_.Exception.Message), $Ui.ErrorTitle, 'OK', 'Warning') | Out-Null

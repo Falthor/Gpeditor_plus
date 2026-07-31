@@ -75,6 +75,13 @@ if (-not (Test-IsRunningAsAdministrator)) {
 # launch creates default folders and seeds Audit from src\DefaultData\*.audit.
 $script:AppSettings = Get-AppSettings
 Initialize-AppSettingsFirstRun -Settings $script:AppSettings -ScriptRoot $PSScriptRoot
+# Projects moved from %LocalAppData% to a fixed ProgramData default - unlike
+# the other paths.* folders (created once, on first run only), this one is
+# ensured on every launch so an existing install picks up the new default
+# location without the folder missing under it.
+if (-not (Test-Path -LiteralPath $script:AppSettings.paths.projectsDir)) {
+    New-Item -ItemType Directory -Path $script:AppSettings.paths.projectsDir -Force | Out-Null
+}
 $script:CatalogEditingEnabled = $script:AppSettings.editorMode
 $BackupRoot = $script:AppSettings.paths.backupRoot
 $SecEditInfPath = Join-Path $script:AppSettings.paths.tempDir 'secedit.inf'
@@ -632,6 +639,7 @@ $window.Resources.MergedDictionaries.Add($script:ModernStyle)
 
 $categoryTree      = $window.FindName('CategoryTree')
 $policyList        = $window.FindName('PolicyList')
+Register-DataGridClipboardCopy -Control $policyList -Ui (Get-UiStrings) -TemplateColumnProperties @{ Name = 'DisplayName' }
 $categoryPathLabel = $window.FindName('CategoryPathLabel')
 $statusLabel       = $window.FindName('StatusLabel')
 $searchBox         = $window.FindName('SearchBox')
@@ -832,6 +840,183 @@ function Get-CisRowLabels {
     }
 }
 
+# ---------------------------------------------------------------------------
+# CIS recommendation cache: Get-CisRecommendationForAdmxPolicy/
+# -ForSecuritySetting/-ForAuditSubcategory are pure functions of
+# (CisIndex, item) - their result never changes for the life of a given
+# $script:CisIndex. Every consumer below (Update-PolicyList, Invoke-Search,
+# Update-TreeVisibilityForCisFilter, the CIS Gap-fill generator...) used to
+# recompute it from scratch on every call - measured at ~700ms for a full
+# pass over the real catalog (3548 ADMX policies + 167 Security settings +
+# 59 Advanced Audit subcategories), paid again on every search/category
+# click. Precomputed once here into PolicyId/SettingId -> result
+# dictionaries instead; consumers do an O(1) lookup. Built once at startup
+# (after $script:CisIndex is loaded) and rebuilt by Invoke-CisIndexRebuild
+# (OptionsDialog.ps1) whenever the CIS index itself is rebuilt.
+# ---------------------------------------------------------------------------
+$script:CisRecCacheByAdmxPolicyId = @{}
+$script:CisRecCacheBySecuritySettingId = @{}
+$script:CisRecCacheByAuditSubcategoryId = @{}
+
+# ---------------------------------------------------------------------------
+# Search haystacks: one precomputed, already-concatenated string per item per
+# field group (Name/Description/Key/CisNumber/Any), built in the same pass as
+# the CIS recommendation cache above (reuses its already-resolved CisEntry -
+# no extra CIS lookup). A live search used to call Test-ContainsIgnoreCase
+# several times per item PLUS a nested per-element/per-profile loop
+# (Test-AdmxKeyMatch/Test-SearchCisNumberMatch) - measured at ~1.1s for the
+# ADMX loop alone (3548 policies) in the real app, dwarfing the CIS cache's
+# own ~100ms. Not the CIS lookup itself but the sheer number of PowerShell
+# function calls per item. Reduced here to exactly one Test-ContainsIgnoreCase
+# call per item per search (Test-SearchMatchHaystack below) by joining every
+# searchable field into one string at cache-build time instead of at search
+# time - "`n" separators so a query can never accidentally match across a
+# field boundary that isn't present in any single field.
+# ---------------------------------------------------------------------------
+$script:SearchHaystackByAdmxPolicyId = @{}
+$script:SearchHaystackBySecuritySettingId = @{}
+$script:SearchHaystackByAuditSubcategoryId = @{}
+
+function New-SearchHaystack {
+    # $Fields: ordered list of raw (not lowercased - Test-ContainsIgnoreCase
+    # is itself case-insensitive) strings/arrays-of-strings to join. $null/
+    # empty entries collapse to nothing rather than an empty line.
+    param([object[]]$Fields)
+    $parts = New-Object System.Collections.Generic.List[string]
+    foreach ($f in $Fields) {
+        foreach ($v in @($f)) {
+            if (-not [string]::IsNullOrEmpty($v)) { $parts.Add($v) }
+        }
+    }
+    return ($parts -join "`n")
+}
+
+function New-AdmxSearchHaystack {
+    param($Policy, $CisEntry)
+    $name = $Policy.displayName
+    $description = $Policy.explainText
+    $key = New-SearchHaystack -Fields @(
+        $Policy.registryKey, $Policy.valueName, $Policy.admxFile,
+        @(@($Policy.elements) | ForEach-Object { $_.id, $_.valueName, $_.key })
+    )
+    $cisNumber = if ($CisEntry) { New-SearchHaystack -Fields @(@($CisEntry.profiles) | ForEach-Object { $_.cisNumber }) } else { '' }
+    return [pscustomobject]@{
+        Name        = $name
+        Description = $description
+        Key         = $key
+        CisNumber   = $cisNumber
+        Any         = New-SearchHaystack -Fields @($name, $description, $key, $cisNumber)
+    }
+}
+
+function New-SecuritySearchHaystack {
+    param($Setting, $CisEntry)
+    $name = $Setting.displayName
+    $description = $Setting.description
+    $key = New-SearchHaystack -Fields @($Setting.name, $Setting.section)
+    $cisNumber = if ($CisEntry) { New-SearchHaystack -Fields @(@($CisEntry.profiles) | ForEach-Object { $_.cisNumber }) } else { '' }
+    return [pscustomobject]@{
+        Name        = $name
+        Description = $description
+        Key         = $key
+        CisNumber   = $cisNumber
+        Any         = New-SearchHaystack -Fields @($name, $description, $key, $cisNumber)
+    }
+}
+
+function New-AuditSearchHaystack {
+    param($Setting, $CisEntry)
+    $name = $Setting.displayName
+    # AdvancedAuditCatalog.ps1 always leaves "description" empty - kept for
+    # shape consistency with the other two haystacks, same as
+    # Test-SearchMatchAdvancedAudit before this change.
+    $description = $Setting.description
+    $key = New-SearchHaystack -Fields @($Setting.name, $Setting.guid)
+    $cisNumber = if ($CisEntry) { New-SearchHaystack -Fields @(@($CisEntry.profiles) | ForEach-Object { $_.cisNumber }) } else { '' }
+    return [pscustomobject]@{
+        Name        = $name
+        Description = $description
+        Key         = $key
+        CisNumber   = $cisNumber
+        Any         = New-SearchHaystack -Fields @($name, $description, $key, $cisNumber)
+    }
+}
+
+function Build-CisRecommendationCache {
+    $byAdmx = @{}
+    $haystackAdmx = @{}
+    foreach ($pol in $script:admxIndex.policies) {
+        $rec = Get-CisRecommendationForAdmxPolicy -CisIndex $script:CisIndex -Policy $pol
+        $byAdmx[$pol.id] = $rec
+        $haystackAdmx[$pol.id] = New-AdmxSearchHaystack -Policy $pol -CisEntry $rec.CisEntry
+    }
+    $script:CisRecCacheByAdmxPolicyId = $byAdmx
+    $script:SearchHaystackByAdmxPolicyId = $haystackAdmx
+
+    $bySecurity = @{}
+    $haystackSecurity = @{}
+    foreach ($setting in $script:securityIndex.settings) {
+        $rec = Get-CisRecommendationForSecuritySetting -CisIndex $script:CisIndex -Section $setting.section -Name $setting.name -DisplayName $setting.displayName
+        $bySecurity[$setting.id] = $rec
+        $haystackSecurity[$setting.id] = New-SecuritySearchHaystack -Setting $setting -CisEntry $rec
+    }
+    $script:CisRecCacheBySecuritySettingId = $bySecurity
+    $script:SearchHaystackBySecuritySettingId = $haystackSecurity
+
+    $byAudit = @{}
+    $haystackAudit = @{}
+    foreach ($setting in $script:advancedAuditIndex.settings) {
+        $rec = Get-CisRecommendationForAuditSubcategory -CisIndex $script:CisIndex -SubcategoryNameEn $setting.name
+        $byAudit[$setting.id] = $rec
+        $haystackAudit[$setting.id] = New-AuditSearchHaystack -Setting $setting -CisEntry $rec
+    }
+    $script:CisRecCacheByAuditSubcategoryId = $byAudit
+    $script:SearchHaystackByAuditSubcategoryId = $haystackAudit
+}
+
+# Returns the same [pscustomobject]@{ CisEntry; ElementId } shape as
+# Get-CisRecommendationForAdmxPolicy - falls back to a live call if $Policy
+# isn't in the cache (defensive only; every policy in $script:admxIndex is
+# cached at build time, so this should never actually miss).
+function Get-CachedCisRecommendationForAdmxPolicy {
+    param($Policy)
+    if ($script:CisRecCacheByAdmxPolicyId.ContainsKey($Policy.id)) { return $script:CisRecCacheByAdmxPolicyId[$Policy.id] }
+    return Get-CisRecommendationForAdmxPolicy -CisIndex $script:CisIndex -Policy $Policy
+}
+
+function Get-CachedCisRecommendationForSecuritySetting {
+    param($Setting)
+    if ($script:CisRecCacheBySecuritySettingId.ContainsKey($Setting.id)) { return $script:CisRecCacheBySecuritySettingId[$Setting.id] }
+    return Get-CisRecommendationForSecuritySetting -CisIndex $script:CisIndex -Section $Setting.section -Name $Setting.name -DisplayName $Setting.displayName
+}
+
+function Get-CachedCisRecommendationForAuditSubcategory {
+    param($Setting)
+    if ($script:CisRecCacheByAuditSubcategoryId.ContainsKey($Setting.id)) { return $script:CisRecCacheByAuditSubcategoryId[$Setting.id] }
+    return Get-CisRecommendationForAuditSubcategory -CisIndex $script:CisIndex -SubcategoryNameEn $Setting.name
+}
+
+# Defensive fallback (same reasoning as Get-CachedCisRecommendationFor*
+# above) if $Policy somehow isn't in the cache - rebuilds its haystack from a
+# live CIS lookup rather than failing the search for that one item.
+function Get-SearchHaystackForAdmxPolicy {
+    param($Policy)
+    if ($script:SearchHaystackByAdmxPolicyId.ContainsKey($Policy.id)) { return $script:SearchHaystackByAdmxPolicyId[$Policy.id] }
+    return New-AdmxSearchHaystack -Policy $Policy -CisEntry (Get-CachedCisRecommendationForAdmxPolicy -Policy $Policy).CisEntry
+}
+
+function Get-SearchHaystackForSecuritySetting {
+    param($Setting)
+    if ($script:SearchHaystackBySecuritySettingId.ContainsKey($Setting.id)) { return $script:SearchHaystackBySecuritySettingId[$Setting.id] }
+    return New-SecuritySearchHaystack -Setting $Setting -CisEntry (Get-CachedCisRecommendationForSecuritySetting -Setting $Setting)
+}
+
+function Get-SearchHaystackForAuditSubcategory {
+    param($Setting)
+    if ($script:SearchHaystackByAuditSubcategoryId.ContainsKey($Setting.id)) { return $script:SearchHaystackByAuditSubcategoryId[$Setting.id] }
+    return New-AuditSearchHaystack -Setting $Setting -CisEntry (Get-CachedCisRecommendationForAuditSubcategory -Setting $Setting)
+}
+
 function Update-TreeVisibilityForCisFilter {
     <#
         Filtering by CIS profile and/or "has a CIS recommendation" must not
@@ -849,7 +1034,7 @@ function Update-TreeVisibilityForCisFilter {
     $keepVisible = @{}
 
     foreach ($pol in $script:admxIndex.policies) {
-        $cisRec = (Get-CisRecommendationForAdmxPolicy -CisIndex $script:CisIndex -Policy $pol).CisEntry
+        $cisRec = (Get-CachedCisRecommendationForAdmxPolicy -Policy $pol).CisEntry
         if (-not (Test-CisProfileFilterMatch -CisEntry $cisRec)) { continue }
         foreach ($scope in @('Machine', 'User')) {
             if (-not (Test-PolicyMatchesScope -PolicyClass $pol.class -Scope $scope)) { continue }
@@ -861,7 +1046,7 @@ function Update-TreeVisibilityForCisFilter {
     }
 
     foreach ($setting in $script:securityIndex.settings) {
-        $cisRec = Get-CisRecommendationForSecuritySetting -CisIndex $script:CisIndex -Section $setting.section -Name $setting.name -DisplayName $setting.displayName
+        $cisRec = Get-CachedCisRecommendationForSecuritySetting -Setting $setting
         if (-not (Test-CisProfileFilterMatch -CisEntry $cisRec)) { continue }
         if ($script:TreeItemsBySecurityCategory.ContainsKey($setting.category)) {
             Add-TreeKeepVisible -KeepSet $keepVisible -Node $script:TreeItemsBySecurityCategory[$setting.category] -Ancestors $script:TreeAncestorsBySecurityCategory[$setting.category]
@@ -869,7 +1054,7 @@ function Update-TreeVisibilityForCisFilter {
     }
 
     foreach ($setting in $script:advancedAuditIndex.settings) {
-        $cisRec = Get-CisRecommendationForAuditSubcategory -CisIndex $script:CisIndex -SubcategoryNameEn $setting.name
+        $cisRec = Get-CachedCisRecommendationForAuditSubcategory -Setting $setting
         if (-not (Test-CisProfileFilterMatch -CisEntry $cisRec)) { continue }
         if ($script:TreeItemsByAdvAuditCategory.ContainsKey($setting.category)) {
             Add-TreeKeepVisible -KeepSet $keepVisible -Node $script:TreeItemsByAdvAuditCategory[$setting.category] -Ancestors $script:TreeAncestorsByAdvAuditCategory[$setting.category]
@@ -1253,7 +1438,7 @@ function Invoke-CisProfileOverlay {
         foreach ($pol in $script:admxIndex.policies) {
             foreach ($scope in @('Machine', 'User')) {
                 if (-not (Test-PolicyMatchesScope -PolicyClass $pol.class -Scope $scope)) { continue }
-                $admxMatch = Get-CisRecommendationForAdmxPolicy -CisIndex $script:CisIndex -Policy $pol
+                $admxMatch = Get-CachedCisRecommendationForAdmxPolicy -Policy $pol
                 $cisRec = $admxMatch.CisEntry
                 if (-not $cisRec) { continue }
                 $recValue = Get-CisRecommendationValueForProfile -CisEntry $cisRec -ActiveProfile $activeProfile
@@ -1275,7 +1460,7 @@ function Invoke-CisProfileOverlay {
 
         # --- Security Settings (Account Policies, classic Audit Policy, Security Options, User Rights Assignment) ---
         foreach ($setting in $securitySettings) {
-            $cisRec = Get-CisRecommendationForSecuritySetting -CisIndex $script:CisIndex -Section $setting.section -Name $setting.name -DisplayName $setting.displayName
+            $cisRec = Get-CachedCisRecommendationForSecuritySetting -Setting $setting
             if (-not $cisRec) { continue }
             $recValue = Get-CisRecommendationValueForProfile -CisEntry $cisRec -ActiveProfile $activeProfile
             if ($null -eq $recValue) { continue }
@@ -1293,7 +1478,7 @@ function Invoke-CisProfileOverlay {
 
         # --- Advanced Audit Policy Configuration ---
         foreach ($sub in (Get-AdvancedAuditCatalogEntries)) {
-            $cisRec = Get-CisRecommendationForAuditSubcategory -CisIndex $script:CisIndex -SubcategoryNameEn $sub.name
+            $cisRec = Get-CachedCisRecommendationForAuditSubcategory -Setting $sub
             if (-not $cisRec) { continue }
             $recValue = Get-CisRecommendationValueForProfile -CisEntry $cisRec -ActiveProfile $activeProfile
             if ($null -eq $recValue) { continue }
@@ -2086,6 +2271,7 @@ $helpLogsMenuItem.Add_Click({
     Open-GpEditLogFile
 })
 
+Build-CisRecommendationCache
 Update-StaticUiText -Ui (Get-CurrentUi)
 Rebuild-Tree -Ui (Get-CurrentUi)
 Update-ActiveProfileLabel
@@ -2162,7 +2348,7 @@ function Update-PolicyList {
             foreach ($pol in $script:policiesByCategory[$tag.CategoryId]) {
                 if (-not (Test-PolicyMatchesScope -PolicyClass $pol.class -Scope $tag.Scope)) { continue }
                 $state = Get-AdmxPolicyState -Policy $pol -PolLookup $lookup
-                $cisRec = (Get-CisRecommendationForAdmxPolicy -CisIndex $script:CisIndex -Policy $pol).CisEntry
+                $cisRec = (Get-CachedCisRecommendationForAdmxPolicy -Policy $pol).CisEntry
                 if (-not (Test-CisProfileFilterMatch -CisEntry $cisRec)) { continue }
                 $cisRowLabels = Get-CisRowLabels -CisEntry $cisRec -Ui $ui
                 $items.Add([pscustomobject]@{
@@ -2188,7 +2374,7 @@ function Update-PolicyList {
         $categoryPathLabel.Text = ($ui.SecurityBreadcrumbPrefix -f $tag.Label)
         foreach ($setting in $script:securityIndex.settings) {
             if ($setting.category -ne $tag.SecurityCategory) { continue }
-            $cisRec = Get-CisRecommendationForSecuritySetting -CisIndex $script:CisIndex -Section $setting.section -Name $setting.name -DisplayName $setting.displayName
+            $cisRec = Get-CachedCisRecommendationForSecuritySetting -Setting $setting
             if (-not (Test-CisProfileFilterMatch -CisEntry $cisRec)) { continue }
             $cisRowLabels = Get-CisRowLabels -CisEntry $cisRec -Ui $ui
             $items.Add([pscustomobject]@{
@@ -2213,7 +2399,7 @@ function Update-PolicyList {
         $categoryPathLabel.Text = "$($ui.AdvancedAuditPolicyConfig) > $($ui.AdvancedAuditPolicyObject) > $($tag.Label)"
         foreach ($setting in $script:advancedAuditIndex.settings) {
             if ($setting.category -ne $tag.AdvAuditCategory) { continue }
-            $cisRec = Get-CisRecommendationForAuditSubcategory -CisIndex $script:CisIndex -SubcategoryNameEn $setting.name
+            $cisRec = Get-CachedCisRecommendationForAuditSubcategory -Setting $setting
             if (-not (Test-CisProfileFilterMatch -CisEntry $cisRec)) { continue }
             $cisRowLabels = Get-CisRowLabels -CisEntry $cisRec -Ui $ui
             $items.Add([pscustomobject]@{
@@ -2256,7 +2442,7 @@ function Update-PolicyList {
                 if (-not (Test-PolicyMatchesScope -PolicyClass $pol.class -Scope $scope)) { continue }
                 $lookup = if ($scope -eq 'Machine') { $machineLookup } else { $userLookup }
                 $state = Get-AdmxPolicyState -Policy $pol -PolLookup $lookup
-                $cisRec = (Get-CisRecommendationForAdmxPolicy -CisIndex $script:CisIndex -Policy $pol).CisEntry
+                $cisRec = (Get-CachedCisRecommendationForAdmxPolicy -Policy $pol).CisEntry
                 if (-not (Test-CisProfileFilterMatch -CisEntry $cisRec)) { continue }
                 $cisRowLabels = Get-CisRowLabels -CisEntry $cisRec -Ui $ui
                 $items.Add([pscustomobject]@{
@@ -2279,7 +2465,7 @@ function Update-PolicyList {
         foreach ($setting in $script:securityIndex.settings) {
             $catKey = $script:SecurityCategoryToUiKey[$setting.category]
             $catLabel = if ($catKey) { $ui[$catKey] } else { $setting.category }
-            $cisRec = Get-CisRecommendationForSecuritySetting -CisIndex $script:CisIndex -Section $setting.section -Name $setting.name -DisplayName $setting.displayName
+            $cisRec = Get-CachedCisRecommendationForSecuritySetting -Setting $setting
             if (-not (Test-CisProfileFilterMatch -CisEntry $cisRec)) { continue }
             $cisRowLabels = Get-CisRowLabels -CisEntry $cisRec -Ui $ui
             $items.Add([pscustomobject]@{
@@ -2300,7 +2486,7 @@ function Update-PolicyList {
 
         foreach ($setting in $script:advancedAuditIndex.settings) {
             $catLabel = $ui["AdvAudit$($setting.category)"]
-            $cisRec = Get-CisRecommendationForAuditSubcategory -CisIndex $script:CisIndex -SubcategoryNameEn $setting.name
+            $cisRec = Get-CachedCisRecommendationForAuditSubcategory -Setting $setting
             if (-not (Test-CisProfileFilterMatch -CisEntry $cisRec)) { continue }
             $cisRowLabels = Get-CisRowLabels -CisEntry $cisRec -Ui $ui
             $items.Add([pscustomobject]@{
@@ -2500,78 +2686,24 @@ function Get-SelectedSearchField {
     }
 }
 
-function Test-SearchCisNumberMatch {
-    # Searches the CIS number (e.g. "18.9.51.1.1") of every profile in
-    # $CisEntry - used by both "Any" mode and the dedicated "CIS Number" mode.
-    param([string]$Query, $CisEntry)
-    if (-not $CisEntry) { return $false }
-    foreach ($p in @($CisEntry.profiles)) {
-        if (Test-ContainsIgnoreCase $p.cisNumber $Query) { return $true }
-    }
-    return $false
-}
-
-function Test-AdmxKeyMatch {
-    # "Key" field: same fields as the "Technical details" panel - ADMX
-    # file, registry key, value name, plus each element's id/value/key.
-    param([string]$Query, $Policy)
-    if (Test-ContainsIgnoreCase $Policy.registryKey $Query) { return $true }
-    if (Test-ContainsIgnoreCase $Policy.valueName $Query) { return $true }
-    if (Test-ContainsIgnoreCase $Policy.admxFile $Query) { return $true }
-    foreach ($el in @($Policy.elements)) {
-        if ((Test-ContainsIgnoreCase $el.id $Query) -or (Test-ContainsIgnoreCase $el.valueName $Query) -or (Test-ContainsIgnoreCase $el.key $Query)) { return $true }
-    }
-    return $false
-}
-
-# Tests whether an Admx policy matches the search query for the selected
-# search field (Any/Name/Description/Key/CisNumber).
-function Test-SearchMatchAdmx {
-    param([string]$Field, [string]$Query, $Policy, $CisEntry)
+# Tests whether a precomputed search haystack (New-AdmxSearchHaystack/
+# New-SecuritySearchHaystack/New-AuditSearchHaystack - same
+# Name/Description/Key/CisNumber/Any shape regardless of item kind) matches
+# the query for the selected search field. One Test-ContainsIgnoreCase call
+# per item per search - replaces the former per-kind
+# Test-SearchMatchAdmx/-Security/-AdvancedAudit, each of which called
+# Test-ContainsIgnoreCase up to a dozen+ times per item (once per field, plus
+# once per ADMX element, plus once per CIS profile) by checking the raw
+# policy/setting/CisEntry fields directly at search time instead of a
+# precomputed string.
+function Test-SearchMatchHaystack {
+    param([string]$Field, [string]$Query, $Haystack)
     switch ($Field) {
-        'Name'        { return Test-ContainsIgnoreCase $Policy.displayName $Query }
-        # An ADMX policy has no "Description" distinct from its
-        # explanation; explainText is the only descriptive field.
-        'Description' { return Test-ContainsIgnoreCase $Policy.explainText $Query }
-        'Key'         { return Test-AdmxKeyMatch -Query $Query -Policy $Policy }
-        'CisNumber'   { return Test-SearchCisNumberMatch -Query $Query -CisEntry $CisEntry }
-        default {
-            return (Test-ContainsIgnoreCase $Policy.displayName $Query) -or (Test-ContainsIgnoreCase $Policy.explainText $Query) `
-                -or (Test-AdmxKeyMatch -Query $Query -Policy $Policy) -or (Test-SearchCisNumberMatch -Query $Query -CisEntry $CisEntry)
-        }
-    }
-}
-
-# Same as Test-SearchMatchAdmx, for a Security Settings entry.
-function Test-SearchMatchSecurity {
-    param([string]$Field, [string]$Query, $Setting, $CisEntry)
-    switch ($Field) {
-        'Name'        { return Test-ContainsIgnoreCase $Setting.displayName $Query }
-        'Description' { return Test-ContainsIgnoreCase $Setting.description $Query }
-        'Key'         { return (Test-ContainsIgnoreCase $Setting.name $Query) -or (Test-ContainsIgnoreCase $Setting.section $Query) }
-        'CisNumber'   { return Test-SearchCisNumberMatch -Query $Query -CisEntry $CisEntry }
-        default {
-            return (Test-ContainsIgnoreCase $Setting.displayName $Query) -or (Test-ContainsIgnoreCase $Setting.description $Query) `
-                -or (Test-ContainsIgnoreCase $Setting.name $Query) -or (Test-ContainsIgnoreCase $Setting.section $Query) `
-                -or (Test-SearchCisNumberMatch -Query $Query -CisEntry $CisEntry)
-        }
-    }
-}
-
-# Same as Test-SearchMatchAdmx, for an Advanced Audit Policy entry.
-function Test-SearchMatchAdvancedAudit {
-    param([string]$Field, [string]$Query, $Setting, $CisEntry)
-    switch ($Field) {
-        'Name'        { return Test-ContainsIgnoreCase $Setting.displayName $Query }
-        # AdvancedAuditCatalog.ps1 always leaves "description" empty - this
-        # mode legitimately never returns a result here.
-        'Description' { return Test-ContainsIgnoreCase $Setting.description $Query }
-        'Key'         { return (Test-ContainsIgnoreCase $Setting.name $Query) -or (Test-ContainsIgnoreCase $Setting.guid $Query) }
-        'CisNumber'   { return Test-SearchCisNumberMatch -Query $Query -CisEntry $CisEntry }
-        default {
-            return (Test-ContainsIgnoreCase $Setting.displayName $Query) -or (Test-ContainsIgnoreCase $Setting.name $Query) `
-                -or (Test-ContainsIgnoreCase $Setting.guid $Query) -or (Test-SearchCisNumberMatch -Query $Query -CisEntry $CisEntry)
-        }
+        'Name'        { return Test-ContainsIgnoreCase $Haystack.Name $Query }
+        'Description' { return Test-ContainsIgnoreCase $Haystack.Description $Query }
+        'Key'         { return Test-ContainsIgnoreCase $Haystack.Key $Query }
+        'CisNumber'   { return Test-ContainsIgnoreCase $Haystack.CisNumber $Query }
+        default       { return Test-ContainsIgnoreCase $Haystack.Any $Query }
     }
 }
 
@@ -2598,11 +2730,8 @@ function Invoke-Search {
     $searchField = Get-SelectedSearchField
 
     foreach ($pol in $script:admxIndex.policies) {
-        # Computes the CIS recommendation first (does not depend on scope):
-        # needed before the match filter since "Any" mode also searches the
-        # CIS number - reused inside the scope loop below.
-        $cisRec = (Get-CisRecommendationForAdmxPolicy -CisIndex $script:CisIndex -Policy $pol).CisEntry
-        if (-not (Test-SearchMatchAdmx -Field $searchField -Query $Query -Policy $pol -CisEntry $cisRec)) { continue }
+        if (-not (Test-SearchMatchHaystack -Field $searchField -Query $Query -Haystack (Get-SearchHaystackForAdmxPolicy -Policy $pol))) { continue }
+        $cisRec = (Get-CachedCisRecommendationForAdmxPolicy -Policy $pol).CisEntry
         if (-not (Test-KindFilterMatch -Kind 'Admx')) { continue }
         foreach ($scope in @('Machine', 'User')) {
             if (-not (Test-PolicyMatchesScope -PolicyClass $pol.class -Scope $scope)) { continue }
@@ -2637,8 +2766,8 @@ function Invoke-Search {
 
     if ((Test-KindFilterMatch -Kind 'Security') -and (Test-ScopeFilterMatch -Scope $null)) {
         foreach ($setting in $script:securityIndex.settings) {
-            $cisRec = Get-CisRecommendationForSecuritySetting -CisIndex $script:CisIndex -Section $setting.section -Name $setting.name -DisplayName $setting.displayName
-            if (-not (Test-SearchMatchSecurity -Field $searchField -Query $Query -Setting $setting -CisEntry $cisRec)) { continue }
+            if (-not (Test-SearchMatchHaystack -Field $searchField -Query $Query -Haystack (Get-SearchHaystackForSecuritySetting -Setting $setting))) { continue }
+            $cisRec = Get-CachedCisRecommendationForSecuritySetting -Setting $setting
             $catKey = $script:SecurityCategoryToUiKey[$setting.category]
             $catLabel = if ($catKey) { $ui[$catKey] } else { $setting.category }
             $treeNode = if ($script:TreeItemsBySecurityCategory.ContainsKey($setting.category)) { $script:TreeItemsBySecurityCategory[$setting.category] } else { $null }
@@ -2668,8 +2797,8 @@ function Invoke-Search {
 
     if ((Test-KindFilterMatch -Kind 'AdvancedAudit') -and (Test-ScopeFilterMatch -Scope $null)) {
         foreach ($setting in $script:advancedAuditIndex.settings) {
-            $cisRec = Get-CisRecommendationForAuditSubcategory -CisIndex $script:CisIndex -SubcategoryNameEn $setting.name
-            if (-not (Test-SearchMatchAdvancedAudit -Field $searchField -Query $Query -Setting $setting -CisEntry $cisRec)) { continue }
+            if (-not (Test-SearchMatchHaystack -Field $searchField -Query $Query -Haystack (Get-SearchHaystackForAuditSubcategory -Setting $setting))) { continue }
+            $cisRec = Get-CachedCisRecommendationForAuditSubcategory -Setting $setting
             $catLabel = $ui["AdvAudit$($setting.category)"]
             $treeNode = if ($script:TreeItemsByAdvAuditCategory.ContainsKey($setting.category)) { $script:TreeItemsByAdvAuditCategory[$setting.category] } else { $null }
             if (-not (Test-CisProfileFilterMatch -CisEntry $cisRec)) { continue }
@@ -2765,7 +2894,8 @@ function Reset-ToCategoryOrPrompt {
     $wasSearching = $script:IsSearchActive
     $script:IsSearchActive = $false
     Exit-SearchCategoryColumnMode
-    if ($wasSearching) { Show-AllTreeItems }
+    if (-not $wasSearching) { return }
+    Show-AllTreeItems
     if ($categoryTree.SelectedItem) {
         Update-PolicyList
     }
@@ -2808,7 +2938,7 @@ $script:MinSearchLength = 2
 # DispatcherTimer: each keystroke restarts the delay, only the last one
 # of a burst triggers the search.
 $script:SearchDebounceTimer = New-Object System.Windows.Threading.DispatcherTimer
-$script:SearchDebounceTimer.Interval = [TimeSpan]::FromMilliseconds(180)
+$script:SearchDebounceTimer.Interval = [TimeSpan]::FromMilliseconds(350)
 $script:SearchDebounceTimer.Add_Tick({
     param($EventSender, $e)
     $script:SearchDebounceTimer.Stop()
@@ -2897,6 +3027,85 @@ function Restore-TreeSelection {
     }
 }
 
+function Get-TreeNodeAncestors {
+    # Same per-Kind ancestor lookup as Get-TreeSelectionRestoreInfo/
+    # Restore-TreeSelection, but for a TreeViewItem the caller already holds
+    # (right-click target) rather than one looked up by key.
+    param($Tvi)
+    $tag = $Tvi.Tag
+    switch ($tag.Kind) {
+        'AdmxCategory' { return $script:TreeAncestorsByKey["$($tag.CategoryId)|$($tag.Scope)"] }
+        'SecurityCategory' { return $script:TreeAncestorsBySecurityCategory[$tag.SecurityCategory] }
+        'AdvancedAuditCategory' { return $script:TreeAncestorsByAdvAuditCategory[$tag.AdvAuditCategory] }
+        'Group' { return $script:TreeAncestorsByGroupId[$tag.GroupId] }
+        default { return @() }
+    }
+}
+
+function Exit-SearchAndBrowseNode {
+    <#
+        "Exit Search Here" (CategoryTree right-click context menu, search mode
+        only): drops out of search entirely and lands on $Tvi's normal,
+        unfiltered category view - one click instead of Clear + re-navigate
+        the tree to the same folder. Update-PolicyList already does the
+        search-exit teardown (IsSearchActive, Category column,
+        Show-AllTreeItems) once $Tvi is the selection; ancestors are
+        re-expanded AFTER that call since Show-AllTreeItems collapses every
+        node, $Tvi included.
+    #>
+    param($Tvi)
+    if ($null -eq $Tvi) { return }
+    $ui = Get-CurrentUi
+    $script:SearchDebounceTimer.Stop()
+    $searchBox.Text = $ui.SearchPlaceholder
+    $searchBox.Foreground = 'Gray'
+
+    if (-not $Tvi.IsSelected) { $Tvi.IsSelected = $true }
+    Update-PolicyList
+
+    foreach ($ancestor in (Get-TreeNodeAncestors -Tvi $Tvi)) { $ancestor.IsExpanded = $true }
+    $Tvi.IsExpanded = $true
+    $Tvi.BringIntoView()
+}
+
+# Right-click, search mode only: "Exit Search Here" on whichever folder is
+# under the cursor (not necessarily the current tree selection - the user
+# may right-click a result folder they haven't clicked into yet). Built
+# fresh per click rather than a per-node ContextMenu assigned at tree-build
+# time, since the target TreeViewItem isn't known until the click happens.
+$categoryTree.Add_PreviewMouseRightButtonDown({
+    param($EventSender, $e)
+    if (-not $script:IsSearchActive) { return }
+
+    $source = $e.OriginalSource
+    while ($source -and -not ($source -is [System.Windows.Controls.TreeViewItem])) {
+        $source = [System.Windows.Media.VisualTreeHelper]::GetParent($source)
+    }
+    if ($null -eq $source) { return }
+    $tvi = $source
+    $tvi.IsSelected = $true
+    $e.Handled = $true
+
+    $ui = Get-CurrentUi
+    $menu = New-Object System.Windows.Controls.ContextMenu
+    $menuItem = New-Object System.Windows.Controls.MenuItem
+    $menuItem.Header = $ui.ClearSearchHereMenuItem
+    # Target node passed via Tag, not a GetNewClosure() capture: a closure
+    # here detaches the scriptblock into its own session state, which loses
+    # visibility of script-scope `function`s (Exit-SearchAndBrowseNode) -
+    # confirmed at runtime ("term not recognized") even though the function
+    # is clearly defined above in this same script.
+    $menuItem.Tag = $tvi
+    $menuItem.Add_Click({
+        param($s2, $e2)
+        Exit-SearchAndBrowseNode -Tvi $s2.Tag
+    })
+    [void]$menu.Items.Add($menuItem)
+    $tvi.ContextMenu = $menu
+    $menu.PlacementTarget = $tvi
+    $menu.IsOpen = $true
+})
+
 function Open-SearchResult {
     # Opens the edit dialog directly without navigating the tree first:
     # Open-SelectedPolicyEditor only needs Kind/PolicyId/Scope, already on
@@ -2954,7 +3163,7 @@ function Open-SelectedPolicyEditor {
         $currentState = Get-AdmxPolicyState -Policy $pol -PolLookup $lookup
         $elementValues = Get-PolicyElementValues -Policy $pol -PolLookup $lookup
 
-        $cisRec = (Get-CisRecommendationForAdmxPolicy -CisIndex $script:CisIndex -Policy $pol).CisEntry
+        $cisRec = (Get-CachedCisRecommendationForAdmxPolicy -Policy $pol).CisEntry
         $result = Show-AdmxEditDialog -Policy $pol -CurrentState $currentState -CurrentElementValues $elementValues -CisRecommendation $cisRec -Owner $window -ScriptRoot $PSScriptRoot -Ui $ui
         if (-not $result) { return }
 
@@ -3001,7 +3210,7 @@ function Open-SelectedPolicyEditor {
         $setting = $script:securityIndex.settings | Where-Object { $_.id -eq $selectedItem.PolicyId } | Select-Object -First 1
         if (-not $setting) { return }
 
-        $cisRec = Get-CisRecommendationForSecuritySetting -CisIndex $script:CisIndex -Section $setting.section -Name $setting.name -DisplayName $setting.displayName
+        $cisRec = Get-CachedCisRecommendationForSecuritySetting -Setting $setting
         $result = Show-SecurityEditDialog -Setting $setting -CisRecommendation $cisRec -Owner $window -ScriptRoot $PSScriptRoot -Ui $ui -DataPath $script:AppSettings.paths.indexDir
 
         if ($script:__secDialogCatalogEdited) {
@@ -3054,7 +3263,7 @@ function Open-SelectedPolicyEditor {
         $setting = $script:advancedAuditIndex.settings | Where-Object { $_.id -eq $selectedItem.PolicyId } | Select-Object -First 1
         if (-not $setting) { return }
 
-        $cisRec = Get-CisRecommendationForAuditSubcategory -CisIndex $script:CisIndex -SubcategoryNameEn $setting.name
+        $cisRec = Get-CachedCisRecommendationForAuditSubcategory -Setting $setting
         $result = Show-SecurityEditDialog -Setting $setting -CisRecommendation $cisRec -Owner $window -ScriptRoot $PSScriptRoot -Ui $ui -DataPath $script:AppSettings.paths.indexDir
         if (-not $result) { return }
 
