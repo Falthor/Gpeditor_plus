@@ -18,7 +18,7 @@
 
 Set-StrictMode -Version Latest
 
-function Get-ChangelogEntries {
+function Get-ChangelogEntry {
     param([string]$Path)
 
     $entries = New-Object System.Collections.Generic.List[object]
@@ -58,12 +58,14 @@ function Set-ChangelogTextBlockContent {
         of a plain Text assignment - only way to bold the date in a WPF
         TextBlock without a FlowDocument. $MaxEntries = 0 means "all entries".
     #>
+        [CmdletBinding(SupportsShouldProcess)]
     param(
         [Parameter(Mandatory)]$TextBlock,
         [Parameter(Mandatory)][System.Collections.Generic.List[object]]$Entries,
         [int]$MaxEntries = 0,
         [string]$EmptyText = ''
     )
+    if ($PSCmdlet.ShouldProcess('Set-ChangelogTextBlockContent', 'Invoke')) {
 
     $TextBlock.Inlines.Clear()
     if ($Entries.Count -eq 0) {
@@ -88,5 +90,7 @@ function Set-ChangelogTextBlockContent {
             [void]$TextBlock.Inlines.Add((New-Object System.Windows.Documents.LineBreak))
             [void]$TextBlock.Inlines.Add((New-Object System.Windows.Documents.Run("- $item")))
         }
+    }
+
     }
 }

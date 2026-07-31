@@ -69,8 +69,10 @@ function Show-ColumnPickerDialog {
     $okButton.Content = $Ui.OkButton
     $cancelButton.Content = $Ui.CancelButton
 
-    function Set-ListBoxItems {
-        param($ListBox, [string[]]$Keys)
+    function Set-ListBoxItem {
+            [CmdletBinding(SupportsShouldProcess)]
+    param($ListBox, [string[]]$Keys)
+    if ($PSCmdlet.ShouldProcess('Set-ListBoxItem', 'Invoke')) {
         $ListBox.Items.Clear()
         foreach ($key in $Keys) {
             $item = New-Object System.Windows.Controls.ListBoxItem
@@ -79,7 +81,9 @@ function Show-ColumnPickerDialog {
             $item.Tag = $key
             [void]$ListBox.Items.Add($item)
         }
+    
     }
+}
 
     $displayedKeysList = New-Object System.Collections.Generic.List[string]
     foreach ($k in $DisplayedKeys) { if ($byKey.ContainsKey($k)) { $displayedKeysList.Add($k) } }
@@ -90,22 +94,20 @@ function Show-ColumnPickerDialog {
     $availableKeysList = New-Object System.Collections.Generic.List[string]
     foreach ($c in $catalog) { if (-not $c.Locked -and -not $displayedKeysList.Contains($c.Key)) { $availableKeysList.Add($c.Key) } }
 
-    Set-ListBoxItems -ListBox $availableListBox -Keys $availableKeysList
-    Set-ListBoxItems -ListBox $displayedListBox -Keys $displayedKeysList
+    Set-ListBoxItem -ListBox $availableListBox -Keys $availableKeysList
+    Set-ListBoxItem -ListBox $displayedListBox -Keys $displayedKeysList
 
     $addButton.Add_Click({
-        param($EventSender, $e)
         $selected = @($availableListBox.SelectedItems) | ForEach-Object { $_.Tag }
         foreach ($key in $selected) {
             [void]$availableKeysList.Remove($key)
             $displayedKeysList.Add($key)
         }
-        Set-ListBoxItems -ListBox $availableListBox -Keys $availableKeysList
-        Set-ListBoxItems -ListBox $displayedListBox -Keys $displayedKeysList
+        Set-ListBoxItem -ListBox $availableListBox -Keys $availableKeysList
+        Set-ListBoxItem -ListBox $displayedListBox -Keys $displayedKeysList
     })
 
     $removeButton.Add_Click({
-        param($EventSender, $e)
         # Selected Locked columns (Name/State/CIS) are silently ignored -
         # not removable, only reorderable.
         $selected = @($displayedListBox.SelectedItems) | ForEach-Object { $_.Tag } | Where-Object { -not $byKey[$_].Locked }
@@ -113,53 +115,48 @@ function Show-ColumnPickerDialog {
             [void]$displayedKeysList.Remove($key)
             $availableKeysList.Add($key)
         }
-        Set-ListBoxItems -ListBox $availableListBox -Keys $availableKeysList
-        Set-ListBoxItems -ListBox $displayedListBox -Keys $displayedKeysList
+        Set-ListBoxItem -ListBox $availableListBox -Keys $availableKeysList
+        Set-ListBoxItem -ListBox $displayedListBox -Keys $displayedKeysList
     })
 
     $moveUpButton.Add_Click({
-        param($EventSender, $e)
         $idx = $displayedListBox.SelectedIndex
         if ($idx -gt 0) {
             $key = $displayedKeysList[$idx]
             $displayedKeysList.RemoveAt($idx)
             $displayedKeysList.Insert($idx - 1, $key)
-            Set-ListBoxItems -ListBox $displayedListBox -Keys $displayedKeysList
+            Set-ListBoxItem -ListBox $displayedListBox -Keys $displayedKeysList
             $displayedListBox.SelectedIndex = $idx - 1
         }
     })
 
     $moveDownButton.Add_Click({
-        param($EventSender, $e)
         $idx = $displayedListBox.SelectedIndex
         if ($idx -ge 0 -and $idx -lt ($displayedKeysList.Count - 1)) {
             $key = $displayedKeysList[$idx]
             $displayedKeysList.RemoveAt($idx)
             $displayedKeysList.Insert($idx + 1, $key)
-            Set-ListBoxItems -ListBox $displayedListBox -Keys $displayedKeysList
+            Set-ListBoxItem -ListBox $displayedListBox -Keys $displayedKeysList
             $displayedListBox.SelectedIndex = $idx + 1
         }
     })
 
     $resetButton.Add_Click({
-        param($EventSender, $e)
         $displayedKeysList.Clear()
         $availableKeysList.Clear()
         foreach ($c in $catalog) {
             if ($c.Locked) { $displayedKeysList.Add($c.Key) } else { $availableKeysList.Add($c.Key) }
         }
-        Set-ListBoxItems -ListBox $availableListBox -Keys $availableKeysList
-        Set-ListBoxItems -ListBox $displayedListBox -Keys $displayedKeysList
+        Set-ListBoxItem -ListBox $availableListBox -Keys $availableKeysList
+        Set-ListBoxItem -ListBox $displayedListBox -Keys $displayedKeysList
     })
 
     $script:__columnPickerResult = $null
     $okButton.Add_Click({
-        param($EventSender, $e)
         $script:__columnPickerResult = @($displayedKeysList)
         $window.DialogResult = $true
     })
     $cancelButton.Add_Click({
-        param($EventSender, $e)
         $window.DialogResult = $false
     })
 
@@ -167,15 +164,15 @@ function Show-ColumnPickerDialog {
     return $script:__columnPickerResult
 }
 
-function Get-CisProfileGroups {
-    # Groups Get-CisDistinctProfiles by (Benchmark, Version, Role) - Level
+function Get-CisProfileGroup {
+    # Groups Get-CisDistinctProfile by (Benchmark, Version, Role) - Level
     # (L1/L2) is NOT part of the grouping: in Show-ProfileSelectionDialog a
     # group is one selectable row in a tab, level is chosen separately via
     # the L1/L2 radio buttons (not every benchmark+role combo has both
     # levels available).
     param($CisIndex)
 
-    $all = Get-CisDistinctProfiles -CisIndex $CisIndex
+    $all = Get-CisDistinctProfile -CisIndex $CisIndex
     $groups = New-Object System.Collections.Generic.List[object]
     foreach ($g in ($all | Group-Object -Property { "$($_.Benchmark)|$($_.Version)|$($_.Role)" })) {
         $first = $g.Group[0]
@@ -189,7 +186,7 @@ function Get-CisProfileGroups {
     # ", $groups" (not just "$groups"): an unprotected "return" enumerates
     # the collection - an EMPTY list (no CIS profiles in the index) would
     # become $null for the caller instead of an empty list. Same real bug
-    # as Select-FilteredItems (GpEdit.ps1), fixed here as a precaution.
+    # as Select-FilteredItem (GpEdit.ps1), fixed here as a precaution.
     return , $groups
 }
 
@@ -201,7 +198,7 @@ function Show-ProfileSelectionDialog {
         buttons, enabled/disabled based on what's actually available for
         the selected row). $CurrentProfile (active filter, or $null) is
         pre-selected on open. Returns the chosen profile (same shape as
-        Get-CisDistinctProfiles) on OK, $null on Cancel - never a $null
+        Get-CisDistinctProfile) on OK, $null on Cancel - never a $null
         meaning "clear the filter", that stays the job of the separate
         "Remove profile filter" button.
 
@@ -223,7 +220,7 @@ function Show-ProfileSelectionDialog {
         [string]$TitleOverride
     )
 
-    $groups = Get-CisProfileGroups -CisIndex $CisIndex
+    $groups = Get-CisProfileGroup -CisIndex $CisIndex
 
     $window = Import-XamlWindow -ScriptRoot $ScriptRoot -Name 'ProfileSelectionWindow' -Owner $Owner
     $window.Title = if ($TitleOverride) { $TitleOverride } else { $Ui.ProfileSelectionWindowTitle }
@@ -325,7 +322,7 @@ function Show-ProfileSelectionDialog {
     $allListBoxes = @($desktopListBox, $serversListBox, $dcListBox)
     foreach ($lb in $allListBoxes) {
         $lb.Add_SelectionChanged({
-            param($EventSender, $e)
+            param($EventSender)
             if ($null -eq $EventSender.SelectedItem) { return }
             foreach ($other in $allListBoxes) { if ($other -ne $EventSender) { $other.SelectedIndex = -1 } }
             # Never read/write $script:__profileSelectedGroup directly here
@@ -355,7 +352,6 @@ function Show-ProfileSelectionDialog {
 
     $script:__profileSelectionResult = $null
     $okButton.Add_Click({
-        param($EventSender, $e)
         if ($bothRadio.IsChecked) {
             $script:__profileSelectionResult = [pscustomobject]@{ Group = $script:__profileSelectedGroup; Levels = @('L1', 'L2') }
         }
@@ -370,7 +366,6 @@ function Show-ProfileSelectionDialog {
         $window.DialogResult = $true
     })
     $cancelButton.Add_Click({
-        param($EventSender, $e)
         $window.DialogResult = $false
     })
 
@@ -393,7 +388,7 @@ function Show-OrgSpecificValuesDialog {
         "New Group Policy > CIS Gap-fill/Full compliance", screen 3 (plan
         §4.3): one text field per organization-specific CIS item actually
         present in the chosen profile(s) - $OrgValueEntries is
-        Get-CisOrgValueEntries's result (already filtered to what's
+        Get-CisOrgValueEntry's result (already filtered to what's
         recommended; the caller is expected to skip this whole dialog when
         it's empty, per plan §4.4). Fields for anything absent from
         $OrgValueEntries are hidden entirely, never just disabled.
@@ -423,8 +418,8 @@ function Show-OrgSpecificValuesDialog {
     $generateButton.Content = $Ui.GenerateButton
     $cancelButton.Content = $Ui.CancelButton
 
-    $generateButton.Add_Click({ param($EventSender, $e) $window.DialogResult = $true })
-    $cancelButton.Add_Click({ param($EventSender, $e) $window.DialogResult = $false })
+    $generateButton.Add_Click({ $window.DialogResult = $true })
+    $cancelButton.Add_Click({ $window.DialogResult = $false })
 
     if (-not $window.ShowDialog()) { return $null }
 
@@ -506,17 +501,24 @@ function Show-FilterDialog {
 
     $script:__filterSelectedProfile = $CurrentState.Profile
 
-    function Update-FilterCisProfileLabel {
+    function Update-FilterCisProfileLabel {    [CmdletBinding(SupportsShouldProcess)]
+    param()
+
+    if ($PSCmdlet.ShouldProcess('Update-FilterCisProfileLabel', 'Invoke')) {
         if ($null -eq $script:__filterSelectedProfile) {
             $cisProfileLabel.Text = $Ui.FilterNoProfileSelected
         } else {
             $cisProfileLabel.Text = ($Ui.FilterCurrentProfileFormat -f (Get-CisProfileDisplayText -ProfileSpec $script:__filterSelectedProfile))
         }
+    
     }
+}
     Update-FilterCisProfileLabel
 
     function Set-FilterFormFromState {
-        param($State)
+            [CmdletBinding(SupportsShouldProcess)]
+    param($State)
+    if ($PSCmdlet.ShouldProcess('Set-FilterFormFromState', 'Invoke')) {
         switch ($State.StateMode) {
             'ConfiguredOnly' { $stateConfiguredRadio.IsChecked = $true }
             'Enabled'        { $stateEnabledRadio.IsChecked = $true }
@@ -530,11 +532,12 @@ function Show-FilterDialog {
         $kindSecurityCheck.IsChecked = ($State.Kinds -contains 'Security')
         $kindAdvancedAuditCheck.IsChecked = ($State.Kinds -contains 'AdvancedAudit')
         $hasCisRecCheck.IsChecked = [bool]$State.HasCisRecOnly
+    
     }
+}
     Set-FilterFormFromState -State $CurrentState
 
     $chooseProfileButton.Add_Click({
-        param($EventSender, $e)
         $selected = Show-ProfileSelectionDialog -Owner $window -ScriptRoot $ScriptRoot -Ui $Ui -CisIndex $CisIndex -CurrentProfile $script:__filterSelectedProfile
         if ($selected) {
             $script:__filterSelectedProfile = $selected
@@ -543,13 +546,11 @@ function Show-FilterDialog {
     })
 
     $clearProfileButton.Add_Click({
-        param($EventSender, $e)
         $script:__filterSelectedProfile = $null
         Update-FilterCisProfileLabel
     })
 
     $resetButton.Add_Click({
-        param($EventSender, $e)
         $script:__filterSelectedProfile = $null
         Update-FilterCisProfileLabel
         Set-FilterFormFromState -State ([pscustomobject]@{
@@ -562,7 +563,6 @@ function Show-FilterDialog {
 
     $script:__filterDialogResult = $null
     $okButton.Add_Click({
-        param($EventSender, $e)
         $stateMode = if ($stateConfiguredRadio.IsChecked) { 'ConfiguredOnly' }
             elseif ($stateEnabledRadio.IsChecked) { 'Enabled' }
             elseif ($stateDisabledRadio.IsChecked) { 'Disabled' }
@@ -585,7 +585,6 @@ function Show-FilterDialog {
         $window.DialogResult = $true
     })
     $cancelButton.Add_Click({
-        param($EventSender, $e)
         $window.DialogResult = $false
     })
 
@@ -632,7 +631,7 @@ function Show-CisMissingAdmxDialog {
 
     $okButton = $window.FindName('OkButton')
     $okButton.Content = $Ui.OkButton
-    $okButton.Add_Click({ param($EventSender, $e) $window.DialogResult = $true })
+    $okButton.Add_Click({ $window.DialogResult = $true })
     $null = $window.ShowDialog()
 }
 
@@ -677,7 +676,7 @@ function Show-CisCatalogGapsDialog {
 
     $okButton = $window.FindName('OkButton')
     $okButton.Content = $Ui.OkButton
-    $okButton.Add_Click({ param($EventSender, $e) $window.DialogResult = $true })
+    $okButton.Add_Click({ $window.DialogResult = $true })
     $null = $window.ShowDialog()
 }
 
@@ -699,7 +698,7 @@ function Show-AboutWindow {
 
     $okButton = $window.FindName('OkButton')
     $okButton.Content = $Ui.OkButton
-    $okButton.Add_Click({ param($EventSender, $e) $window.DialogResult = $true })
+    $okButton.Add_Click({ $window.DialogResult = $true })
     $null = $window.ShowDialog()
 }
 
@@ -713,7 +712,7 @@ function Show-PatchNoteWindow {
 
     $okButton = $window.FindName('OkButton')
     $okButton.Content = $Ui.OkButton
-    $okButton.Add_Click({ param($EventSender, $e) $window.DialogResult = $true })
+    $okButton.Add_Click({ $window.DialogResult = $true })
     $null = $window.ShowDialog()
 }
 
@@ -741,8 +740,8 @@ function Show-NewGpoDialog {
     $okButton.Content = $Ui.OkButton
     $cancelButton.Content = $Ui.CancelButton
 
-    $okButton.Add_Click({ param($EventSender, $e) $window.DialogResult = $true })
-    $cancelButton.Add_Click({ param($EventSender, $e) $window.DialogResult = $false })
+    $okButton.Add_Click({ $window.DialogResult = $true })
+    $cancelButton.Add_Click({ $window.DialogResult = $false })
 
     if ($window.ShowDialog()) {
         if ($gapFillRadio.IsChecked) { return 'GapFill' }
@@ -779,9 +778,9 @@ function Show-UnsavedProjectCloseDialog {
     $cancelButton.Content = $Ui.CancelButton
 
     $script:__unsavedProjectCloseResult = 'Cancel'
-    $saveButton.Add_Click({ param($EventSender, $e) $script:__unsavedProjectCloseResult = 'Save'; $window.Close() })
-    $continueButton.Add_Click({ param($EventSender, $e) $script:__unsavedProjectCloseResult = 'Continue'; $window.Close() })
-    $cancelButton.Add_Click({ param($EventSender, $e) $script:__unsavedProjectCloseResult = 'Cancel'; $window.Close() })
+    $saveButton.Add_Click({ $script:__unsavedProjectCloseResult = 'Save'; $window.Close() })
+    $continueButton.Add_Click({ $script:__unsavedProjectCloseResult = 'Continue'; $window.Close() })
+    $cancelButton.Add_Click({ $script:__unsavedProjectCloseResult = 'Cancel'; $window.Close() })
 
     $null = $window.ShowDialog()
     return $script:__unsavedProjectCloseResult

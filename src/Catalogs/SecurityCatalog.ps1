@@ -38,7 +38,7 @@ if (-not (Test-Path variable:script:CatalogEditingEnabled)) {
 # be reviewed/diffed independently of the app logic. This file rebuilds the
 # exact same $script:<Name>Catalog ordered-hashtable shape the rest of this
 # file expects (.Keys/.ContainsKey/dot access all still work), so
-# Get-SecurityCatalogEntries and Set-SecurityCatalogEntryField below did not
+# Get-SecurityCatalogEntry and Set-SecurityCatalogEntryField below did not
 # need to change.
 #
 # This file is re-dot-sourced after every live edit (see Show-SecurityEditDialog,
@@ -71,7 +71,7 @@ function ConvertTo-SecurityCatalogHashtable {
     return $result
 }
 
-function Merge-SecurityCatalogBundledEntries {
+function Merge-SecurityCatalogBundledEntry {
     <#
         Adds entries that exist in the app-bundled catalog but not (yet) in
         the user's writable copy, and writes the result back.
@@ -146,7 +146,7 @@ function Import-SecurityCatalogData {
 
 Import-SecurityCatalogData
 
-# Category/section (as exposed by Get-SecurityCatalogEntries) -> source
+# Category/section (as exposed by Get-SecurityCatalogEntry) -> source
 # $script:<...>Catalog variable name - stable mapping, one entry per
 # catalog hashtable above.
 $script:SecurityCatalogVariableByCategorySection = @(
@@ -155,7 +155,7 @@ $script:SecurityCatalogVariableByCategorySection = @(
     @{ Category = 'Security Options'; Section = 'System Access'; Variable = 'OtherSystemAccessCatalog' }
     @{ Category = 'Security Options'; Section = 'Registry Values'; Variable = 'SecurityOptionsRegistryCatalog' }
     # Same source catalog, reachable under another category because of the
-    # per-entry Category override in Get-SecurityCatalogEntries - without
+    # per-entry Category override in Get-SecurityCatalogEntry - without
     # this row the live catalog editor's pencil could not resolve the
     # source catalog for those entries.
     @{ Category = 'Password Policy'; Section = 'Registry Values'; Variable = 'SecurityOptionsRegistryCatalog' }
@@ -186,6 +186,8 @@ function Set-SecurityCatalogEntryField {
         $script:SecurityCatalogDataPath, NOT a path derived from $Path
         (that used to resolve one level too shallow - see bug report).
     #>
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSReviewUnusedParameter', 'Path', Justification = 'Kept for call-site compatibility, see doc comment above - intentionally unused.')]
+        [CmdletBinding(SupportsShouldProcess)]
     param(
         [Parameter(Mandatory)][string]$Path,
         [Parameter(Mandatory)][string]$Category,
@@ -194,6 +196,7 @@ function Set-SecurityCatalogEntryField {
         [Parameter(Mandatory)][ValidateSet('DisplayName', 'Explain')][string]$Field,
         [Parameter(Mandatory)][string]$Text
     )
+    if ($PSCmdlet.ShouldProcess('Set-SecurityCatalogEntryField', 'Invoke')) {
 
     $catalogVar = Get-SecurityCatalogVariableName -Category $Category -Section $Section
     if (-not $catalogVar) { throw "Unknown category/section: $Category / $Section" }
@@ -217,6 +220,8 @@ function Set-SecurityCatalogEntryField {
     $json = $data | ConvertTo-Json -Depth 10
     $utf8Bom = New-Object System.Text.UTF8Encoding($true)
     [System.IO.File]::WriteAllText($jsonPath, $json, $utf8Bom)
+
+    }
 }
 
 function Get-CatalogExplainText {
@@ -230,7 +235,7 @@ function Get-CatalogExplainText {
     return $FallbackDescription
 }
 
-function Get-SecurityCatalogEntries {
+function Get-SecurityCatalogEntry {
     # Flattens the catalogs above into one list (Category, Name, DisplayName,
     # Description, ValueType) for indexing/search (Step 7), same shape as ADMX policies.
     $list = New-Object System.Collections.Generic.List[object]

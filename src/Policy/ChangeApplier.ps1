@@ -4,7 +4,7 @@
     This live model only applies in real-machine mode: in project mode
     (New/Open Group Policy), GpEdit.ps1 redirects these same writes to temp
     files and only writes to the project folder on an explicit "Save now"
-    (see Save-GpoProjectChanges in GpEdit.ps1).
+    (see Save-GpoProjectChange in GpEdit.ps1).
 
     Backup: one timestamped backup per session (on the very first write),
     capturing file state before any change - enough for a full manual
@@ -131,7 +131,7 @@ function Invoke-SecEditInfExport {
     return [pscustomobject]@{ ExitCode = $LASTEXITCODE; Output = $output }
 }
 
-function Remove-TattooedRegistryValues {
+function Remove-TattooedRegistryValue {
     # secedit /configure NEVER clears a registry value just because it's
     # absent from the imported .cfg - known SCE/Windows "tattooing" behavior
     # (same in real gpedit.msc/secpol.msc for raw-registry-key settings),
@@ -146,10 +146,12 @@ function Remove-TattooedRegistryValues {
     # [Privilege Rights]/[System Access]/[Event Audit] don't have this
     # problem - secedit manages those entirely via SAM/LSA, no isolated
     # registry key to clean up - so out of scope here.
+        [CmdletBinding(SupportsShouldProcess)]
     param(
         [Parameter(Mandatory)][string]$SecEditInfPath,
         [Parameter(Mandatory)][hashtable]$BaselineKeys
     )
+    if ($PSCmdlet.ShouldProcess('Remove-TattooedRegistryValue', 'Invoke')) {
 
     if ($BaselineKeys.Count -eq 0) { return , @() }
 
@@ -161,7 +163,7 @@ function Remove-TattooedRegistryValues {
         if ($currentKeys -and $currentKeys.Contains($key)) { continue }
 
         # Expected format: "MACHINE\<registry path>\<value name>"
-        # (see Get-SecurityCatalogEntries, SecurityCatalog.ps1).
+        # (see Get-SecurityCatalogEntry, SecurityCatalog.ps1).
         if ($key -notmatch '^(MACHINE|USER)\\(.+)\\([^\\]+)$') { continue }
         $hive = if ($Matches[1] -eq 'USER') { 'HKCU:' } else { 'HKLM:' }
         $regPath = $Matches[2]
@@ -175,6 +177,8 @@ function Remove-TattooedRegistryValues {
     }
 
     return , $removed
+
+    }
 }
 
 function Invoke-SecEditInfApply {
@@ -185,7 +189,7 @@ function Invoke-SecEditInfApply {
     # session - without it /import would merge instead of starting fresh
     # from secedit.inf. Requires admin rights: caller must check
     # (Test-IsRunningAsAdministrator) BEFORE calling. Optional
-    # $RegistryValuesBaselineKeys triggers Remove-TattooedRegistryValues
+    # $RegistryValuesBaselineKeys triggers Remove-TattooedRegistryValue
     # before import - see its comment for why.
     param(
         [Parameter(Mandatory)][string]$SecEditInfPath,
@@ -193,7 +197,7 @@ function Invoke-SecEditInfApply {
     )
 
     if ($RegistryValuesBaselineKeys.Count -gt 0) {
-        Remove-TattooedRegistryValues -SecEditInfPath $SecEditInfPath -BaselineKeys $RegistryValuesBaselineKeys | Out-Null
+        Remove-TattooedRegistryValue -SecEditInfPath $SecEditInfPath -BaselineKeys $RegistryValuesBaselineKeys | Out-Null
     }
 
     $sdbPath = Join-Path $env:TEMP 'gpedit-security.sdb'

@@ -29,11 +29,13 @@ function Get-PrincipalSidType {
             }
         }
     }
-    catch { }
+    catch {
+        Write-Verbose "Get-PrincipalSidType: SID lookup failed for '$Sid': $($_.Exception.Message)"
+    }
     return $null
 }
 
-function Get-PrincipalLocationChoices {
+function Get-PrincipalLocationChoice {
     # Local machine always, plus the domain if joined. No full AD browsing -
     # this project only handles local security policy.
     $choices = New-Object System.Collections.Generic.List[object]
@@ -44,7 +46,9 @@ function Get-PrincipalLocationChoices {
             $choices.Add([pscustomobject]@{ Label = $cs.Domain; Prefix = $cs.Domain })
         }
     }
-    catch { }
+    catch {
+        Write-Verbose "Get-PrincipalLocationChoice: domain lookup failed: $($_.Exception.Message)"
+    }
     # .ToArray(), not @($choices): @() directly on a List[object] triggers
     # a PowerShell 5.1 dynamic-binder ArgumentException on this machine
     # (confirmed environment bug specific to List[object] - List[string]
@@ -88,7 +92,7 @@ function Resolve-PrincipalNamesText {
         }
     }
 
-    # .ToArray(), not @(): see note in Get-PrincipalLocationChoices.
+    # .ToArray(), not @(): see note in Get-PrincipalLocationChoice.
     return [pscustomobject]@{ Resolved = $resolved.ToArray(); NotFound = $notFound.ToArray() }
 }
 
@@ -138,7 +142,7 @@ function Show-LocationsDialog {
     $window.FindName('LocationsIntroLabel').Text = $Ui.LocationsIntro
 
     $listBox = $window.FindName('LocationsListBox')
-    $choices = Get-PrincipalLocationChoices
+    $choices = Get-PrincipalLocationChoice
     foreach ($c in $choices) {
         $item = New-Object System.Windows.Controls.ListBoxItem
         $item.Content = $c.Label
@@ -199,7 +203,7 @@ function Show-SelectPrincipalsDialog {
     # crosses closures fine (like $listBox.Items.Add(...) elsewhere).
     $state = @{
         SelectedTypes   = @('User', 'Group', 'Alias', 'WellKnownGroup')
-        CurrentLocation = (Get-PrincipalLocationChoices)[0]
+        CurrentLocation = (Get-PrincipalLocationChoice)[0]
         LastCheckedText = ''
     }
     $resolvedPrincipals = New-Object System.Collections.Generic.List[object]
@@ -252,7 +256,7 @@ function Show-SelectPrincipalsDialog {
     $okButton.Add_Click({
         $ok = & $runCheckNames
         if (-not $ok) { return }
-        # .ToArray(), not @(): see note in Get-PrincipalLocationChoices.
+        # .ToArray(), not @(): see note in Get-PrincipalLocationChoice.
         $script:__selectPrincipalsResult = $resolvedPrincipals.ToArray()
         $window.DialogResult = $true
     })

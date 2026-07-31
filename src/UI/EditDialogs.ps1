@@ -86,7 +86,9 @@ function Import-XamlWindow {
 }
 
 function New-LabeledControl {
+        [CmdletBinding(SupportsShouldProcess)]
     param([string]$LabelText, [System.Windows.UIElement]$Control)
+    if ($PSCmdlet.ShouldProcess('New-LabeledControl', 'Invoke')) {
     $panel = New-Object System.Windows.Controls.StackPanel
     $panel.Margin = '0,0,0,10'
     $label = New-Object System.Windows.Controls.TextBlock
@@ -96,6 +98,8 @@ function New-LabeledControl {
     [void]$panel.Children.Add($label)
     [void]$panel.Children.Add($Control)
     return $panel
+
+    }
 }
 
 function Register-DataGridClipboardCopy {
@@ -123,6 +127,7 @@ function Register-DataGridClipboardCopy {
         for the icon+text) needs its property name supplied via
         -TemplateColumnProperties, keyed by the column's Header text.
     #>
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSReviewUnusedParameter', 'TemplateColumnProperties', Justification = 'Used inside $getVisibleColumnPaths, a nested scriptblock invisible to this analyzer rule.')]
     param(
         [Parameter(Mandatory)]$Control,
         [Parameter(Mandatory)][hashtable]$Ui,
@@ -232,6 +237,9 @@ function Register-DataGridClipboardCopy {
 
     $Control.Add_KeyDown({
         param($EventSender, $e)
+        # $EventSender must stay declared for positional binding (WPF invokes as
+        # (sender, e)) - referenced as a no-op only to satisfy PSReviewUnusedParameter.
+        [void]$EventSender
         if ($e.Key -eq [System.Windows.Input.Key]::C -and
             ($e.KeyboardDevice.Modifiers -band [System.Windows.Input.ModifierKeys]::Control)) {
             & $copySelectedRows
@@ -248,6 +256,9 @@ function Register-DataGridClipboardCopy {
     # above.
     $Control.Add_PreviewMouseRightButtonDown({
         param($EventSender, $e)
+        # $EventSender must stay declared for positional binding (WPF invokes as
+        # (sender, e)) - referenced as a no-op only to satisfy PSReviewUnusedParameter.
+        [void]$EventSender
         $isDataGrid = $Control -is [System.Windows.Controls.DataGrid]
         $headerType = if ($isDataGrid) { [System.Windows.Controls.Primitives.DataGridColumnHeader] } else { [System.Windows.Controls.GridViewColumnHeader] }
         $header = & $findVisualAncestor -Element $e.OriginalSource -Type $headerType
@@ -298,19 +309,18 @@ function Register-DataGridClipboardCopy {
 
     $copyRowMenuItem = New-Object System.Windows.Controls.MenuItem
     $copyRowMenuItem.Header = $Ui.CopyRowMenuItem
-    $copyRowMenuItem.Add_Click({ param($EventSender, $e) & $copySelectedRows }.GetNewClosure())
+    $copyRowMenuItem.Add_Click({ & $copySelectedRows }.GetNewClosure())
 
     $copyCellMenuItem = New-Object System.Windows.Controls.MenuItem
     $copyCellMenuItem.Header = $Ui.CopyCellMenuItem
-    $copyCellMenuItem.Add_Click({ param($EventSender, $e) & $copySelectedCellsInColumn }.GetNewClosure())
+    $copyCellMenuItem.Add_Click({ & $copySelectedCellsInColumn }.GetNewClosure())
 
     $copyColumnMenuItem = New-Object System.Windows.Controls.MenuItem
     $copyColumnMenuItem.Header = $Ui.CopyColumnMenuItem
-    $copyColumnMenuItem.Add_Click({ param($EventSender, $e) & $copyColumnAllRows }.GetNewClosure())
+    $copyColumnMenuItem.Add_Click({ & $copyColumnAllRows }.GetNewClosure())
 
     $contextMenu = New-Object System.Windows.Controls.ContextMenu
     $contextMenu.Add_Opened({
-        param($EventSender, $e)
         $isCellMode = $clickContext.Mode -eq 'cell'
         $isHeaderMode = $clickContext.Mode -eq 'header'
 
@@ -353,6 +363,10 @@ function Enable-CatalogFieldEditToggle {
         return $true on success (exit edit mode) or $false to stay in it
         (e.g. error already shown to the user).
     #>
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSReviewUnusedParameter', 'DisplayControl', Justification = 'Used inside Add_Click .GetNewClosure() scriptblocks, invisible to this analyzer rule.')]
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSReviewUnusedParameter', 'EditControl', Justification = 'Used inside Add_Click .GetNewClosure() scriptblocks, invisible to this analyzer rule.')]
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSReviewUnusedParameter', 'GetCurrentText', Justification = 'Used inside Add_Click .GetNewClosure() scriptblocks, invisible to this analyzer rule.')]
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSReviewUnusedParameter', 'OnSave', Justification = 'Used inside Add_Click .GetNewClosure() scriptblocks, invisible to this analyzer rule.')]
     param(
         [Parameter(Mandatory)]$EditButton,
         [Parameter(Mandatory)]$SaveButton,
@@ -405,7 +419,7 @@ function Enable-CatalogFieldEditToggle {
 function Get-CisClientEditionRoleClass {
     <#
         Classifies a client OS benchmark name (Windows 10/11) as
-        'StandAlone' or 'Enterprise' - drives how ConvertTo-CisProfileRows
+        'StandAlone' or 'Enterprise' - drives how ConvertTo-CisProfileRow
         fills the DC/MS columns for these benchmarks, which have no real
         DC/MS role in the CIS sense (role = $null in the index). $null for
         any Server benchmark (real DC/MS role, derived from data) or an
@@ -428,7 +442,7 @@ function Get-CisRoleColumnsForRow {
     <#
         Computes the DC/MS columns for a REAL row (a recommendation exists
         for this exact benchmark+version+level) - see
-        ConvertTo-CisProfileRows, which only shows real rows (2026-07-27
+        ConvertTo-CisProfileRow, which only shows real rows (2026-07-27
         rollback: no more filler rows for benchmarks without a
         recommendation, including "Stand-alone").
     #>
@@ -447,7 +461,7 @@ function Get-CisRoleColumnsForRow {
     }
 }
 
-function ConvertTo-CisProfileRows {
+function ConvertTo-CisProfileRow {
     <#
         Turns the raw profiles[] list (benchmark/version/level/role/
         cisNumber/valueData) from the CIS index into DataGrid-ready
@@ -500,6 +514,7 @@ function Set-CisRecommendationTab {
         $null for SecurityEditWindow (no reg_key/reg_item for
         security/advanced-audit settings).
     #>
+        [CmdletBinding(SupportsShouldProcess)]
     param(
         $CisRecommendation,
         [Parameter(Mandatory)]$CisTabItem,
@@ -513,6 +528,7 @@ function Set-CisRecommendationTab {
         $RegItemLabel,
         [Parameter(Mandatory)][hashtable]$Ui
     )
+    if ($PSCmdlet.ShouldProcess('Set-CisRecommendationTab', 'Invoke')) {
 
     if ($null -eq $CisRecommendation) {
         $CisTabItem.Visibility = 'Collapsed'
@@ -539,11 +555,13 @@ function Set-CisRecommendationTab {
         $RegItemLabel.Text = $CisRecommendation.regItem
     }
 
-    # @() is needed here: ConvertTo-CisProfileRows returns a List[object]
+    # @() is needed here: ConvertTo-CisProfileRow returns a List[object]
     # via "return", which PowerShell unwraps to a single object (not
     # IEnumerable, crashes on ItemsSource) once it holds just one row.
-    $CisProfilesGrid.ItemsSource = @(ConvertTo-CisProfileRows -Profiles $CisRecommendation.profiles -Ui $Ui)
+    $CisProfilesGrid.ItemsSource = @(ConvertTo-CisProfileRow -Profiles $CisRecommendation.profiles -Ui $Ui)
     Register-DataGridClipboardCopy -Control $CisProfilesGrid -Ui $Ui
+
+    }
 }
 
 function Show-AdmxEditDialog {
@@ -752,7 +770,9 @@ function Set-ExplainTextWithDefaultHighlight {
         "Explain" tab for other security categories, and AdmxEditWindow's
         ExplainGroupBox - not limited to one context despite the name.
     #>
+        [CmdletBinding(SupportsShouldProcess)]
     param([Parameter(Mandatory)]$TextBlock, [string]$Text)
+    if ($PSCmdlet.ShouldProcess('Set-ExplainTextWithDefaultHighlight', 'Invoke')) {
 
     $TextBlock.Inlines.Clear()
     if (-not $Text) { return }
@@ -771,9 +791,12 @@ function Set-ExplainTextWithDefaultHighlight {
         $TextBlock.Inlines.Add($run)
         if ($i -lt $lines.Count - 1) { $TextBlock.Inlines.Add((New-Object System.Windows.Documents.LineBreak)) }
     }
+
+    }
 }
 
 function Show-SecurityEditDialog {
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSReviewUnusedParameter', 'DataPath', Justification = 'Used inside an Add_Click .GetNewClosure() scriptblock, invisible to this analyzer rule.')]
     param(
         [Parameter(Mandatory)]$Setting,
         $CisRecommendation,
@@ -914,10 +937,10 @@ function Show-SecurityEditDialog {
         # Explain/CIS Info, so no Enable-CatalogFieldEditToggle here - just
         # toggle IsReadOnly, keeping the original text to restore on Cancel.
         $catalogPath = Join-Path $ScriptRoot 'Catalogs\SecurityCatalog.ps1'
-        $originalNameText = $null
+        $nameEditState = @{ OriginalText = $null }
 
         $editNameButton.Add_Click({
-            $originalNameText = $titleLabel.Text
+            $nameEditState.OriginalText = $titleLabel.Text
             $titleLabel.IsReadOnly = $false
             $titleLabel.IsReadOnlyCaretVisible = $true
             $titleLabel.Background = 'White'
@@ -930,7 +953,7 @@ function Show-SecurityEditDialog {
         })
 
         $cancelNameButton.Add_Click({
-            $titleLabel.Text = $originalNameText
+            $titleLabel.Text = $nameEditState.OriginalText
             $titleLabel.IsReadOnly = $true
             $titleLabel.IsReadOnlyCaretVisible = $false
             $titleLabel.Background = 'Transparent'

@@ -8,7 +8,9 @@ Set-StrictMode -Version Latest
 
 function New-PolLookup {
     # Builds a "registry key|value name" (lowercase) -> .pol entry dict for O(1) lookup.
+        [CmdletBinding(SupportsShouldProcess)]
     param([System.Collections.IEnumerable]$Entries)
+    if ($PSCmdlet.ShouldProcess('New-PolLookup', 'Invoke')) {
 
     $lookup = @{}
     if ($null -eq $Entries) { return $lookup }
@@ -17,6 +19,8 @@ function New-PolLookup {
         $lookup[$k] = $e
     }
     return $lookup
+
+    }
 }
 
 function Get-PolFileEntriesSafe {
@@ -62,7 +66,7 @@ function Get-AdmxPolicyState {
     return 'NotConfigured'
 }
 
-function Get-PolicyElementValues {
+function Get-PolicyElementValue {
     # For each element of a policy, gets its current value from the scope's
     # registry.pol (to pre-fill the edit dialog). Key = element.id.
     param($Policy, [hashtable]$PolLookup)
@@ -149,7 +153,7 @@ function Resolve-PrincipalDisplayName {
 
 function Format-SecuritySettingValue {
     # Formats a security setting's raw value for display in the list
-    # (State/Value column), using the current UI language ($Ui from Get-UiStrings).
+    # (State/Value column), using the current UI language ($Ui from Get-UiString).
     param($Setting, [hashtable]$Ui)
 
     if (-not $Setting.isConfigured) { return $Ui.StateNotDefined }

@@ -64,7 +64,7 @@ trap {
 # Test-IsRunningAsAdministrator alone covers both UAC-enabled (not elevated)
 # and UAC-disabled (non-admin session) cases; only the shown message differs.
 if (-not (Test-IsRunningAsAdministrator)) {
-    $startupUi = Get-UiStrings
+    $startupUi = Get-UiString
     $startupMessage = if (Test-IsUacEnabled) { $startupUi.LaunchNotElevatedMessage } else { $startupUi.LaunchNotAdminAccountMessage }
     [System.Windows.MessageBox]::Show($startupMessage, $startupUi.LaunchBlockedTitle, 'OK', 'Error') | Out-Null
     return
@@ -72,9 +72,9 @@ if (-not (Test-IsRunningAsAdministrator)) {
 
 # File > Options: default locations + Editor Mode, persisted in
 # %LocalAppData%\Gpeditor_plus\settings.json (see AppSettings.ps1). First
-# launch creates default folders and seeds Audit from src\DefaultData\*.audit.
-$script:AppSettings = Get-AppSettings
-Initialize-AppSettingsFirstRun -Settings $script:AppSettings -ScriptRoot $PSScriptRoot
+# launch creates default folders.
+$script:AppSettings = Get-AppSetting
+Initialize-AppSettingsFirstRun -Settings $script:AppSettings
 # Projects moved from %LocalAppData% to a fixed ProgramData default - unlike
 # the other paths.* folders (created once, on first run only), this one is
 # ensured on every launch so an existing install picks up the new default
@@ -82,6 +82,11 @@ Initialize-AppSettingsFirstRun -Settings $script:AppSettings -ScriptRoot $PSScri
 if (-not (Test-Path -LiteralPath $script:AppSettings.paths.projectsDir)) {
     New-Item -ItemType Directory -Path $script:AppSettings.paths.projectsDir -Force | Out-Null
 }
+# Seeds Audit from src\DefaultData\Audit\*.audit the first time the folder
+# doesn't exist (fresh install or the user deleted it) - checked every
+# launch, independent of the settings.json first-run flag, so a folder that
+# vanished later still gets reseeded once.
+Initialize-AuditFilesFolder -Settings $script:AppSettings -ScriptRoot $PSScriptRoot
 $script:CatalogEditingEnabled = $script:AppSettings.editorMode
 $BackupRoot = $script:AppSettings.paths.backupRoot
 $SecEditInfPath = Join-Path $script:AppSettings.paths.tempDir 'secedit.inf'
@@ -94,11 +99,11 @@ $script:SecEditInfDirty = $false
 # True once a setting changed while a GPO project is active but not yet
 # pushed by "Save now" - drives Update-SaveNowButtonVisibility and the
 # close-time unsaved-changes warning. Reset on new/opened project and after
-# a successful push in Save-GpoProjectChanges.
+# a successful push in Save-GpoProjectChange.
 $script:ProjectDirty = $false
 
 # True once a Security Options setting changed outside any GPO project -
-# lets Export-GpoProjectFiles apply secedit immediately at export time
+# lets Export-GpoProjectFile apply secedit immediately at export time
 # rather than waiting for window close. Never reset once set; the
 # close-time apply (gated on SecEditInfDirty) still runs regardless
 # (deliberate redundancy).
@@ -165,9 +170,9 @@ else {
     # bundled catalog by a later app version would otherwise never reach a
     # machine that already has one. Append the missing ones without touching
     # anything already there (the user may have edited DisplayName/Explain).
-    $addedCatalogEntries = Merge-SecurityCatalogBundledEntries -BundledPath $script:BundledSecurityCatalogPath -UserPath $script:SecurityCatalogDataPath
+    $addedCatalogEntries = Merge-SecurityCatalogBundledEntry -BundledPath $script:BundledSecurityCatalogPath -UserPath $script:SecurityCatalogDataPath
     if ($addedCatalogEntries -gt 0) {
-        Write-Host "Security catalog: $addedCatalogEntries new setting(s) added from the bundled catalog."
+        Write-Information "Security catalog: $addedCatalogEntries new setting(s) added from the bundled catalog." -InformationAction Continue
     }
 }
 Import-SecurityCatalogData
@@ -192,7 +197,7 @@ if (Test-Path -LiteralPath $admxPath) {
     }
 }
 if ($needsRebuild) {
-    Write-Host "ADMX index missing or stale, generating..."
+    Write-Information "ADMX index missing or stale, generating..." -InformationAction Continue
     & (Join-Path $PSScriptRoot 'Indexers\Build-Index.ps1') -Kind Admx -PolicyDefinitionsPath $PolicyDefinitionsPath -OutputPath $admxPath -SourceFingerprint $admxFingerprint
     $admxIndex = Get-Content -Raw -Encoding UTF8 $admxPath | ConvertFrom-Json
 }
@@ -253,7 +258,7 @@ if (Test-Path -LiteralPath $cisIndexPath) {
     }
 }
 if ($cisNeedsRebuild -and (Test-Path -LiteralPath $script:AppSettings.paths.auditFilesDir) -and (Get-ChildItem -LiteralPath $script:AppSettings.paths.auditFilesDir -Filter '*.audit' -File -ErrorAction SilentlyContinue)) {
-    Write-Host "CIS index missing or stale, generating..."
+    Write-Information "CIS index missing or stale, generating..." -InformationAction Continue
     & (Join-Path $PSScriptRoot 'Indexers\Build-Index.ps1') -Kind Cis -AuditFilesPath $script:AppSettings.paths.auditFilesDir -OutputPath $cisIndexPath -SourceFingerprint $auditFingerprint
 }
 $script:CisIndex = Import-CisIndex -Path $cisIndexPath
@@ -278,7 +283,7 @@ $script:FilterKinds = @('Admx', 'Security', 'AdvancedAudit')
 $script:FilterHasCisRecOnly = $false
 
 # Patch notes (right-hand pane + ? > Patch note).
-$script:ChangelogEntries = Get-ChangelogEntries -Path (Join-Path $PSScriptRoot '..\CHANGELOG.md')
+$script:ChangelogEntries = Get-ChangelogEntry -Path (Join-Path $PSScriptRoot '..\CHANGELOG.md')
 $script:PatchNotesEntryCount = 10
 $script:HasLeftInitialPatchNotesView = $false
 
@@ -298,8 +303,10 @@ $script:policiesByCategory = @{}
 # Builds fast id-based lookups (category by id, children by parent,
 # policies by category) from the raw $admxIndex arrays, used everywhere
 # the tree/list needs to navigate the category hierarchy.
-function Build-CategoryLookups {
+function New-CategoryLookup {
+        [CmdletBinding(SupportsShouldProcess)]
     param($AdmxIndex)
+    if ($PSCmdlet.ShouldProcess('New-CategoryLookup', 'Invoke')) {
 
     $categoriesById = @{}
     $childrenByParent = @{}
@@ -320,9 +327,11 @@ function Build-CategoryLookups {
     $script:categoriesById = $categoriesById
     $script:childrenByParent = $childrenByParent
     $script:policiesByCategory = $policiesByCategory
+
+    }
 }
 
-Build-CategoryLookups -AdmxIndex $admxIndex
+New-CategoryLookup -AdmxIndex $admxIndex
 
 # --- Icons: Segoe MDL2 Assets glyphs (bundled with Windows, no image file
 # --- to embed). Folder icon for tree categories, distinct icons for the
@@ -341,7 +350,9 @@ $script:IconGlyphDictionary     = [char]0xE82D   # Dictionary (Overview root)
 function Set-TreeNodeHeader {
     # Also sets AutomationProperties.Name explicitly: once Header is not a
     # plain string, screen readers can't derive an accessible name from it.
+        [CmdletBinding(SupportsShouldProcess)]
     param($Tvi, [string]$Text, [string]$Glyph = $null, [string]$Color = $null)
+    if ($PSCmdlet.ShouldProcess('Set-TreeNodeHeader', 'Invoke')) {
     $panel = New-Object System.Windows.Controls.StackPanel
     $panel.Orientation = 'Horizontal'
     $icon = New-Object System.Windows.Controls.TextBlock
@@ -357,6 +368,8 @@ function Set-TreeNodeHeader {
     [void]$panel.Children.Add($label)
     $Tvi.Header = $panel
     [System.Windows.Automation.AutomationProperties]::SetName($Tvi, $Text)
+
+    }
 }
 
 # An Admx policy's declared class ('Machine'/'User'/'Both') decides
@@ -399,7 +412,7 @@ function Test-KindFilterMatch {
 
 function Test-AnyStateScopeKindFilterActive {
     # $true if the Filter menu's State/Scope/Kind dimensions currently
-    # restrict the tree (used by Build-MainTreeRoots to decide whether an
+    # restrict the tree (used by New-MainTreeRoot to decide whether an
     # otherwise-empty root container should still be shown).
     return (
         $script:FilterStateMode -ne 'Any' -or
@@ -408,7 +421,7 @@ function Test-AnyStateScopeKindFilterActive {
     )
 }
 
-function Test-CategoryHasPolicies {
+function Test-CategoryHasPolicy {
     # A category only counts as "having policies" if at least one of them
     # passes the active Filter menu state/scope/kind - otherwise its folder
     # would still show up empty in the tree.
@@ -429,15 +442,15 @@ function Test-CategoryHasPolicies {
     }
     if (-not $has -and $script:childrenByParent.ContainsKey($CategoryId)) {
         foreach ($childId in $script:childrenByParent[$CategoryId]) {
-            if (Test-CategoryHasPolicies -CategoryId $childId -Scope $Scope -Cache $Cache) { $has = $true; break }
+            if (Test-CategoryHasPolicy -CategoryId $childId -Scope $Scope -Cache $Cache) { $has = $true; break }
         }
     }
     $Cache[$CategoryId] = $has
     return $has
 }
 
-function Test-SecurityCategoryHasPolicies {
-    # Same reasoning as Test-CategoryHasPolicies, for the static Security
+function Test-SecurityCategoryHasPolicy {
+    # Same reasoning as Test-CategoryHasPolicy, for the static Security
     # Settings leaves (Password Policy, Audit Policy, etc.).
     param([string]$Category)
     if (-not (Test-KindFilterMatch -Kind 'Security') -or -not (Test-ScopeFilterMatch -Scope $null)) { return $false }
@@ -448,9 +461,9 @@ function Test-SecurityCategoryHasPolicies {
     return $false
 }
 
-# Same reasoning as Test-SecurityCategoryHasPolicies, for Advanced Audit
+# Same reasoning as Test-SecurityCategoryHasPolicy, for Advanced Audit
 # Policy Configuration leaves.
-function Test-AdvAuditCategoryHasPolicies {
+function Test-AdvAuditCategoryHasPolicy {
     param([string]$Category)
     if (-not (Test-KindFilterMatch -Kind 'AdvancedAudit') -or -not (Test-ScopeFilterMatch -Scope $null)) { return $false }
     if ($script:FilterStateMode -eq 'Any') { return $true }
@@ -464,7 +477,9 @@ function New-CategoryTreeViewItem {
     # $Ancestors: list (root -> leaf order) of parent TreeViewItems, stored
     # so search can reconstruct the path to expand when navigating directly
     # from a result.
+        [CmdletBinding(SupportsShouldProcess)]
     param([string]$CategoryId, [string]$Scope, [hashtable]$Cache, [System.Collections.Generic.List[object]]$Ancestors)
+    if ($PSCmdlet.ShouldProcess('New-CategoryTreeViewItem', 'Invoke')) {
 
     $cat = $script:categoriesById[$CategoryId]
     $tvi = New-Object System.Windows.Controls.TreeViewItem
@@ -482,19 +497,23 @@ function New-CategoryTreeViewItem {
 
     if ($script:childrenByParent.ContainsKey($CategoryId)) {
         foreach ($childId in ($script:childrenByParent[$CategoryId] | Sort-Object { $script:categoriesById[$_].displayName })) {
-            if (Test-CategoryHasPolicies -CategoryId $childId -Scope $Scope -Cache $Cache) {
+            if (Test-CategoryHasPolicy -CategoryId $childId -Scope $Scope -Cache $Cache) {
                 [void]$tvi.Items.Add((New-CategoryTreeViewItem -CategoryId $childId -Scope $Scope -Cache $Cache -Ancestors $childAncestors))
             }
         }
     }
     return $tvi
+
+    }
 }
 
 # Builds a leaf tree node for one of the static Security Settings
 # categories (Password Policy, Audit Policy, etc.), registering it in the
 # lookups search/navigation use to jump straight to it.
 function New-SecurityLeafItem {
+        [CmdletBinding(SupportsShouldProcess)]
     param([string]$Header, [string]$Category, [System.Collections.Generic.List[object]]$Ancestors)
+    if ($PSCmdlet.ShouldProcess('New-SecurityLeafItem', 'Invoke')) {
     $tvi = New-Object System.Windows.Controls.TreeViewItem
     Set-TreeNodeHeader -Tvi $tvi -Text $Header
     # Label keeps the plain text: Header becomes a StackPanel (icon + text)
@@ -505,12 +524,16 @@ function New-SecurityLeafItem {
     $script:TreeAncestorsBySecurityCategory[$Category] = @($Ancestors)
     $script:AllTreeItems.Add($tvi)
     return $tvi
+
+    }
 }
 
 # Same as New-SecurityLeafItem, for an Advanced Audit Policy Configuration
 # category.
 function New-AdvancedAuditLeafItem {
+        [CmdletBinding(SupportsShouldProcess)]
     param([string]$Header, [string]$Category, [System.Collections.Generic.List[object]]$Ancestors)
+    if ($PSCmdlet.ShouldProcess('New-AdvancedAuditLeafItem', 'Invoke')) {
     $tvi = New-Object System.Windows.Controls.TreeViewItem
     Set-TreeNodeHeader -Tvi $tvi -Text $Header
     $tvi.Tag = [pscustomobject]@{ Kind = 'AdvancedAuditCategory'; AdvAuditCategory = $Category; Label = $Header }
@@ -518,14 +541,18 @@ function New-AdvancedAuditLeafItem {
     $script:TreeAncestorsByAdvAuditCategory[$Category] = @($Ancestors)
     $script:AllTreeItems.Add($tvi)
     return $tvi
+
+    }
 }
 
 function New-StaticNode {
     # As in real gpedit.msc, only the two root nodes start collapsed
     # (IsExpanded default false).
     # $GroupId: stable identifier stored in TreeItemsByGroupId/
-    # TreeAncestorsByGroupId, lets this node be found again after Rebuild-Tree.
+    # TreeAncestorsByGroupId, lets this node be found again after Update-Tree.
+        [CmdletBinding(SupportsShouldProcess)]
     param([string]$Header, [string]$GroupId = $null, [System.Collections.Generic.List[object]]$Ancestors = $null, [string]$Glyph = $null, [string]$Color = $null)
+    if ($PSCmdlet.ShouldProcess('New-StaticNode', 'Invoke')) {
     $tvi = New-Object System.Windows.Controls.TreeViewItem
     Set-TreeNodeHeader -Tvi $tvi -Text $Header -Glyph $Glyph -Color $Color
     $tvi.Tag = [pscustomobject]@{ Kind = 'Group'; Label = $Header; GroupId = $GroupId }
@@ -535,12 +562,16 @@ function New-StaticNode {
         $script:TreeAncestorsByGroupId[$GroupId] = if ($Ancestors) { @($Ancestors) } else { @() }
     }
     return $tvi
+
+    }
 }
 
-function Build-MainTreeRoots {
+function New-MainTreeRoot {
     # Builds the two roots (Computer/User Configuration) plus the navigation
     # indexes used by search to expand/select the right node directly.
+        [CmdletBinding(SupportsShouldProcess)]
     param([hashtable]$Ui)
+    if ($PSCmdlet.ShouldProcess('New-MainTreeRoot', 'Invoke')) {
 
     $script:TreeItemsByAdmxCategoryScope = @{}
     $script:TreeAncestorsByKey = @{}
@@ -572,7 +603,7 @@ function Build-MainTreeRoots {
     $machineAncestors = [System.Collections.Generic.List[object]]@($computerRoot, $computerAdmxRoot)
     $machineCache = @{}
     foreach ($rootCatId in ($script:childrenByParent['$ROOT$'] | Sort-Object { $script:categoriesById[$_].displayName })) {
-        if (Test-CategoryHasPolicies -CategoryId $rootCatId -Scope 'Machine' -Cache $machineCache) {
+        if (Test-CategoryHasPolicy -CategoryId $rootCatId -Scope 'Machine' -Cache $machineCache) {
             [void]$computerAdmxRoot.Items.Add((New-CategoryTreeViewItem -CategoryId $rootCatId -Scope 'Machine' -Cache $machineCache -Ancestors $machineAncestors))
         }
     }
@@ -584,22 +615,22 @@ function Build-MainTreeRoots {
     $securityRoot = New-StaticNode -Header $Ui.SecuritySettings -GroupId 'ComputerSecurityRoot' -Ancestors ([System.Collections.Generic.List[object]]@($computerRoot, $windowsSettingsRoot))
     $accountPoliciesRoot = New-StaticNode -Header $Ui.AccountPolicies -GroupId 'AccountPoliciesRoot' -Ancestors ([System.Collections.Generic.List[object]]@($computerRoot, $windowsSettingsRoot, $securityRoot))
     $accountAncestors = [System.Collections.Generic.List[object]]@($computerRoot, $windowsSettingsRoot, $securityRoot, $accountPoliciesRoot)
-    if (Test-SecurityCategoryHasPolicies -Category 'Password Policy') { [void]$accountPoliciesRoot.Items.Add((New-SecurityLeafItem -Header $Ui.PasswordPolicy -Category 'Password Policy' -Ancestors $accountAncestors)) }
-    if (Test-SecurityCategoryHasPolicies -Category 'Account Lockout Policy') { [void]$accountPoliciesRoot.Items.Add((New-SecurityLeafItem -Header $Ui.AccountLockoutPolicy -Category 'Account Lockout Policy' -Ancestors $accountAncestors)) }
+    if (Test-SecurityCategoryHasPolicy -Category 'Password Policy') { [void]$accountPoliciesRoot.Items.Add((New-SecurityLeafItem -Header $Ui.PasswordPolicy -Category 'Password Policy' -Ancestors $accountAncestors)) }
+    if (Test-SecurityCategoryHasPolicy -Category 'Account Lockout Policy') { [void]$accountPoliciesRoot.Items.Add((New-SecurityLeafItem -Header $Ui.AccountLockoutPolicy -Category 'Account Lockout Policy' -Ancestors $accountAncestors)) }
     if ($accountPoliciesRoot.Items.Count -gt 0) { [void]$securityRoot.Items.Add($accountPoliciesRoot) }
 
     $localPoliciesRoot = New-StaticNode -Header $Ui.LocalPolicies -GroupId 'LocalPoliciesRoot' -Ancestors ([System.Collections.Generic.List[object]]@($computerRoot, $windowsSettingsRoot, $securityRoot))
     $localAncestors = [System.Collections.Generic.List[object]]@($computerRoot, $windowsSettingsRoot, $securityRoot, $localPoliciesRoot)
-    if (Test-SecurityCategoryHasPolicies -Category 'Audit Policy') { [void]$localPoliciesRoot.Items.Add((New-SecurityLeafItem -Header $Ui.AuditPolicy -Category 'Audit Policy' -Ancestors $localAncestors)) }
-    if (Test-SecurityCategoryHasPolicies -Category 'User Rights Assignment') { [void]$localPoliciesRoot.Items.Add((New-SecurityLeafItem -Header $Ui.UserRightsAssignment -Category 'User Rights Assignment' -Ancestors $localAncestors)) }
-    if (Test-SecurityCategoryHasPolicies -Category 'Security Options') { [void]$localPoliciesRoot.Items.Add((New-SecurityLeafItem -Header $Ui.SecurityOptions -Category 'Security Options' -Ancestors $localAncestors)) }
+    if (Test-SecurityCategoryHasPolicy -Category 'Audit Policy') { [void]$localPoliciesRoot.Items.Add((New-SecurityLeafItem -Header $Ui.AuditPolicy -Category 'Audit Policy' -Ancestors $localAncestors)) }
+    if (Test-SecurityCategoryHasPolicy -Category 'User Rights Assignment') { [void]$localPoliciesRoot.Items.Add((New-SecurityLeafItem -Header $Ui.UserRightsAssignment -Category 'User Rights Assignment' -Ancestors $localAncestors)) }
+    if (Test-SecurityCategoryHasPolicy -Category 'Security Options') { [void]$localPoliciesRoot.Items.Add((New-SecurityLeafItem -Header $Ui.SecurityOptions -Category 'Security Options' -Ancestors $localAncestors)) }
     if ($localPoliciesRoot.Items.Count -gt 0) { [void]$securityRoot.Items.Add($localPoliciesRoot) }
 
     $advAuditConfigRoot = New-StaticNode -Header $Ui.AdvancedAuditPolicyConfig -GroupId 'AdvAuditConfigRoot' -Ancestors ([System.Collections.Generic.List[object]]@($computerRoot, $windowsSettingsRoot, $securityRoot))
     $advAuditObjectRoot = New-StaticNode -Header $Ui.AdvancedAuditPolicyObject -GroupId 'AdvAuditObjectRoot' -Ancestors ([System.Collections.Generic.List[object]]@($computerRoot, $windowsSettingsRoot, $securityRoot, $advAuditConfigRoot))
     $advAuditAncestors = [System.Collections.Generic.List[object]]@($computerRoot, $windowsSettingsRoot, $securityRoot, $advAuditConfigRoot, $advAuditObjectRoot)
     foreach ($catKey in $script:AdvancedAuditCategoryOrder) {
-        if (-not (Test-AdvAuditCategoryHasPolicies -Category $catKey)) { continue }
+        if (-not (Test-AdvAuditCategoryHasPolicy -Category $catKey)) { continue }
         $catHeader = $Ui["AdvAudit$catKey"]
         [void]$advAuditObjectRoot.Items.Add((New-AdvancedAuditLeafItem -Header $catHeader -Category $catKey -Ancestors $advAuditAncestors))
     }
@@ -614,13 +645,15 @@ function Build-MainTreeRoots {
     $userAncestors = [System.Collections.Generic.List[object]]@($userRoot, $userAdmxRoot)
     $userCache = @{}
     foreach ($rootCatId in ($script:childrenByParent['$ROOT$'] | Sort-Object { $script:categoriesById[$_].displayName })) {
-        if (Test-CategoryHasPolicies -CategoryId $rootCatId -Scope 'User' -Cache $userCache) {
+        if (Test-CategoryHasPolicy -CategoryId $rootCatId -Scope 'User' -Cache $userCache) {
             [void]$userAdmxRoot.Items.Add((New-CategoryTreeViewItem -CategoryId $rootCatId -Scope 'User' -Cache $userCache -Ancestors $userAncestors))
         }
     }
     if ($userAdmxRoot.Items.Count -gt 0 -or -not (Test-AnyStateScopeKindFilterActive)) { [void]$userRoot.Items.Add($userAdmxRoot) }
 
     return [pscustomobject]@{ OverviewRoot = $overviewRoot; ComputerRoot = $computerRoot; UserRoot = $userRoot }
+
+    }
 }
 
 # --- Loading the XAML window ---------------------------------------------
@@ -639,7 +672,7 @@ $window.Resources.MergedDictionaries.Add($script:ModernStyle)
 
 $categoryTree      = $window.FindName('CategoryTree')
 $policyList        = $window.FindName('PolicyList')
-Register-DataGridClipboardCopy -Control $policyList -Ui (Get-UiStrings) -TemplateColumnProperties @{ Name = 'DisplayName' }
+Register-DataGridClipboardCopy -Control $policyList -Ui (Get-UiString) -TemplateColumnProperties @{ Name = 'DisplayName' }
 $categoryPathLabel = $window.FindName('CategoryPathLabel')
 $statusLabel       = $window.FindName('StatusLabel')
 $searchBox         = $window.FindName('SearchBox')
@@ -689,13 +722,15 @@ $mainContentGrid   = $window.FindName('MainContentGrid')
 
 # Single access point for the current UI string table, so every caller
 # fetches it the same way (English-only for now, but keeps the door open).
-function Get-CurrentUi { return Get-UiStrings }
+function Get-CurrentUi { return Get-UiString }
 
 # Sets every static (non-list, non-tree) piece of window text - menus,
 # column headers, labels - from the UI string table. Called once at
 # startup; the tree/list content itself is refreshed separately.
 function Update-StaticUiText {
+        [CmdletBinding(SupportsShouldProcess)]
     param([hashtable]$Ui)
+    if ($PSCmdlet.ShouldProcess('Update-StaticUiText', 'Invoke')) {
     $window.Title = $Ui.WindowTitle
     $searchBox.Text = $Ui.SearchPlaceholder
     $searchFieldAnyItem.Content = $Ui.SearchFieldAny
@@ -737,21 +772,27 @@ function Update-StaticUiText {
     $patchNotesTitleLabel.Text = $Ui.PatchNotesTitle
     Update-FilterMenuLabel -Ui $Ui
     if (-not $script:HasLeftInitialPatchNotesView) { Update-PatchNotesPanelContent }
+
+    }
 }
 
-# Clears and repopulates CategoryTree from scratch (Build-MainTreeRoots) -
+# Clears and repopulates CategoryTree from scratch (New-MainTreeRoot) -
 # needed whenever the State/Scope/Kind filter dimensions change, since those
 # affect which category folders qualify as "having policies".
-function Rebuild-Tree {
+function Update-Tree {
+        [CmdletBinding(SupportsShouldProcess)]
     param([hashtable]$Ui)
+    if ($PSCmdlet.ShouldProcess('Update-Tree', 'Invoke')) {
     $categoryTree.Items.Clear()
-    $roots = Build-MainTreeRoots -Ui $Ui
+    $roots = New-MainTreeRoot -Ui $Ui
     [void]$categoryTree.Items.Add($roots.OverviewRoot)
     [void]$categoryTree.Items.Add($roots.ComputerRoot)
     [void]$categoryTree.Items.Add($roots.UserRoot)
+
+    }
 }
 
-function Select-FilteredItems {
+function Select-FilteredItem {
     <#
         Filter menu: applies Scope/Kind/State on top of the already-built
         item list (Kind/Scope/IsConfigured are set on every item - see
@@ -779,7 +820,10 @@ function Select-FilteredItems {
     return , $filtered
 }
 
-function Refresh-ListForCisStateChange {
+function Update-ListForCisStateChange {    [CmdletBinding(SupportsShouldProcess)]
+    param()
+
+    if ($PSCmdlet.ShouldProcess('Update-ListForCisStateChange', 'Invoke')) {
     # Reapplies the current list after a CIS profile/filter change so the
     # "Recommended state" column updates immediately without reopening.
     if ($script:IsSearchActive) {
@@ -790,6 +834,8 @@ function Refresh-ListForCisStateChange {
     }
     elseif ($categoryTree.SelectedItem) {
         Update-PolicyList
+    }
+
     }
 }
 
@@ -815,7 +861,7 @@ function Get-CisValueLabelForRow {
     return Get-CisRecommendationValueForProfile -CisEntry $CisEntry -ActiveProfile $script:CisActiveProfileForColumn -Ui $Ui
 }
 
-function Get-CisRowLabels {
+function Get-CisRowLabel {
     <#
         Computes all 3 CIS columns together from one resolution so they
         stay consistent (CisLabel "Yes" must never coincide with a $null
@@ -881,7 +927,9 @@ function New-SearchHaystack {
     # $Fields: ordered list of raw (not lowercased - Test-ContainsIgnoreCase
     # is itself case-insensitive) strings/arrays-of-strings to join. $null/
     # empty entries collapse to nothing rather than an empty line.
+        [CmdletBinding(SupportsShouldProcess)]
     param([object[]]$Fields)
+    if ($PSCmdlet.ShouldProcess('New-SearchHaystack', 'Invoke')) {
     $parts = New-Object System.Collections.Generic.List[string]
     foreach ($f in $Fields) {
         foreach ($v in @($f)) {
@@ -889,10 +937,14 @@ function New-SearchHaystack {
         }
     }
     return ($parts -join "`n")
+
+    }
 }
 
 function New-AdmxSearchHaystack {
+        [CmdletBinding(SupportsShouldProcess)]
     param($Policy, $CisEntry)
+    if ($PSCmdlet.ShouldProcess('New-AdmxSearchHaystack', 'Invoke')) {
     $name = $Policy.displayName
     $description = $Policy.explainText
     $key = New-SearchHaystack -Fields @(
@@ -907,10 +959,14 @@ function New-AdmxSearchHaystack {
         CisNumber   = $cisNumber
         Any         = New-SearchHaystack -Fields @($name, $description, $key, $cisNumber)
     }
+
+    }
 }
 
 function New-SecuritySearchHaystack {
+        [CmdletBinding(SupportsShouldProcess)]
     param($Setting, $CisEntry)
+    if ($PSCmdlet.ShouldProcess('New-SecuritySearchHaystack', 'Invoke')) {
     $name = $Setting.displayName
     $description = $Setting.description
     $key = New-SearchHaystack -Fields @($Setting.name, $Setting.section)
@@ -922,10 +978,14 @@ function New-SecuritySearchHaystack {
         CisNumber   = $cisNumber
         Any         = New-SearchHaystack -Fields @($name, $description, $key, $cisNumber)
     }
+
+    }
 }
 
 function New-AuditSearchHaystack {
+        [CmdletBinding(SupportsShouldProcess)]
     param($Setting, $CisEntry)
+    if ($PSCmdlet.ShouldProcess('New-AuditSearchHaystack', 'Invoke')) {
     $name = $Setting.displayName
     # AdvancedAuditCatalog.ps1 always leaves "description" empty - kept for
     # shape consistency with the other two haystacks, same as
@@ -940,9 +1000,14 @@ function New-AuditSearchHaystack {
         CisNumber   = $cisNumber
         Any         = New-SearchHaystack -Fields @($name, $description, $key, $cisNumber)
     }
+
+    }
 }
 
-function Build-CisRecommendationCache {
+function New-CisRecommendationCache {    [CmdletBinding(SupportsShouldProcess)]
+    param()
+
+    if ($PSCmdlet.ShouldProcess('New-CisRecommendationCache', 'Invoke')) {
     $byAdmx = @{}
     $haystackAdmx = @{}
     foreach ($pol in $script:admxIndex.policies) {
@@ -972,6 +1037,8 @@ function Build-CisRecommendationCache {
     }
     $script:CisRecCacheByAuditSubcategoryId = $byAudit
     $script:SearchHaystackByAuditSubcategoryId = $haystackAudit
+
+    }
 }
 
 # Returns the same [pscustomobject]@{ CisEntry; ElementId } shape as
@@ -1017,17 +1084,20 @@ function Get-SearchHaystackForAuditSubcategory {
     return New-AuditSearchHaystack -Setting $Setting -CisEntry (Get-CachedCisRecommendationForAuditSubcategory -Setting $Setting)
 }
 
-function Update-TreeVisibilityForCisFilter {
+function Update-TreeVisibilityForCisFilter {    [CmdletBinding(SupportsShouldProcess)]
+    param()
+
+    if ($PSCmdlet.ShouldProcess('Update-TreeVisibilityForCisFilter', 'Invoke')) {
     <#
         Filtering by CIS profile and/or "has a CIS recommendation" must not
         leave empty tree nodes - same principle as search filtering
         (Update-TreeVisibilityForSearch) but computed over all settings,
         both scopes. Restores full tree if no filter is active. State/
         Scope/Kind filtering is handled separately, by rebuilding the tree
-        itself (see Test-CategoryHasPolicies and the FilterMenu handler).
+        itself (see Test-CategoryHasPolicy and the FilterMenu handler).
     #>
     if ($null -eq $script:CisProfileFilter -and -not $script:FilterHasCisRecOnly) {
-        Show-AllTreeItems
+        Show-AllTreeItem
         return
     }
 
@@ -1062,6 +1132,8 @@ function Update-TreeVisibilityForCisFilter {
     }
 
     Update-TreeVisibilityForSearch -KeepSet $keepVisible
+
+    }
 }
 
 function Get-CisProfileDisplayText {
@@ -1074,7 +1146,10 @@ function Get-CisProfileDisplayText {
     return $text
 }
 
-function Update-ActiveProfileLabel {
+function Update-ActiveProfileLabel {    [CmdletBinding(SupportsShouldProcess)]
+    param()
+
+    if ($PSCmdlet.ShouldProcess('Update-ActiveProfileLabel', 'Invoke')) {
     # Status bar (bottom of the console): name of the CIS profile currently
     # active for the "Recommended state" column - reflects either the
     # explicitly chosen filter (View > Profile) or the machine's default
@@ -1083,17 +1158,22 @@ function Update-ActiveProfileLabel {
     $ui = Get-CurrentUi
     $text = Get-CisProfileDisplayText -ProfileSpec $script:CisActiveProfileForColumn
     $activeProfileLabel.Text = if ($text) { $ui.ActiveCisProfileFormat -f $text } else { '' }
+
+    }
 }
 
 # --- Advanced menu: off-machine GPO projects (see
 # plan-gpedit-advanced-generate-gpo.md) ------------------------------------
 
-function Update-ActiveProjectLabel {
+function Update-ActiveProjectLabel {    [CmdletBinding(SupportsShouldProcess)]
+    param()
+
+    if ($PSCmdlet.ShouldProcess('Update-ActiveProjectLabel', 'Invoke')) {
     # Status bar AND window title: 3 states - no project (empty), a "New
     # Group Policy" session in progress but not yet saved (generic text, no
     # name, title unchanged), or a saved/opened project (real name). Edits
     # made once a project is saved/opened only reach its real files when
-    # "Save now" is clicked (see Save-GpoProjectChanges, Update-SaveNowButtonVisibility)
+    # "Save now" is clicked (see Save-GpoProjectChange, Update-SaveNowButtonVisibility)
     # - there is no auto-save indicator to show here anymore.
     $ui = Get-CurrentUi
     if ($script:ActiveProject -and $script:ActiveProject.Saved) {
@@ -1106,9 +1186,14 @@ function Update-ActiveProjectLabel {
         $activeProjectLabel.Text = ''
         $window.Title = $ui.WindowTitle
     }
+
+    }
 }
 
-function Update-GpoDerivedState {
+function Update-GpoDerivedState {    [CmdletBinding(SupportsShouldProcess)]
+    param()
+
+    if ($PSCmdlet.ShouldProcess('Update-GpoDerivedState', 'Invoke')) {
     # Rebuilds lookups/indexes from the current paths and refreshes the
     # displayed list - shared by Set-ActiveGpoProject and
     # Start-UnsavedGpoSession to avoid duplicating this logic.
@@ -1125,7 +1210,9 @@ function Update-GpoDerivedState {
     & (Join-Path $PSScriptRoot 'Indexers\Build-Index.ps1') -Kind AdvancedAudit -AuditCsvPath $script:AuditCsvPath -OutputPath $auditIndexPath
     $script:advancedAuditIndex = Get-Content -Raw -Encoding UTF8 $auditIndexPath | ConvertFrom-Json
 
-    Refresh-ListForCisStateChange
+    Update-ListForCisStateChange
+
+    }
 }
 
 function Disable-GpoAdvancedMenusForActiveSession {
@@ -1135,11 +1222,16 @@ function Disable-GpoAdvancedMenusForActiveSession {
     $fileOpenMenuItem.IsEnabled = $false
 }
 
-function Update-SaveNowButtonVisibility {
+function Update-SaveNowButtonVisibility {    [CmdletBinding(SupportsShouldProcess)]
+    param()
+
+    if ($PSCmdlet.ShouldProcess('Update-SaveNowButtonVisibility', 'Invoke')) {
     # "Save now" only makes sense with an active project that has pending
     # unpushed changes - outside a project the app writes straight to the
     # real system.
     $saveNowButton.Visibility = if ($script:ActiveProject -and $script:ProjectDirty) { 'Visible' } else { 'Collapsed' }
+
+    }
 }
 
 function Close-GpoProject {
@@ -1162,7 +1254,7 @@ function Close-GpoProject {
         if ($choice -eq 'Save') {
             if ($alreadySaved) {
                 try {
-                    Save-GpoProjectChanges
+                    Save-GpoProjectChange
                 }
                 catch {
                     Show-WriteErrorMessage -Ui $ui -ErrorText $_.Exception.Message
@@ -1170,7 +1262,7 @@ function Close-GpoProject {
                 }
             }
             else {
-                Save-GpoProjectAs
+                Save-GpoProjectCopy
                 if (-not $script:ActiveProject.Saved) {
                     # Save As was cancelled - stay in the session rather than
                     # closing with changes stuck in temp files about to be
@@ -1187,7 +1279,7 @@ function Close-GpoProject {
     # project-local secedit.inf, never the real machine, so they must not
     # trigger a real secedit /configure at the next window close.
     $script:SecEditInfDirty = $script:ActiveProject.PreProjectSecEditInfDirty
-    Remove-GpoTempFiles
+    Remove-GpoTempFile
 
     $script:ActiveProject = $null
     $script:ProjectDirty = $false
@@ -1205,10 +1297,15 @@ function Close-GpoProject {
     Update-ActiveProjectLabel
 }
 
-function New-GpoTempSuffix {
+function New-GpoTempSuffix {    [CmdletBinding(SupportsShouldProcess)]
+    param()
+
+    if ($PSCmdlet.ShouldProcess('New-GpoTempSuffix', 'Invoke')) {
     # 25 random chars shared by every temp file of a session.
     $chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
     return -join (1..25 | ForEach-Object { $chars[(Get-Random -Maximum $chars.Length)] })
+
+    }
 }
 
 function Get-OrCreateGpoTempFile {
@@ -1238,7 +1335,10 @@ function Get-OrCreateGpoTempFile {
     return $tempPath
 }
 
-function Remove-GpoTempFiles {
+function Remove-GpoTempFile {    [CmdletBinding(SupportsShouldProcess)]
+    param()
+
+    if ($PSCmdlet.ShouldProcess('Remove-GpoTempFile', 'Invoke')) {
     # Deletes every temp file materialized this session and resets state.
     foreach ($key in @($script:GpoTempFiles.Keys)) {
         $p = $script:GpoTempFiles[$key]
@@ -1246,24 +1346,28 @@ function Remove-GpoTempFiles {
         $script:GpoTempFiles[$key] = $null
     }
     $script:GpoTempSuffix = $null
+
+    }
 }
 
 function Set-ActiveGpoProject {
     <#
         Central switch-over to a project saved on disk - called by
-        Open-GpoProject and by Save-GpoProjectAs (-PreserveWorkingPaths:
+        Open-GpoProject and by Save-GpoProjectCopy (-PreserveWorkingPaths:
         working paths already point at what was just copied into the
         project folder, nothing to reassign). $Files is the relative-path
         map persisted in <name>_Info.xml, kept on $script:ActiveProject.Files
-        so Save-GpoProjectChanges knows where each file belongs. No
+        so Save-GpoProjectChange knows where each file belongs. No
         $script:GptIniPath here: a project never writes GPT.ini.
     #>
+        [CmdletBinding(SupportsShouldProcess)]
     param(
         [Parameter(Mandatory)][string]$Dir,
         [Parameter(Mandatory)][string]$Name,
         [Parameter(Mandatory)][hashtable]$Files,
         [switch]$PreserveWorkingPaths
     )
+    if ($PSCmdlet.ShouldProcess('Set-ActiveGpoProject', 'Invoke')) {
 
     if (-not $PreserveWorkingPaths) {
         $script:MachinePolPath = Join-Path $Dir $Files.machinePol
@@ -1271,7 +1375,7 @@ function Set-ActiveGpoProject {
         $script:AuditCsvPath = Join-Path $Dir $Files.auditCsv
         $script:SecEditInfPath = Join-Path $Dir $Files.secEditInf
     }
-    # -PreserveWorkingPaths means this is Save-GpoProjectAs promoting an
+    # -PreserveWorkingPaths means this is Save-GpoProjectCopy promoting an
     # already-running unsaved session to a saved project - carry forward the
     # baseline captured when that session started rather than recapturing
     # (which could already reflect that session's own project-only edits).
@@ -1288,9 +1392,14 @@ function Set-ActiveGpoProject {
     Update-SaveNowButtonVisibility
 
     Update-ActiveProjectLabel
+
+    }
 }
 
-function Start-GpoUnsavedSessionState {
+function Start-GpoUnsavedSessionState {    [CmdletBinding(SupportsShouldProcess)]
+    param()
+
+    if ($PSCmdlet.ShouldProcess('Start-GpoUnsavedSessionState', 'Invoke')) {
     # Shared skeleton for every "New Group Policy" flavor (Default, CIS
     # Gap-fill/Full compliance): resets the active-project/temp-file state
     # to a fresh unsaved session. Callers still need to point the 4
@@ -1299,6 +1408,8 @@ function Start-GpoUnsavedSessionState {
     $script:ProjectDirty = $false
     $script:GpoTempFiles = @{ MachinePol = $null; UserPol = $null; SecEditInf = $null; AuditCsv = $null }
     $script:GpoTempSuffix = $null
+
+    }
 }
 
 function Complete-GpoSessionActivation {
@@ -1314,7 +1425,10 @@ function Complete-GpoSessionActivation {
     Update-ActiveProjectLabel
 }
 
-function Start-UnsavedGpoSession {
+function Start-UnsavedGpoSession {    [CmdletBinding(SupportsShouldProcess)]
+    param()
+
+    if ($PSCmdlet.ShouldProcess('Start-UnsavedGpoSession', 'Invoke')) {
     <#
         "Advanced > New Group Policy > Default": loads the Default template
         for editing without creating anything on disk. Edits materialize
@@ -1332,6 +1446,8 @@ function Start-UnsavedGpoSession {
     $script:AuditCsvPath = Join-Path $script:DefaultGpPath 'Default.csv'
 
     Complete-GpoSessionActivation
+
+    }
 }
 
 function Show-CisGenerationProfileSelection {
@@ -1358,12 +1474,12 @@ function Show-CisGenerationProfileSelection {
     return , $profiles
 }
 
-function Get-CisOrgSpecificValues {
+function Get-CisOrgSpecificValue {
     <#
         "New Group Policy > CIS Gap-fill/Full compliance", screen 2->3
         (plan §4.3/§4.4): shows the "Organization-specific values" screen
         only if the chosen profile(s) actually recommend at least one of
-        the 4 org-specific items (Get-CisOrgValueEntries) - otherwise
+        the 4 org-specific items (Get-CisOrgValueEntry) - otherwise
         skips straight past it, per the plan's flow diagram. Returns a
         hashtable (possibly empty, if the screen was skipped) on
         Generate/skip, or $null on Cancel - $null must abort the WHOLE
@@ -1371,12 +1487,12 @@ function Get-CisOrgSpecificValues {
     #>
     param([Parameter(Mandatory)][System.Collections.Generic.List[object]]$Profiles, [Parameter(Mandatory)][hashtable]$Ui)
 
-    $orgEntries = Get-CisOrgValueEntries -CisIndex $script:CisIndex -ActiveProfiles $Profiles
+    $orgEntries = Get-CisOrgValueEntry -CisIndex $script:CisIndex -ActiveProfiles $Profiles
     if ($orgEntries.Count -eq 0) { return @{} }
     return Show-OrgSpecificValuesDialog -Owner $window -ScriptRoot $PSScriptRoot -Ui $Ui -OrgValueEntries $orgEntries
 }
 
-# Get-CisOrgValueEntries's synthetic Key -> SecurityCatalog.ps1 catalogKey
+# Get-CisOrgValueEntry's synthetic Key -> SecurityCatalog.ps1 catalogKey
 # (System Access: NewAdministratorName/NewGuestName; Registry Values:
 # LegalNoticeCaption/LegalNoticeText) - lets Invoke-CisProfileOverlay find
 # the real Section/Name/ValueType/RegType to write through
@@ -1407,7 +1523,7 @@ function Invoke-CisProfileOverlay {
         guessed (plan §8 point 5).
 
         $OrgValues (plan §4.3, user-entered text keyed by
-        Get-CisOrgValueEntries's Key) is applied once at the end, outside
+        Get-CisOrgValueEntry's Key) is applied once at the end, outside
         the per-profile loop above - unlike everything else in this
         function, these 4 items have no CIS-recommended value to look up
         per profile; the user's text is the value, written as-is via
@@ -1430,7 +1546,7 @@ function Invoke-CisProfileOverlay {
     $appliedKeys = @{}
     $alreadyOkKeys = @{}
     $skippedTitles = New-Object System.Collections.Generic.List[string]
-    $securitySettings = Get-SecurityCatalogEntries
+    $securitySettings = Get-SecurityCatalogEntry
 
     foreach ($activeProfile in $Profiles) {
 
@@ -1477,7 +1593,7 @@ function Invoke-CisProfileOverlay {
         }
 
         # --- Advanced Audit Policy Configuration ---
-        foreach ($sub in (Get-AdvancedAuditCatalogEntries)) {
+        foreach ($sub in (Get-AdvancedAuditCatalogEntry)) {
             $cisRec = Get-CachedCisRecommendationForAuditSubcategory -Setting $sub
             if (-not $cisRec) { continue }
             $recValue = Get-CisRecommendationValueForProfile -CisEntry $cisRec -ActiveProfile $activeProfile
@@ -1544,19 +1660,21 @@ function Start-CisGpoSession {
         deliberately the real host state - "gap-fill" only makes sense
         relative to what's actually configured (plan §3.1).
     #>
+        [CmdletBinding(SupportsShouldProcess)]
     param(
         [Parameter(Mandatory)][ValidateSet('GapFill', 'FullCompliance')][string]$Mode,
         [Parameter(Mandatory)][System.Collections.Generic.List[object]]$Profiles,
         [Parameter(Mandatory)][hashtable]$Ui,
         [hashtable]$OrgValues = @{}
     )
+    if ($PSCmdlet.ShouldProcess('Start-CisGpoSession', 'Invoke')) {
 
     $window.Cursor = [System.Windows.Input.Cursors]::Wait
     $summary = $null
     try {
-        $liveMachineEntries = Get-LiveMachinePolEntries
-        $liveUserEntries = Get-LiveUserPolEntries
-        $liveAuditRows = Get-LiveAuditCsvRows
+        $liveMachineEntries = Get-LiveMachinePolEntry
+        $liveUserEntries = Get-LiveUserPolEntry
+        $liveAuditRows = Get-LiveAuditCsvRow
         $liveSecEditTempPath = Get-LiveSecEditInf
         try {
             $liveGpt = Read-GptTmplInf -Path $liveSecEditTempPath
@@ -1596,6 +1714,8 @@ function Start-CisGpoSession {
     }
 
     if ($summary) { Show-CisGenerationSummary -Summary $summary -Ui $Ui }
+
+    }
 }
 
 function Copy-GpoWorkingFile {
@@ -1732,7 +1852,7 @@ function Get-GpoProjectManifest {
     }
 }
 
-function Save-GpoProjectAs {
+function Save-GpoProjectCopy {
     <#
         "File > Save": only effective during an unsaved "New Group Policy"
         session. Opens SaveFileDialog; the chosen name becomes the project
@@ -1782,7 +1902,7 @@ function Save-GpoProjectAs {
     Write-GpEditProjectLog -Action 'Created' -ProjectName $name -Location $projectDir
 }
 
-function Save-GpoProjectChanges {
+function Save-GpoProjectChange {
     <#
         "Save now": pushes current working files (temp files for edited
         categories, untouched project files otherwise) onto the active
@@ -1807,13 +1927,13 @@ function Save-GpoProjectChanges {
 function Invoke-SaveGpoProjectNow {
     <#
         Shared by the "Save now" button and File > Save once a project is
-        active: pushes pending edits (Save-GpoProjectChanges) and confirms
+        active: pushes pending edits (Save-GpoProjectChange) and confirms
         success/failure with a popup.
     #>
     if (-not $script:ActiveProject -or -not $script:ActiveProject.Saved) { return }
     $ui = Get-CurrentUi
     try {
-        Save-GpoProjectChanges
+        Save-GpoProjectChange
         [System.Windows.MessageBox]::Show($ui.SaveNowSuccessMessage, $ui.InfoTitle, 'OK', 'Information') | Out-Null
     }
     catch {
@@ -1821,13 +1941,16 @@ function Invoke-SaveGpoProjectNow {
     }
 }
 
-function New-GpoProject {
+function New-GpoProject {    [CmdletBinding(SupportsShouldProcess)]
+    param()
+
+    if ($PSCmdlet.ShouldProcess('New-GpoProject', 'Invoke')) {
     <#
         "Advanced > New Group Policy": Default loads the template directly
         for editing (Start-UnsavedGpoSession). CIS Gap-fill/Full compliance
         additionally ask for a CIS profile/level (Show-CisGenerationProfileSelection)
         then, only if the chosen profile(s) call for it, organization-specific
-        values (Get-CisOrgSpecificValues, plan §4.3/§4.4) before generating
+        values (Get-CisOrgSpecificValue, plan §4.3/§4.4) before generating
         (Start-CisGpoSession). All three end up in the same unsaved-session
         state, saved only via File > Save.
     #>
@@ -1843,10 +1966,12 @@ function New-GpoProject {
     $profiles = Show-CisGenerationProfileSelection -Mode $choice -Ui $ui
     if (-not $profiles) { return }
 
-    $orgValues = Get-CisOrgSpecificValues -Profiles $profiles -Ui $ui
+    $orgValues = Get-CisOrgSpecificValue -Profiles $profiles -Ui $ui
     if ($null -eq $orgValues) { return }
 
     Start-CisGpoSession -Mode $choice -Profiles $profiles -OrgValues $orgValues -Ui $ui
+
+    }
 }
 
 function Open-GpoProject {
@@ -1876,10 +2001,10 @@ function Open-GpoProject {
     Set-ActiveGpoProject -Dir $selectedPath -Name $manifest.Name -Files $manifest.Files
 }
 
-function Export-GpoProjectFiles {
+function Export-GpoProjectFile {
     <#
         "File > Export": builds the exact same folder/file layout as
-        Save-GpoProjectAs (Machine\registry.pol, User\registry.pol,
+        Save-GpoProjectCopy (Machine\registry.pol, User\registry.pol,
         secedit.inf, Machine\Microsoft\Windows NT\Audit\audit.csv, plus a
         <name>_Info.xml manifest) at a location chosen via the same
         SaveFileDialog trick used to save a project. Works in every app
@@ -1905,7 +2030,7 @@ function Export-GpoProjectFiles {
         $confirm = [System.Windows.MessageBox]::Show($ui.ExportConfirmSaveMessage, $ui.ExportConfirmSaveTitle, 'OKCancel', 'Question')
         if ($confirm -ne [System.Windows.MessageBoxResult]::OK) { return }
         try {
-            Save-GpoProjectChanges
+            Save-GpoProjectChange
         }
         catch {
             Show-WriteErrorMessage -Ui $ui -ErrorText $_.Exception.Message
@@ -1986,10 +2111,14 @@ function Export-GpoProjectFiles {
 # View > Profile: switches the CIS profile used for the "Recommended
 # state" column. $null restores the machine's own default profile.
 function Set-CisProfileFilter {
+        [CmdletBinding(SupportsShouldProcess)]
     param($NewProfile)
+    if ($PSCmdlet.ShouldProcess('Set-CisProfileFilter', 'Invoke')) {
     $script:CisProfileFilter = $NewProfile
     $script:CisActiveProfileForColumn = if ($NewProfile) { $NewProfile } else { $script:CisDefaultProfile }
     Update-ActiveProfileLabel
+
+    }
 }
 
 function Get-ActiveFilterCount {
@@ -2007,15 +2136,18 @@ function Get-ActiveFilterCount {
 # Refreshes the "Filter" menu header text with its active-filter-count
 # badge (or the plain label if no filter dimension is active).
 function Update-FilterMenuLabel {
+        [CmdletBinding(SupportsShouldProcess)]
     param([hashtable]$Ui)
+    if ($PSCmdlet.ShouldProcess('Update-FilterMenuLabel', 'Invoke')) {
     $activeCount = Get-ActiveFilterCount
     $filterMenu.Header = if ($activeCount -gt 0) { $Ui.MenuFilterActiveFormat -f $activeCount } else { $Ui.MenuFilter }
+
+    }
 }
 
 Update-FilterMenuLabel -Ui (Get-CurrentUi)
 
 $filterMenu.Add_Click({
-    param($EventSender, $e)
     $currentState = [pscustomobject]@{
         StateMode = $script:FilterStateMode
         Scopes = $script:FilterScopes
@@ -2028,7 +2160,7 @@ $filterMenu.Add_Click({
     if ($null -eq $result) { return }
 
     # State/Scope/Kind change which category folders even qualify as
-    # "having policies" (Test-CategoryHasPolicies), so the tree itself -
+    # "having policies" (Test-CategoryHasPolicy), so the tree itself -
     # not just the list - needs to be rebuilt for those three. CIS
     # profile/HasCisRecOnly instead just hide/show existing nodes (see
     # Update-TreeVisibilityForCisFilter) - cheaper, no rebuild needed.
@@ -2047,22 +2179,27 @@ $filterMenu.Add_Click({
 
     if ($treeDimensionsChanged) {
         $restoreInfo = Get-TreeSelectionRestoreInfo
-        Rebuild-Tree -Ui $ui
+        Update-Tree -Ui $ui
         Restore-TreeSelection -Info $restoreInfo
     }
     # In search mode, Invoke-Search (called below by
-    # Refresh-ListForCisStateChange) already recomputes tree filtering
+    # Update-ListForCisStateChange) already recomputes tree filtering
     # combined with the active filters - don't overwrite with a version
     # that ignores the search text.
     if (-not $script:IsSearchActive) { Update-TreeVisibilityForCisFilter }
-    Refresh-ListForCisStateChange
+    Update-ListForCisStateChange
 })
 
 # --- Right-hand "Patch notes" pane ---------------------------------------
 # Renders the changelog entries (capped at PatchNotesEntryCount) into the
 # patch-notes text block.
-function Update-PatchNotesPanelContent {
+function Update-PatchNotesPanelContent {    [CmdletBinding(SupportsShouldProcess)]
+    param()
+
+    if ($PSCmdlet.ShouldProcess('Update-PatchNotesPanelContent', 'Invoke')) {
     Set-ChangelogTextBlockContent -TextBlock $patchNotesTextBlock -Entries $script:ChangelogEntries -MaxEntries $script:PatchNotesEntryCount
+
+    }
 }
 
 function Switch-ToNormalView {
@@ -2076,38 +2213,32 @@ function Switch-ToNormalView {
 
 # --- File menu: Save / Exit -----------------------------------------------
 $fileSaveMenuItem.Add_Click({
-    param($EventSender, $e)
     if ($script:ActiveProject -and $script:ActiveProject.Saved) {
         # Project already saved/opened: doubles as "Save now".
         Invoke-SaveGpoProjectNow
     } else {
         # Not-yet-saved session: first save, via folder-browse flow.
-        Save-GpoProjectAs
+        Save-GpoProjectCopy
     }
 })
 
 $fileCloseMenuItem.Add_Click({
-    param($EventSender, $e)
     Close-GpoProject
 })
 
 $fileImportMenuItem.Add_Click({
-    param($EventSender, $e)
-    Import-GpoProjectFiles
+    Import-GpoProjectFile
 })
 
 $fileExportMenuItem.Add_Click({
-    param($EventSender, $e)
-    Export-GpoProjectFiles
+    Export-GpoProjectFile
 })
 
 $fileOptionsMenuItem.Add_Click({
-    param($EventSender, $e)
     Show-OptionsDialog -Owner $window -ScriptRoot $PSScriptRoot -Ui (Get-CurrentUi)
 })
 
 $fileExitMenuItem.Add_Click({
-    param($EventSender, $e)
     $window.Close()
 })
 
@@ -2159,7 +2290,9 @@ function Sync-CurrentColumnOrderFromGridView {
 # reinserts only the chosen ones in the chosen order (Category always
 # stays a member, hidden, so search mode can still show it).
 function Set-ColumnsDisplay {
+        [CmdletBinding(SupportsShouldProcess)]
     param([string[]]$OrderedKeys)
+    if ($PSCmdlet.ShouldProcess('Set-ColumnsDisplay', 'Invoke')) {
     $script:CurrentColumnOrder = $OrderedKeys
     $columnByKey = Get-ColumnByKeyMap
 
@@ -2180,6 +2313,8 @@ function Set-ColumnsDisplay {
 
     if ('Category' -notin $OrderedKeys) {
         [void]$columns.Add($columnCategory)
+    }
+
     }
 }
 
@@ -2218,17 +2353,20 @@ $script:CisStatesColumnWidth = 260
 # Shows/hides the "CIS States" column and re-appends it at the end of the
 # grid every time, since Set-ColumnsDisplay's reorder logic ignores it.
 function Set-CisStatesColumnVisible {
+        [CmdletBinding(SupportsShouldProcess)]
     param([bool]$Visible)
+    if ($PSCmdlet.ShouldProcess('Set-CisStatesColumnVisible', 'Invoke')) {
 
     $columnCisStates.Width = if ($Visible) { $script:CisStatesColumnWidth } else { 0 }
 
     $columns = $policyList.View.Columns
     if ($columns.Contains($columnCisStates)) { [void]$columns.Remove($columnCisStates) }
     [void]$columns.Add($columnCisStates)
+
+    }
 }
 
 $viewColumnsMenuItem.Add_Click({
-    param($EventSender, $e)
     Sync-CurrentColumnOrderFromGridView
     $ui = Get-CurrentUi
     $result = Show-ColumnPickerDialog -Owner $window -ScriptRoot $PSScriptRoot -Ui $ui -DisplayedKeys $script:CurrentColumnOrder
@@ -2236,7 +2374,6 @@ $viewColumnsMenuItem.Add_Click({
 })
 
 $viewMissingAdmxMenuItem.Add_Click({
-    param($EventSender, $e)
     $ui = Get-CurrentUi
     $rows = Get-CisMissingAdmxReport -CisIndex $script:CisIndex -AdmxIndex $script:admxIndex -ActiveProfile $script:CisActiveProfileForColumn
     $profileText = Get-CisProfileDisplayText -ProfileSpec $script:CisActiveProfileForColumn
@@ -2244,7 +2381,6 @@ $viewMissingAdmxMenuItem.Add_Click({
 })
 
 $viewCatalogGapsMenuItem.Add_Click({
-    param($EventSender, $e)
     $ui = Get-CurrentUi
     $rows = Get-CisCatalogGapsReport -CisIndex $script:CisIndex -AdmxIndex $script:admxIndex -ActiveProfile $script:CisActiveProfileForColumn
     $profileText = Get-CisProfileDisplayText -ProfileSpec $script:CisActiveProfileForColumn
@@ -2254,26 +2390,23 @@ $viewCatalogGapsMenuItem.Add_Click({
 # --- File menu: New/Open (off-machine GPO projects) -----------------------
 # Import/Export intentionally have no handler: IsEnabled="False" permanently
 # in the XAML - not wired up.
-$fileNewMenuItem.Add_Click({ param($EventSender, $e) New-GpoProject })
-$fileOpenMenuItem.Add_Click({ param($EventSender, $e) Open-GpoProject })
+$fileNewMenuItem.Add_Click({ New-GpoProject })
+$fileOpenMenuItem.Add_Click({ Open-GpoProject })
 
 # --- Help menu (About / Patch note) ---------------------------------------
 $helpAboutMenuItem.Add_Click({
-    param($EventSender, $e)
     Show-AboutWindow -Owner $window -ScriptRoot $PSScriptRoot -Ui (Get-CurrentUi) -ChangelogEntries $script:ChangelogEntries
 })
 $helpPatchNoteMenuItem.Add_Click({
-    param($EventSender, $e)
     Show-PatchNoteWindow -Owner $window -ScriptRoot $PSScriptRoot -Ui (Get-CurrentUi) -ChangelogEntries $script:ChangelogEntries
 })
 $helpLogsMenuItem.Add_Click({
-    param($EventSender, $e)
     Open-GpEditLogFile
 })
 
-Build-CisRecommendationCache
+New-CisRecommendationCache
 Update-StaticUiText -Ui (Get-CurrentUi)
-Rebuild-Tree -Ui (Get-CurrentUi)
+Update-Tree -Ui (Get-CurrentUi)
 Update-ActiveProfileLabel
 
 # --- State column width: wider by default in User Rights Assignment /
@@ -2294,13 +2427,17 @@ $stateWidthPropertyDescriptor.AddValueChanged($columnState, {
 # (User Rights Assignment/Security Options) is visited this session, unless
 # the user has since manually resized it.
 function Update-StateColumnWidthForMenu {
+        [CmdletBinding(SupportsShouldProcess)]
     param([string]$MenuId, [bool]$IsWide)
+    if ($PSCmdlet.ShouldProcess('Update-StateColumnWidthForMenu', 'Invoke')) {
     if ($script:StateColumnManuallyResized) { return }
     if ($script:StateColumnVisitedMenus.Contains($MenuId)) { return }
     [void]$script:StateColumnVisitedMenus.Add($MenuId)
     $script:StateColumnAutoApplying = $true
     try { $columnState.Width = if ($IsWide) { 195 } else { 165 } }
     finally { $script:StateColumnAutoApplying = $false }
+
+    }
 }
 
 function Invoke-UiRenderPass {
@@ -2311,7 +2448,10 @@ function Invoke-UiRenderPass {
 }
 
 # --- Populating the list from the selected category -----------------------
-function Update-PolicyList {
+function Update-PolicyList {    [CmdletBinding(SupportsShouldProcess)]
+    param()
+
+    if ($PSCmdlet.ShouldProcess('Update-PolicyList', 'Invoke')) {
     $selected = $categoryTree.SelectedItem
     if ($null -eq $selected) { return }
     $tag = $selected.Tag
@@ -2335,7 +2475,7 @@ function Update-PolicyList {
     $wasSearching = $script:IsSearchActive
     $script:IsSearchActive = $false
     Exit-SearchCategoryColumnMode
-    if ($wasSearching) { Show-AllTreeItems }
+    if ($wasSearching) { Show-AllTreeItem }
 
     $items = New-Object System.Collections.Generic.List[object]
 
@@ -2350,7 +2490,7 @@ function Update-PolicyList {
                 $state = Get-AdmxPolicyState -Policy $pol -PolLookup $lookup
                 $cisRec = (Get-CachedCisRecommendationForAdmxPolicy -Policy $pol).CisEntry
                 if (-not (Test-CisProfileFilterMatch -CisEntry $cisRec)) { continue }
-                $cisRowLabels = Get-CisRowLabels -CisEntry $cisRec -Ui $ui
+                $cisRowLabels = Get-CisRowLabel -CisEntry $cisRec -Ui $ui
                 $items.Add([pscustomobject]@{
                     DisplayName = $pol.displayName
                     StateLabel  = Get-AdmxPolicyStateLabel -State $state -Ui $ui
@@ -2376,7 +2516,7 @@ function Update-PolicyList {
             if ($setting.category -ne $tag.SecurityCategory) { continue }
             $cisRec = Get-CachedCisRecommendationForSecuritySetting -Setting $setting
             if (-not (Test-CisProfileFilterMatch -CisEntry $cisRec)) { continue }
-            $cisRowLabels = Get-CisRowLabels -CisEntry $cisRec -Ui $ui
+            $cisRowLabels = Get-CisRowLabel -CisEntry $cisRec -Ui $ui
             $items.Add([pscustomobject]@{
                 DisplayName = $setting.displayName
                 StateLabel  = Format-SecuritySettingValue -Setting $setting -Ui $ui
@@ -2401,7 +2541,7 @@ function Update-PolicyList {
             if ($setting.category -ne $tag.AdvAuditCategory) { continue }
             $cisRec = Get-CachedCisRecommendationForAuditSubcategory -Setting $setting
             if (-not (Test-CisProfileFilterMatch -CisEntry $cisRec)) { continue }
-            $cisRowLabels = Get-CisRowLabels -CisEntry $cisRec -Ui $ui
+            $cisRowLabels = Get-CisRowLabel -CisEntry $cisRec -Ui $ui
             $items.Add([pscustomobject]@{
                 DisplayName = $setting.displayName
                 StateLabel  = Format-SecuritySettingValue -Setting $setting -Ui $ui
@@ -2444,7 +2584,7 @@ function Update-PolicyList {
                 $state = Get-AdmxPolicyState -Policy $pol -PolLookup $lookup
                 $cisRec = (Get-CachedCisRecommendationForAdmxPolicy -Policy $pol).CisEntry
                 if (-not (Test-CisProfileFilterMatch -CisEntry $cisRec)) { continue }
-                $cisRowLabels = Get-CisRowLabels -CisEntry $cisRec -Ui $ui
+                $cisRowLabels = Get-CisRowLabel -CisEntry $cisRec -Ui $ui
                 $items.Add([pscustomobject]@{
                     DisplayName   = $pol.displayName
                     StateLabel    = Get-AdmxPolicyStateLabel -State $state -Ui $ui
@@ -2467,7 +2607,7 @@ function Update-PolicyList {
             $catLabel = if ($catKey) { $ui[$catKey] } else { $setting.category }
             $cisRec = Get-CachedCisRecommendationForSecuritySetting -Setting $setting
             if (-not (Test-CisProfileFilterMatch -CisEntry $cisRec)) { continue }
-            $cisRowLabels = Get-CisRowLabels -CisEntry $cisRec -Ui $ui
+            $cisRowLabels = Get-CisRowLabel -CisEntry $cisRec -Ui $ui
             $items.Add([pscustomobject]@{
                 DisplayName   = $setting.displayName
                 StateLabel    = Format-SecuritySettingValue -Setting $setting -Ui $ui
@@ -2488,7 +2628,7 @@ function Update-PolicyList {
             $catLabel = $ui["AdvAudit$($setting.category)"]
             $cisRec = Get-CachedCisRecommendationForAuditSubcategory -Setting $setting
             if (-not (Test-CisProfileFilterMatch -CisEntry $cisRec)) { continue }
-            $cisRowLabels = Get-CisRowLabels -CisEntry $cisRec -Ui $ui
+            $cisRowLabels = Get-CisRowLabel -CisEntry $cisRec -Ui $ui
             $items.Add([pscustomobject]@{
                 DisplayName   = $setting.displayName
                 StateLabel    = Format-SecuritySettingValue -Setting $setting -Ui $ui
@@ -2519,7 +2659,7 @@ function Update-PolicyList {
         Set-CisStatesColumnVisible -Visible $false
     }
 
-    $items = Select-FilteredItems -Items $items
+    $items = Select-FilteredItem -Items $items
     $policyList.ItemsSource = $items
     $statusLabel.Text = ($ui.StatusItemsDisplayed -f $items.Count)
 
@@ -2534,10 +2674,11 @@ function Update-PolicyList {
             $policyList.ScrollIntoView($toReselect)
         }
     }
+
+    }
 }
 
 $categoryTree.Add_SelectedItemChanged({
-    param($EventSender, $e)
     Switch-ToNormalView
     if ($script:IsSearchActive) {
         Update-SearchResultsForSelectedCategory
@@ -2549,7 +2690,10 @@ $categoryTree.Add_SelectedItemChanged({
 
 # --- "Technical details" panel: registry key / ADMX file for the setting
 # --- selected in the list (without opening the edit dialog). -------------
-function Update-DetailPanel {
+function Update-DetailPanel {    [CmdletBinding(SupportsShouldProcess)]
+    param()
+
+    if ($PSCmdlet.ShouldProcess('Update-DetailPanel', 'Invoke')) {
     $ui = Get-CurrentUi
     $selectedItem = $policyList.SelectedItem
     if ($null -eq $selectedItem) {
@@ -2569,10 +2713,11 @@ function Update-DetailPanel {
         $setting = $script:advancedAuditIndex.settings | Where-Object { $_.id -eq $selectedItem.PolicyId } | Select-Object -First 1
         if ($setting) { $detailTextBox.Text = Get-AdvancedAuditTechnicalDetailText -Setting $setting -Ui $ui }
     }
+
+    }
 }
 
 $policyList.Add_SelectionChanged({
-    param($EventSender, $e)
     Update-DetailPanel
 })
 
@@ -2597,6 +2742,9 @@ $policyList.AddHandler(
     [System.Windows.Controls.GridViewColumnHeader]::ClickEvent,
     [System.Windows.RoutedEventHandler]{
         param($EventSender, $e)
+        # $EventSender must stay declared for positional binding (WPF invokes as
+        # (sender, e)) - referenced as a no-op only to satisfy PSReviewUnusedParameter.
+        [void]$EventSender
         $header = $e.OriginalSource -as [System.Windows.Controls.GridViewColumnHeader]
         if ($null -eq $header -or $null -eq $header.Column) { return }
         $sortProperty = $null
@@ -2653,7 +2801,9 @@ function Add-TreeKeepVisible {
 
 function Update-TreeVisibilityForSearch {
     # Shows only categories (and ancestors) containing at least one result.
+        [CmdletBinding(SupportsShouldProcess)]
     param([hashtable]$KeepSet)
+    if ($PSCmdlet.ShouldProcess('Update-TreeVisibilityForSearch', 'Invoke')) {
     foreach ($tvi in $script:AllTreeItems) {
         $tvi.Visibility = if ($KeepSet.ContainsKey($tvi)) { 'Visible' } else { 'Collapsed' }
     }
@@ -2663,9 +2813,11 @@ function Update-TreeVisibilityForSearch {
     if ($script:TreeItemsByGroupId.ContainsKey('Overview')) {
         $script:TreeItemsByGroupId['Overview'].Visibility = 'Visible'
     }
+
+    }
 }
 
-function Show-AllTreeItems {
+function Show-AllTreeItem {
     # Restores normal visibility for every node, collapsed (fresh state,
     # like startup). Called only when actually leaving search mode.
     foreach ($tvi in $script:AllTreeItems) {
@@ -2742,7 +2894,7 @@ function Invoke-Search {
             $treeNode = if ($script:TreeItemsByAdmxCategoryScope.ContainsKey($treeKey)) { $script:TreeItemsByAdmxCategoryScope[$treeKey] } else { $null }
             if (-not (Test-CisProfileFilterMatch -CisEntry $cisRec)) { continue }
             if (-not (Test-StateFilterMatch -AdmxState $state -IsConfigured ($state -ne 'NotConfigured'))) { continue }
-            $cisRowLabels = Get-CisRowLabels -CisEntry $cisRec -Ui $ui
+            $cisRowLabels = Get-CisRowLabel -CisEntry $cisRec -Ui $ui
             $items.Add([pscustomobject]@{
                 DisplayName   = $pol.displayName
                 StateLabel    = Get-AdmxPolicyStateLabel -State $state -Ui $ui
@@ -2773,7 +2925,7 @@ function Invoke-Search {
             $treeNode = if ($script:TreeItemsBySecurityCategory.ContainsKey($setting.category)) { $script:TreeItemsBySecurityCategory[$setting.category] } else { $null }
             if (-not (Test-CisProfileFilterMatch -CisEntry $cisRec)) { continue }
             if (-not (Test-StateFilterMatch -AdmxState $null -IsConfigured $setting.isConfigured)) { continue }
-            $cisRowLabels = Get-CisRowLabels -CisEntry $cisRec -Ui $ui
+            $cisRowLabels = Get-CisRowLabel -CisEntry $cisRec -Ui $ui
             $items.Add([pscustomobject]@{
                 DisplayName   = $setting.displayName
                 StateLabel    = Format-SecuritySettingValue -Setting $setting -Ui $ui
@@ -2803,7 +2955,7 @@ function Invoke-Search {
             $treeNode = if ($script:TreeItemsByAdvAuditCategory.ContainsKey($setting.category)) { $script:TreeItemsByAdvAuditCategory[$setting.category] } else { $null }
             if (-not (Test-CisProfileFilterMatch -CisEntry $cisRec)) { continue }
             if (-not (Test-StateFilterMatch -AdmxState $null -IsConfigured $setting.isConfigured)) { continue }
-            $cisRowLabels = Get-CisRowLabels -CisEntry $cisRec -Ui $ui
+            $cisRowLabels = Get-CisRowLabel -CisEntry $cisRec -Ui $ui
             $items.Add([pscustomobject]@{
                 DisplayName   = $setting.displayName
                 StateLabel    = Format-SecuritySettingValue -Setting $setting -Ui $ui
@@ -2829,7 +2981,7 @@ function Invoke-Search {
     # Filter menu state already applied per-item above (Kind/Scope/State)
     # and via Test-CisProfileFilterMatch (profile/HasCisRecOnly) - nothing
     # left to reapply here, unlike the tree-click path where
-    # Select-FilteredItems runs after Update-PolicyList builds $items.
+    # Select-FilteredItem runs after Update-PolicyList builds $items.
     $script:SearchResultItems = $items
     $policyList.ItemsSource = $items
     $categoryPathLabel.Text = ($ui.SearchResultsHeaderFormat -f $Query, $items.Count)
@@ -2860,7 +3012,10 @@ function Get-TreeNodeLabel {
     return $Tvi.Tag.Label
 }
 
-function Update-SearchResultsForSelectedCategory {
+function Update-SearchResultsForSelectedCategory {    [CmdletBinding(SupportsShouldProcess)]
+    param()
+
+    if ($PSCmdlet.ShouldProcess('Update-SearchResultsForSelectedCategory', 'Invoke')) {
     # During search, clicking a tree folder no longer exits search mode:
     # the list is restricted to that folder and its children. Clicking a
     # root goes back to the full result set.
@@ -2884,9 +3039,14 @@ function Update-SearchResultsForSelectedCategory {
 
     $policyList.ItemsSource = $filtered
     $statusLabel.Text = if ($filtered.Count -eq 0) { $ui.SearchNoResults } else { ($ui.StatusItemsDisplayed -f $filtered.Count) }
+
+    }
 }
 
-function Reset-ToCategoryOrPrompt {
+function Reset-ToCategoryOrPrompt {    [CmdletBinding(SupportsShouldProcess)]
+    param()
+
+    if ($PSCmdlet.ShouldProcess('Reset-ToCategoryOrPrompt', 'Invoke')) {
     # Resets the list to normal content without touching the search box
     # text - used by TextChanged when the box becomes empty, since
     # GotFocus would otherwise immediately restore the placeholder.
@@ -2895,7 +3055,7 @@ function Reset-ToCategoryOrPrompt {
     $script:IsSearchActive = $false
     Exit-SearchCategoryColumnMode
     if (-not $wasSearching) { return }
-    Show-AllTreeItems
+    Show-AllTreeItem
     if ($categoryTree.SelectedItem) {
         Update-PolicyList
     }
@@ -2903,6 +3063,8 @@ function Reset-ToCategoryOrPrompt {
         $policyList.ItemsSource = $null
         $categoryPathLabel.Text = $ui.SelectCategoryPrompt
         $statusLabel.Text = ($ui.StatusIndexSummary -f $admxIndex.policies.Count, $admxIndex.categories.Count, $securityIndex.settings.Count)
+    }
+
     }
 }
 
@@ -2915,7 +3077,6 @@ function Clear-Search {
 }
 
 $searchBox.Add_GotFocus({
-    param($EventSender, $e)
     $ui = Get-CurrentUi
     if ($searchBox.Text -eq $ui.SearchPlaceholder) {
         $searchBox.Text = ''
@@ -2924,7 +3085,6 @@ $searchBox.Add_GotFocus({
 })
 
 $searchBox.Add_LostFocus({
-    param($EventSender, $e)
     if ([string]::IsNullOrWhiteSpace($searchBox.Text)) {
         $searchBox.Text = (Get-CurrentUi).SearchPlaceholder
         $searchBox.Foreground = 'Gray'
@@ -2940,7 +3100,6 @@ $script:MinSearchLength = 2
 $script:SearchDebounceTimer = New-Object System.Windows.Threading.DispatcherTimer
 $script:SearchDebounceTimer.Interval = [TimeSpan]::FromMilliseconds(350)
 $script:SearchDebounceTimer.Add_Tick({
-    param($EventSender, $e)
     $script:SearchDebounceTimer.Stop()
     $ui = Get-CurrentUi
     $text = $searchBox.Text
@@ -2950,7 +3109,6 @@ $script:SearchDebounceTimer.Add_Tick({
 })
 
 $searchBox.Add_TextChanged({
-    param($EventSender, $e)
     $ui = Get-CurrentUi
     $text = $searchBox.Text
     $script:SearchDebounceTimer.Stop()
@@ -2960,7 +3118,6 @@ $searchBox.Add_TextChanged({
 })
 
 $searchButton.Add_Click({
-    param($EventSender, $e)
     $ui = Get-CurrentUi
     $text = $searchBox.Text
     if ($text -ne $ui.SearchPlaceholder -and $text.Trim().Length -ge $script:MinSearchLength) {
@@ -2969,7 +3126,6 @@ $searchButton.Add_Click({
 })
 
 $searchFieldCombo.Add_SelectionChanged({
-    param($EventSender, $e)
     $ui = Get-CurrentUi
     $text = $searchBox.Text
     if ($text -eq $ui.SearchPlaceholder) { return }
@@ -2978,7 +3134,6 @@ $searchFieldCombo.Add_SelectionChanged({
 })
 
 $clearSearchButton.Add_Click({
-    param($EventSender, $e)
     Clear-Search
 })
 
@@ -2999,7 +3154,7 @@ function Select-TreeItemByKey {
 
 function Get-TreeSelectionRestoreInfo {
     # Captures a stable node reference for Restore-TreeSelection after a
-    # Rebuild-Tree (old TreeViewItems are destroyed, but the category/group
+    # Update-Tree (old TreeViewItems are destroyed, but the category/group
     # keys stay the same). $Node defaults to the current selection.
     param($Node = $categoryTree.SelectedItem)
     $selected = $Node
@@ -3015,7 +3170,7 @@ function Get-TreeSelectionRestoreInfo {
 }
 
 # Reselects the node captured by Get-TreeSelectionRestoreInfo, by key,
-# after a Rebuild-Tree has destroyed the old TreeViewItem instances.
+# after a Update-Tree has destroyed the old TreeViewItem instances.
 function Restore-TreeSelection {
     param($Info)
     if ($null -eq $Info -or -not $Info.Key) { return }
@@ -3027,7 +3182,7 @@ function Restore-TreeSelection {
     }
 }
 
-function Get-TreeNodeAncestors {
+function Get-TreeNodeAncestor {
     # Same per-Kind ancestor lookup as Get-TreeSelectionRestoreInfo/
     # Restore-TreeSelection, but for a TreeViewItem the caller already holds
     # (right-click target) rather than one looked up by key.
@@ -3049,8 +3204,8 @@ function Exit-SearchAndBrowseNode {
         unfiltered category view - one click instead of Clear + re-navigate
         the tree to the same folder. Update-PolicyList already does the
         search-exit teardown (IsSearchActive, Category column,
-        Show-AllTreeItems) once $Tvi is the selection; ancestors are
-        re-expanded AFTER that call since Show-AllTreeItems collapses every
+        Show-AllTreeItem) once $Tvi is the selection; ancestors are
+        re-expanded AFTER that call since Show-AllTreeItem collapses every
         node, $Tvi included.
     #>
     param($Tvi)
@@ -3063,7 +3218,7 @@ function Exit-SearchAndBrowseNode {
     if (-not $Tvi.IsSelected) { $Tvi.IsSelected = $true }
     Update-PolicyList
 
-    foreach ($ancestor in (Get-TreeNodeAncestors -Tvi $Tvi)) { $ancestor.IsExpanded = $true }
+    foreach ($ancestor in (Get-TreeNodeAncestor -Tvi $Tvi)) { $ancestor.IsExpanded = $true }
     $Tvi.IsExpanded = $true
     $Tvi.BringIntoView()
 }
@@ -3075,6 +3230,9 @@ function Exit-SearchAndBrowseNode {
 # time, since the target TreeViewItem isn't known until the click happens.
 $categoryTree.Add_PreviewMouseRightButtonDown({
     param($EventSender, $e)
+    # $EventSender must stay declared for positional binding (WPF invokes as
+    # (sender, e)) - referenced as a no-op only to satisfy PSReviewUnusedParameter.
+    [void]$EventSender
     if (-not $script:IsSearchActive) { return }
 
     $source = $e.OriginalSource
@@ -3097,11 +3255,10 @@ $categoryTree.Add_PreviewMouseRightButtonDown({
     # is clearly defined above in this same script.
     $menuItem.Tag = $tvi
     $menuItem.Add_Click({
-        param($s2, $e2)
+        param($s2)
         Exit-SearchAndBrowseNode -Tvi $s2.Tag
     })
     [void]$menu.Items.Add($menuItem)
-    $tvi.ContextMenu = $menu
     $menu.PlacementTarget = $tvi
     $menu.IsOpen = $true
 })
@@ -3161,7 +3318,7 @@ function Open-SelectedPolicyEditor {
         if (-not $pol) { return }
         $lookup = if ($selectedItem.Scope -eq 'Machine') { $machineLookup } else { $userLookup }
         $currentState = Get-AdmxPolicyState -Policy $pol -PolLookup $lookup
-        $elementValues = Get-PolicyElementValues -Policy $pol -PolLookup $lookup
+        $elementValues = Get-PolicyElementValue -Policy $pol -PolLookup $lookup
 
         $cisRec = (Get-CachedCisRecommendationForAdmxPolicy -Policy $pol).CisEntry
         $result = Show-AdmxEditDialog -Policy $pol -CurrentState $currentState -CurrentElementValues $elementValues -CisRecommendation $cisRec -Owner $window -ScriptRoot $PSScriptRoot -Ui $ui
@@ -3185,7 +3342,7 @@ function Open-SelectedPolicyEditor {
 
         try {
             $polPath = if ($selectedItem.Scope -eq 'Machine') { $MachinePolPath } else { $UserPolPath }
-            # Never bump GPT.ini in project mode - Save-GpoProjectAs
+            # Never bump GPT.ini in project mode - Save-GpoProjectCopy
             # doesn't persist it and nothing reads its version.
             $gptIniPathForSave = if ($script:ActiveProject) { $null } else { $GptIniPath }
             $newEntries = Save-AdmxChangeToFile -Policy $pol -Scope $selectedItem.Scope -NewState $result.State -ElementValues $result.ElementValues -PolPath $polPath -GptIniPath $gptIniPathForSave
@@ -3300,12 +3457,14 @@ function Open-SelectedPolicyEditor {
 }
 
 $policyList.Add_MouseDoubleClick({
-    param($EventSender, $e)
     if ($script:IsSearchActive) { Open-SearchResult } else { Open-SelectedPolicyEditor }
 })
 
 $policyList.Add_KeyDown({
     param($EventSender, $e)
+    # $EventSender must stay declared for positional binding (WPF invokes as
+    # (sender, e)) - referenced as a no-op only to satisfy PSReviewUnusedParameter.
+    [void]$EventSender
     if ($e.Key -eq [System.Windows.Input.Key]::Enter) {
         if ($script:IsSearchActive) { Open-SearchResult } else { Open-SelectedPolicyEditor }
         $e.Handled = $true
@@ -3313,14 +3472,13 @@ $policyList.Add_KeyDown({
 })
 
 # --- Save now (project mode only: pushes working/temp files to the saved
-# project folder - see Save-GpoProjectChanges) ------------------------------
+# project folder - see Save-GpoProjectChange) ------------------------------
 $saveNowButton.Add_Click({
-    param($EventSender, $e)
     if ($script:ActiveProject -and $script:ActiveProject.Saved) {
         Invoke-SaveGpoProjectNow
     } else {
         # Same Save As fallback as fileSaveMenuItem.Add_Click.
-        Save-GpoProjectAs
+        Save-GpoProjectCopy
     }
 })
 
@@ -3336,7 +3494,10 @@ $saveNowButton.Add_Click({
 # Ctrl+C/crash does not trigger this handler - changes then stay only in
 # secedit.inf/temp files and are lost.
 $window.Add_Closing({
-    param($closingSender, $e)
+    param($EventSender, $e)
+    # $EventSender must stay declared for positional binding (WPF invokes as
+    # (sender, e)) - referenced as a no-op only to satisfy PSReviewUnusedParameter.
+    [void]$EventSender
     $ui = Get-CurrentUi
 
     if ($script:ActiveProject -and (-not $script:ActiveProject.Saved -or $script:ProjectDirty)) {
@@ -3351,7 +3512,7 @@ $window.Add_Closing({
                 # Push pending changes like "Save now". On failure, cancel
                 # the close so nothing is silently lost.
                 try {
-                    Save-GpoProjectChanges
+                    Save-GpoProjectChange
                 }
                 catch {
                     Show-WriteErrorMessage -Ui $ui -ErrorText $_.Exception.Message
@@ -3360,7 +3521,7 @@ $window.Add_Closing({
                 }
             }
             else {
-                Save-GpoProjectAs
+                Save-GpoProjectCopy
                 if (-not $script:ActiveProject.Saved) {
                     # Save As was cancelled - don't close, changes would be
                     # stuck in temp files about to be purged.
@@ -3389,7 +3550,7 @@ $window.Add_Closing({
         }
     }
 
-    Remove-GpoTempFiles
+    Remove-GpoTempFile
 })
 
 [void]$window.ShowDialog()

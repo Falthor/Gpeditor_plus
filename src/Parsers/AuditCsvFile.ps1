@@ -76,12 +76,14 @@ function Write-AuditCsv {
 }
 
 function Set-AuditCsvValue {
+        [CmdletBinding(SupportsShouldProcess)]
     param(
         [Parameter(Mandatory)][hashtable]$Rows,
         [Parameter(Mandatory)][string]$Guid,
         [Parameter(Mandatory)][string]$SubcategoryName,
         [Parameter(Mandatory)][int]$SettingValue
     )
+    if ($PSCmdlet.ShouldProcess('Set-AuditCsvValue', 'Invoke')) {
     $key = $Guid.ToUpperInvariant()
     $Rows[$key] = [ordered]@{
         'Machine Name'      = ''
@@ -92,12 +94,18 @@ function Set-AuditCsvValue {
         'Exclusion Setting' = ''
         'Setting Value'     = "$SettingValue"
     }
+
+    }
 }
 
 function Remove-AuditCsvValue {
+        [CmdletBinding(SupportsShouldProcess)]
     param([Parameter(Mandatory)][hashtable]$Rows, [Parameter(Mandatory)][string]$Guid)
+    if ($PSCmdlet.ShouldProcess('Remove-AuditCsvValue', 'Invoke')) {
     $key = $Guid.ToUpperInvariant()
     if ($Rows.ContainsKey($key)) { $Rows.Remove($key) }
+
+    }
 }
 
 function Get-AuditCsvValue {

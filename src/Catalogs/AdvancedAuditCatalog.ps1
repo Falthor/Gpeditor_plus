@@ -98,8 +98,8 @@ $script:AdvancedAuditSubcategories = @(
 # Internal category -> UiStrings key for the tree label (UiStrings.ps1: AdvAudit<CategoryKey>)
 $script:AdvancedAuditCategoryOrder = @('AccountLogon', 'AccountManagement', 'DetailedTracking', 'DSAccess', 'LogonLogoff', 'ObjectAccess', 'PolicyChange', 'PrivilegeUse', 'System')
 
-function Get-AdvancedAuditCatalogEntries {
-    # Flattens the catalog, same shape as Get-SecurityCatalogEntries.
+function Get-AdvancedAuditCatalogEntry {
+    # Flattens the catalog, same shape as Get-SecurityCatalogEntry.
     $list = New-Object System.Collections.Generic.List[object]
     foreach ($sub in $script:AdvancedAuditSubcategories) {
         $list.Add([ordered]@{

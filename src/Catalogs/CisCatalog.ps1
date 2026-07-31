@@ -56,8 +56,8 @@ function Import-CisIndex {
     }
     try {
         $cisIndex = Get-Content -Raw -Encoding UTF8 -LiteralPath $Path | ConvertFrom-Json
-        $overrides = Get-CisOverrides -DataPath (Split-Path -Parent $Path)
-        Merge-CisOverrides -CisIndex $cisIndex -Overrides $overrides
+        $overrides = Get-CisOverride -DataPath (Split-Path -Parent $Path)
+        Merge-CisOverride -CisIndex $cisIndex -Overrides $overrides
         return $cisIndex
     }
     catch {
@@ -81,7 +81,7 @@ function Get-CisOverridesPath {
     return (Join-Path $DataPath 'cis-overrides.json')
 }
 
-function Get-CisOverrides {
+function Get-CisOverride {
     # Loads data/cis-overrides.json; missing/unreadable => no overrides
     # (same tolerance as a missing cis-index.json).
     param([string]$DataPath)
@@ -136,7 +136,7 @@ function Test-CisFallbackMapEntry {
 
 function Get-CisFallbackMap {
     # Loads cis-fallback-map.json; missing/unreadable => no fallback entries
-    # (same tolerance as Get-CisOverrides/a missing cis-index.json). Entries
+    # (same tolerance as Get-CisOverride/a missing cis-index.json). Entries
     # failing Test-CisFallbackMapEntry are skipped individually with a
     # warning rather than discarding the whole file.
     param([string]$DataPath)
@@ -167,14 +167,16 @@ function Set-CisOverride {
         in this file) and rewrites data/cis-overrides.json in full (small
         file, no performance concern).
     #>
+        [CmdletBinding(SupportsShouldProcess)]
     param(
         [Parameter(Mandatory)][string]$DataPath,
         [Parameter(Mandatory)][string]$Bucket,
         [Parameter(Mandatory)][string]$Key,
         [Parameter(Mandatory)][string]$Info
     )
+    if ($PSCmdlet.ShouldProcess('Set-CisOverride', 'Invoke')) {
     $path = Get-CisOverridesPath -DataPath $DataPath
-    $overrides = Get-CisOverrides -DataPath $DataPath
+    $overrides = Get-CisOverride -DataPath $DataPath
     $overrides["$Bucket`::$Key"] = @{ info = $Info }
 
     $ordered = [ordered]@{}
@@ -184,6 +186,8 @@ function Set-CisOverride {
     if (-not (Test-Path -LiteralPath $outDir)) { New-Item -ItemType Directory -Path $outDir -Force | Out-Null }
     $json = $ordered | ConvertTo-Json -Depth 5
     [System.IO.File]::WriteAllText($path, $json, (New-Object System.Text.UTF8Encoding($true)))
+
+    }
 }
 
 function ConvertTo-CisNormalizedTitle {
@@ -239,7 +243,7 @@ function Get-CisIndexBucket {
     return $prop.Value
 }
 
-function Merge-CisOverrides {
+function Merge-CisOverride {
     # Applies overrides ("info" field only) onto an already-loaded CIS
     # index (PSCustomObject, buckets -> key -> entry). Used by
     # Import-CisIndex; Build-Index.ps1 -Kind Cis applies the same logic separately
@@ -404,7 +408,7 @@ function Get-CisAdmxTemplatePresence {
 
 $script:CisIndexBuckets = @('byRegistry', 'byPasswordPolicy', 'byLockoutPolicy', 'byUserRight', 'byAuditSubcategory', 'byTitle')
 
-function Get-CisAllEntries {
+function Get-CisAllEntry {
     # All entries (unique controls) of the CIS index, across all buckets -
     # each carries its own profiles[] array.
     param($CisIndex)
@@ -412,7 +416,7 @@ function Get-CisAllEntries {
     $entries = New-Object System.Collections.Generic.List[object]
     # ", $entries" everywhere here: an unprotected return enumerates the
     # collection, so an EMPTY List[object] becomes $null for the caller.
-    # Real bug found/fixed in Select-FilteredItems (GpEdit.ps1) -
+    # Real bug found/fixed in Select-FilteredItem (GpEdit.ps1) -
     # applied here as a precaution since this can genuinely return 0
     # elements (CisIndex missing/empty).
     if ($null -eq $CisIndex) { return , $entries }
@@ -435,7 +439,7 @@ function Get-CisBenchmarkYear {
     return 0
 }
 
-function Get-CisDistinctProfiles {
+function Get-CisDistinctProfile {
     <#
         Flat, deduplicated list of all profiles (benchmark, version, level,
         role) in the CIS index, sorted newest to oldest (benchmark year,
@@ -445,7 +449,7 @@ function Get-CisDistinctProfiles {
 
     $seen = @{}
     $profiles = New-Object System.Collections.Generic.List[object]
-    foreach ($entry in (Get-CisAllEntries -CisIndex $CisIndex)) {
+    foreach ($entry in (Get-CisAllEntry -CisIndex $CisIndex)) {
         foreach ($p in @($entry.profiles)) {
             if ($null -eq $p) { continue }
             $key = "$($p.benchmark)|$($p.version)|$($p.level)|$($p.role)"
@@ -460,7 +464,7 @@ function Get-CisDistinctProfiles {
             })
         }
     }
-    # ", [...]" (see Get-CisAllEntries comment above): without it, an empty
+    # ", [...]" (see Get-CisAllEntry comment above): without it, an empty
     # sorted result would become $null for the caller instead of an empty list.
     return , [System.Collections.Generic.List[object]]@(
         $profiles | Sort-Object -Property @(
@@ -482,7 +486,7 @@ function Get-CisDefaultProfile {
     #>
     param($CisIndex)
 
-    $distinct = Get-CisDistinctProfiles -CisIndex $CisIndex
+    $distinct = Get-CisDistinctProfile -CisIndex $CisIndex
     if ($distinct.Count -eq 0) { return $null }
 
     $maxYear = ($distinct | Measure-Object -Property Year -Maximum).Maximum
@@ -530,7 +534,7 @@ function Get-CisMachineDefaultProfile {
     $osInfo = Get-CisMachineOsInfo
     if ($null -eq $osInfo) { return $null }
 
-    $distinct = Get-CisDistinctProfiles -CisIndex $CisIndex
+    $distinct = Get-CisDistinctProfile -CisIndex $CisIndex
     if ($distinct.Count -eq 0) { return $null }
 
     if ($osInfo.ProductType -eq 1) {
@@ -618,7 +622,7 @@ function Test-CisOrgValueEntryInProfile {
     return $false
 }
 
-function Get-CisOrgValueEntries {
+function Get-CisOrgValueEntry {
     <#
         "New Group Policy > CIS Gap-fill/Full compliance", screen 2->3 gate
         (plan §4.3/§4.4): which of the (at most 4) organization-specific
@@ -782,7 +786,7 @@ function Resolve-CisAdmxWrite {
 function Resolve-CisSecurityWrite {
     <#
         Equivalent of Resolve-CisAdmxWrite for a Security Settings catalog
-        entry (Get-SecurityCatalogEntries shape): returns
+        entry (Get-SecurityCatalogEntry shape): returns
         [pscustomobject]@{ Value = <raw string ready for
         Save-SecurityChangeToFile> } or $null if the recommended text can't
         be confidently parsed for this entry's ValueType.
@@ -892,7 +896,7 @@ function Get-CisRegistryValueType {
     return $Default
 }
 
-function Get-CisProfileCoverageMaps {
+function Get-CisProfileCoverageMap {
     <#
         Shared by Get-CisMissingAdmxReport and Get-CisCatalogGapsReport: both
         windows list cis-index.json entries that are "covered but not
@@ -937,11 +941,11 @@ function Get-CisProfileCoverageMaps {
         $match = Get-CisRecommendationForAdmxPolicy -CisIndex $CisIndex -Policy $pol
         if ($null -ne $match.CisEntry) { $reached["$($match.CisEntry.bucket)::$($match.CisEntry.key)"] = $true }
     }
-    foreach ($setting in (Get-SecurityCatalogEntries)) {
+    foreach ($setting in (Get-SecurityCatalogEntry)) {
         $cisRec = Get-CisRecommendationForSecuritySetting -CisIndex $CisIndex -Section $setting.section -Name $setting.name -DisplayName $setting.displayName
         if ($null -ne $cisRec) { $reached["$($cisRec.bucket)::$($cisRec.key)"] = $true }
     }
-    foreach ($sub in (Get-AdvancedAuditCatalogEntries)) {
+    foreach ($sub in (Get-AdvancedAuditCatalogEntry)) {
         $cisRec = Get-CisRecommendationForAuditSubcategory -CisIndex $CisIndex -SubcategoryNameEn $sub.name
         if ($null -ne $cisRec) { $reached["$($cisRec.bucket)::$($cisRec.key)"] = $true }
     }
@@ -952,7 +956,7 @@ function Get-CisProfileCoverageMaps {
 function Get-CisMissingAdmxReport {
     <#
         For the given active CIS profile, lists cis-index.json entries that
-        are covered but not reached (Get-CisProfileCoverageMaps) AND have a
+        are covered but not reached (Get-CisProfileCoverageMap) AND have a
         non-null requiredAdmx (Build-Index.ps1 -Kind Cis found an ADMX dependency
         note in the source .audit's "solution" field) - settings with no
         ADMX mechanism at all (Windows Services, firewall profiles...) are
@@ -966,7 +970,7 @@ function Get-CisMissingAdmxReport {
 
     if ($null -eq $ActiveProfile) { return , (New-Object System.Collections.Generic.List[object]) }
 
-    $maps = Get-CisProfileCoverageMaps -CisIndex $CisIndex -AdmxIndex $AdmxIndex -ActiveProfile $ActiveProfile
+    $maps = Get-CisProfileCoverageMap -CisIndex $CisIndex -AdmxIndex $AdmxIndex -ActiveProfile $ActiveProfile
 
     $rows = New-Object System.Collections.Generic.List[object]
     foreach ($key in $maps.Covered.Keys) {
@@ -992,7 +996,7 @@ function Get-CisMissingAdmxReport {
 function Get-CisCatalogGapsReport {
     <#
         Same "covered but not reached" set as Get-CisMissingAdmxReport
-        (Get-CisProfileCoverageMaps), but the OTHER half of it: entries with
+        (Get-CisProfileCoverageMap), but the OTHER half of it: entries with
         NO requiredAdmx note either - nothing in the source .audit file
         explains why the app can't resolve them. Unlike a missing ADMX
         template, these are never fixed by the user installing something:
@@ -1003,7 +1007,11 @@ function Get-CisCatalogGapsReport {
         minimum password length limits", "NetBT NodeType configuration",
         "Network security: LDAP client encryption requirements") that
         motivated this report: none of them had a solution-field ADMX note,
-        so they were invisible even to "Missing ADMX templates".
+        so they were invisible even to "Missing ADMX templates". Entries
+        flagged notGpoConfigurable (Build-Index.ps1's
+        Test-CisNotGpoConfigurable - e.g. 18.3.1's LAPS CSE registration
+        check) are excluded too: no catalog entry or code mapping will ever
+        make them "reached", so they aren't an actionable gap either.
         Feeds "View > CIS - Catalog gaps" (GpEdit.ps1 passes
         $script:CisIndex/$script:admxIndex/$script:CisActiveProfileForColumn).
         Computed on demand (menu click), same reasoning as Get-CisMissingAdmxReport.
@@ -1012,13 +1020,14 @@ function Get-CisCatalogGapsReport {
 
     if ($null -eq $ActiveProfile) { return , (New-Object System.Collections.Generic.List[object]) }
 
-    $maps = Get-CisProfileCoverageMaps -CisIndex $CisIndex -AdmxIndex $AdmxIndex -ActiveProfile $ActiveProfile
+    $maps = Get-CisProfileCoverageMap -CisIndex $CisIndex -AdmxIndex $AdmxIndex -ActiveProfile $ActiveProfile
 
     $rows = New-Object System.Collections.Generic.List[object]
     foreach ($key in $maps.Covered.Keys) {
         if ($maps.Reached.ContainsKey($key)) { continue }
         $entry = $maps.Covered[$key]
         if ($null -ne $entry.requiredAdmx) { continue }
+        if ($entry.notGpoConfigurable) { continue }
         $cisNumber = ($entry.profiles | Where-Object {
             $_.benchmark -eq $ActiveProfile.Benchmark -and $_.version -eq $ActiveProfile.Version -and
             $_.level -eq $ActiveProfile.Level -and $_.role -eq $ActiveProfile.Role

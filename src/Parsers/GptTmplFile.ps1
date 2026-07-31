@@ -1,4 +1,4 @@
-<#
+﻿<#
     Read/write GptTmpl.inf: local security settings (passwords, lockout,
     user rights, audit policy). Usually UTF-16LE with BOM ([Unicode] /
     Unicode=yes), but Windows reads it tolerantly - what matters is DATA
@@ -29,7 +29,10 @@ function Get-GptTmplTextEncoding {
     }
 }
 
-function New-EmptyGptTmpl {
+function New-EmptyGptTmpl {    [CmdletBinding(SupportsShouldProcess)]
+    param()
+
+    if ($PSCmdlet.ShouldProcess('New-EmptyGptTmpl', 'Invoke')) {
     $gpt = [ordered]@{
         Encoding = 'Unicode'
         Sections = [ordered]@{}
@@ -37,6 +40,8 @@ function New-EmptyGptTmpl {
     $gpt.Sections['Unicode'] = [ordered]@{ Unicode = 'yes' }
     $gpt.Sections['Version'] = [ordered]@{ signature = '"$CHICAGO$"'; Revision = '1' }
     return $gpt
+
+    }
 }
 
 function Read-GptTmplInf {
@@ -108,17 +113,25 @@ function Get-GptTmplValue {
 }
 
 function Set-GptTmplValue {
+        [CmdletBinding(SupportsShouldProcess)]
     param($GptTmpl, [string]$Section, [string]$Key, [string]$Value)
+    if ($PSCmdlet.ShouldProcess('Set-GptTmplValue', 'Invoke')) {
     if (-not $GptTmpl.Sections.Contains($Section)) {
         $GptTmpl.Sections[$Section] = [ordered]@{}
     }
     $GptTmpl.Sections[$Section][$Key] = $Value
+
+    }
 }
 
 function Remove-GptTmplValue {
+        [CmdletBinding(SupportsShouldProcess)]
     param($GptTmpl, [string]$Section, [string]$Key)
+    if ($PSCmdlet.ShouldProcess('Remove-GptTmplValue', 'Invoke')) {
     if ($GptTmpl.Sections.Contains($Section) -and $GptTmpl.Sections[$Section].Contains($Key)) {
         $GptTmpl.Sections[$Section].Remove($Key)
+    }
+
     }
 }
 

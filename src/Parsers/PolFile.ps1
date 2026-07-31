@@ -122,12 +122,14 @@ function ConvertTo-PolData {
 }
 
 function New-PolEntry {
+        [CmdletBinding(SupportsShouldProcess)]
     param(
         [Parameter(Mandatory)][string]$KeyName,
         [Parameter(Mandatory)][string]$ValueName,
         [Parameter(Mandatory)][int]$Type,
         $Value
     )
+    if ($PSCmdlet.ShouldProcess('New-PolEntry', 'Invoke')) {
     $data = ConvertTo-PolData -Type $Type -Value $Value
     return [ordered]@{
         KeyName   = $KeyName
@@ -137,6 +139,8 @@ function New-PolEntry {
         Size      = $data.Length
         RawData   = $data
         Value     = $Value
+    }
+
     }
 }
 
@@ -289,13 +293,21 @@ $script:PolDeleteValuePrefix    = '**del.'
 $script:PolDeleteAllValuesName  = '**delvals.'
 
 function New-PolDeleteValueEntry {
+        [CmdletBinding(SupportsShouldProcess)]
     param([Parameter(Mandatory)][string]$KeyName, [Parameter(Mandatory)][string]$ValueName)
+    if ($PSCmdlet.ShouldProcess('New-PolDeleteValueEntry', 'Invoke')) {
     return New-PolEntry -KeyName $KeyName -ValueName ($script:PolDeleteValuePrefix + $ValueName) -Type 1 -Value ''
+
+    }
 }
 
 function New-PolDeleteAllValuesEntry {
+        [CmdletBinding(SupportsShouldProcess)]
     param([Parameter(Mandatory)][string]$KeyName)
+    if ($PSCmdlet.ShouldProcess('New-PolDeleteAllValuesEntry', 'Invoke')) {
     return New-PolEntry -KeyName $KeyName -ValueName $script:PolDeleteAllValuesName -Type 1 -Value ''
+
+    }
 }
 
 function Test-PolValueIsDeleteMarker {

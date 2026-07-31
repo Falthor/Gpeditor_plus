@@ -1,8 +1,8 @@
-<#
+﻿<#
     Configurable default locations (File > Options), "Editor Mode" toggle and
     default File > Import mode, persisted in
     %LocalAppData%\Gpeditor_plus\settings.json. Of the 7 paths from
-    Get-DefaultAppPaths, tempDir and indexDir are fixed (not exposed in the
+    Get-DefaultAppPath, tempDir and indexDir are fixed (not exposed in the
     Options UI); the other 5, the editorMode bool and defaultImportMode
     (Classic/Standard/Advanced, see Options > Others > Import) are
     user-editable.
@@ -19,7 +19,7 @@ function Get-AppSettingsPath {
     Join-Path $env:LOCALAPPDATA 'Gpeditor_plus\settings.json'
 }
 
-function Get-DefaultAppPaths {
+function Get-DefaultAppPath {
     @{
         logDir          = 'C:\Windows\Logs\Gpeditor_plus\'
         tempDir         = (Join-Path $env:LOCALAPPDATA 'Gpeditor_plus\')
@@ -31,14 +31,14 @@ function Get-DefaultAppPaths {
     }
 }
 
-function Get-AppSettings {
+function Get-AppSetting {
     <#
         Tolerant load: missing/unreadable file falls back fully to defaults
         (same spirit as Import-CisIndex). Merges key-by-key with
-        Get-DefaultAppPaths to survive a partial or older-schema file
+        Get-DefaultAppPath to survive a partial or older-schema file
         without breaking under Set-StrictMode -Version Latest.
     #>
-    $defaults = Get-DefaultAppPaths
+    $defaults = Get-DefaultAppPath
     $settings = [pscustomobject]@{
         paths             = [pscustomobject]$defaults
         editorMode        = $true
@@ -73,7 +73,7 @@ function Get-AppSettings {
     return $settings
 }
 
-function Save-AppSettings {
+function Save-AppSetting {
     param([Parameter(Mandatory)]$Settings)
 
     $path = Get-AppSettingsPath
@@ -84,28 +84,30 @@ function Save-AppSettings {
 }
 
 function Set-AppSettingPath {
-    <# Updates a single path (Key from Get-DefaultAppPaths) and saves immediately. #>
+    <# Updates a single path (Key from Get-DefaultAppPath) and saves immediately. #>
+        [CmdletBinding(SupportsShouldProcess)]
     param(
         [Parameter(Mandatory)]$Settings,
         [Parameter(Mandatory)][string]$Key,
         [Parameter(Mandatory)][string]$Value
     )
+    if ($PSCmdlet.ShouldProcess('Set-AppSettingPath', 'Invoke')) {
     $Settings.paths.$Key = $Value
-    Save-AppSettings -Settings $Settings
+    Save-AppSetting -Settings $Settings
+
+    }
 }
 
 function Initialize-AppSettingsFirstRun {
     <#
-        Call once at startup, right after Get-AppSettings. If settings.json
+        Call once at startup, right after Get-AppSetting. If settings.json
         didn't exist before this call (first run), creates the default
-        folders and seeds auditFilesDir from the .audit files bundled in
-        src\DefaultData (23 CIS benchmarks, unused elsewhere). Never fires
-        again once settings.json exists: user deletions in the Audit folder
-        stay permanent.
+        folders. auditFilesDir seeding is handled separately by
+        Initialize-AuditFilesFolder (keyed off the folder's own existence,
+        not settings.json), so it isn't duplicated here.
     #>
     param(
-        [Parameter(Mandatory)]$Settings,
-        [Parameter(Mandatory)][string]$ScriptRoot
+        [Parameter(Mandatory)]$Settings
     )
 
     $isFirstRun = -not (Test-Path -LiteralPath (Get-AppSettingsPath))
@@ -115,10 +117,27 @@ function Initialize-AppSettingsFirstRun {
         if (-not (Test-Path -LiteralPath $prop.Value)) { New-Item -ItemType Directory -Path $prop.Value -Force | Out-Null }
     }
 
-    $defaultDataDir = Join-Path $ScriptRoot 'DefaultData'
-    if (Test-Path -LiteralPath $defaultDataDir) {
-        Copy-Item -Path (Join-Path $defaultDataDir '*.audit') -Destination $Settings.paths.auditFilesDir -Force
-    }
+    Save-AppSetting -Settings $Settings
+}
 
-    Save-AppSettings -Settings $Settings
+function Initialize-AuditFilesFolder {
+    <#
+        Call on every startup. Seeds auditFilesDir from the .audit files
+        bundled in src\DefaultData\Audit the first time the folder doesn't
+        exist yet (fresh install, or the user deleted the whole folder) -
+        a no-op otherwise, even if DefaultData\Audit later gains new files:
+        an existing folder's contents are the user's to manage from then on.
+    #>
+    param(
+        [Parameter(Mandatory)]$Settings,
+        [Parameter(Mandatory)][string]$ScriptRoot
+    )
+
+    if (Test-Path -LiteralPath $Settings.paths.auditFilesDir) { return }
+
+    New-Item -ItemType Directory -Path $Settings.paths.auditFilesDir -Force | Out-Null
+    $defaultAuditDir = Join-Path $ScriptRoot 'DefaultData\Audit'
+    if (Test-Path -LiteralPath $defaultAuditDir) {
+        Copy-Item -Path (Join-Path $defaultAuditDir '*.audit') -Destination $Settings.paths.auditFilesDir -Force
+    }
 }

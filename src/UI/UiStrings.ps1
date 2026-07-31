@@ -320,6 +320,6 @@ $script:UiStrings = @{
     ClearDataErrorFormat       = 'Could not clear application data: {0}'
 }
 
-function Get-UiStrings {
+function Get-UiString {
     return $script:UiStrings
 }

@@ -26,6 +26,7 @@
     Usage: run from anywhere, e.g.
       powershell -NoProfile -ExecutionPolicy Bypass -File .\Verify-CisProfileCounts.ps1
 #>
+[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingWriteHost', '', Justification = 'Interactive CLI diagnostic tool - colored console output (-ForegroundColor) is exactly what Write-Host is for.')]
 param(
     [string]$RepoRoot = (Split-Path -Parent $PSScriptRoot),
     [string]$IndexDir = (Join-Path $env:LOCALAPPDATA 'Gpeditor_plus\Index')

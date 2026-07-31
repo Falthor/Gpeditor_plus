@@ -294,7 +294,7 @@ Revision=1
     Context 'security catalog' -Tag 'Catalog' {
 
         BeforeAll {
-            $script:entries = Get-SecurityCatalogEntries
+            $script:entries = Get-SecurityCatalogEntry
         }
 
         It 'contains a plausible number of entries' {
@@ -334,7 +334,7 @@ Revision=1
         }
     }
 
-    Context 'Merge-SecurityCatalogBundledEntries' -Tag 'Regression' {
+    Context 'Merge-SecurityCatalogBundledEntry' -Tag 'Regression' {
 
         # GpEdit.ps1 only copies the bundled catalog into indexDir when the
         # file is absent (it must never clobber catalog-editor edits), so a
@@ -355,7 +355,7 @@ Revision=1
         }
 
         It 'adds missing settings and missing catalogs without touching existing entries' {
-            $added = Merge-SecurityCatalogBundledEntries -BundledPath $bundledPath -UserPath $userPath
+            $added = Merge-SecurityCatalogBundledEntry -BundledPath $bundledPath -UserPath $userPath
             $added | Should -Be 11   # 2 new settings + the 9 restored audit-policy entries
 
             $merged = Get-Content -Raw -Encoding UTF8 -LiteralPath $userPath | ConvertFrom-Json
@@ -366,21 +366,21 @@ Revision=1
         }
 
         It 'is idempotent and leaves an up-to-date file untouched' {
-            Merge-SecurityCatalogBundledEntries -BundledPath $bundledPath -UserPath $userPath | Out-Null
+            Merge-SecurityCatalogBundledEntry -BundledPath $bundledPath -UserPath $userPath | Out-Null
             $before = [System.IO.File]::ReadAllBytes($userPath)
-            Merge-SecurityCatalogBundledEntries -BundledPath $bundledPath -UserPath $userPath | Should -Be 0
+            Merge-SecurityCatalogBundledEntry -BundledPath $bundledPath -UserPath $userPath | Should -Be 0
             [System.IO.File]::ReadAllBytes($userPath) | Should -Be $before
         }
 
         It 'writes UTF-8 with BOM' {
-            Merge-SecurityCatalogBundledEntries -BundledPath $bundledPath -UserPath $userPath | Out-Null
+            Merge-SecurityCatalogBundledEntry -BundledPath $bundledPath -UserPath $userPath | Out-Null
             $bytes = [System.IO.File]::ReadAllBytes($userPath)
             @($bytes[0], $bytes[1], $bytes[2]) | Should -Be @(239, 187, 191)
         }
 
         It 'does nothing when either file is missing, instead of throwing' {
-            Merge-SecurityCatalogBundledEntries -BundledPath $bundledPath -UserPath (Join-Path $TestDrive 'does-not-exist.json') | Should -Be 0
-            Merge-SecurityCatalogBundledEntries -BundledPath (Join-Path $TestDrive 'no-bundle.json') -UserPath $userPath | Should -Be 0
+            Merge-SecurityCatalogBundledEntry -BundledPath $bundledPath -UserPath (Join-Path $TestDrive 'does-not-exist.json') | Should -Be 0
+            Merge-SecurityCatalogBundledEntry -BundledPath (Join-Path $TestDrive 'no-bundle.json') -UserPath $userPath | Should -Be 0
         }
     }
 }
@@ -448,7 +448,7 @@ Describe 'AuditCsvFile & AdvancedAuditCatalog' -Tag 'Unit' {
     Context 'subcategory catalog' -Tag 'Catalog' {
 
         BeforeAll {
-            $script:catalog = Get-AdvancedAuditCatalogEntries
+            $script:catalog = Get-AdvancedAuditCatalogEntry
         }
 
         It 'contains 59 subcategories' {
@@ -475,7 +475,8 @@ Describe 'PolicyWriter' -Tag 'Unit' {
         . (Join-Path $SrcRoot 'Policy\PolicyWriter.ps1')
 
         function New-TestPolicy {
-            param(
+                [CmdletBinding(SupportsShouldProcess)]
+    param(
                 [string]$Id = 'Test::Policy1',
                 [string]$RegistryKey = 'Software\Policies\Test',
                 [string]$ValueName = 'MyValue',
@@ -483,6 +484,7 @@ Describe 'PolicyWriter' -Tag 'Unit' {
                 $DisabledValue = 0,
                 [array]$Elements = @()
             )
+    if ($PSCmdlet.ShouldProcess('New-TestPolicy', 'Invoke')) {
             return [pscustomobject]@{
                 id            = $Id
                 registryKey   = $RegistryKey
@@ -491,7 +493,9 @@ Describe 'PolicyWriter' -Tag 'Unit' {
                 disabledValue = $DisabledValue
                 elements      = $Elements
             }
-        }
+        
+    }
+}
     }
 
     Context 'NotConfigured -> Enabled (simple, no elements)' {
@@ -661,14 +665,14 @@ Describe 'PolicyWriter' -Tag 'Unit' {
                 'System Access::MinimumPasswordLength' = @{ IsConfigured = $false; Value = $null }
                 'System Access::PasswordComplexity'    = @{ IsConfigured = $true; Value = '1' }
             }
-            Apply-SecurityChangesToGpt -GptTmpl $gpt -PendingChanges $pendingSecChanges -SettingsById $settingsById | Out-Null
+            Invoke-SecurityChangeToGpt -GptTmpl $gpt -PendingChanges $pendingSecChanges -SettingsById $settingsById | Out-Null
 
             Get-GptTmplValue $gpt 'System Access' 'MinimumPasswordLength' | Should -BeNullOrEmpty
             Get-GptTmplValue $gpt 'System Access' 'PasswordComplexity' | Should -Be '1'
         }
     }
 
-    Context 'Apply-AdmxChangesToEntries (multi-policy orchestration)' {
+    Context 'Invoke-AdmxChangeToEntry (multi-policy orchestration)' {
 
         BeforeAll {
             $polA = New-TestPolicy -Id 'Test::PolA' -ValueName 'ValA'
@@ -683,12 +687,12 @@ Describe 'PolicyWriter' -Tag 'Unit' {
 
         It 'applies only Machine-scoped policies for scope Machine' {
             $initial = New-Object System.Collections.Generic.List[object]
-            $machineResult = Apply-AdmxChangesToEntries -Entries $initial -PendingChanges $pendingAdmx -Scope 'Machine' -PoliciesById $policiesById
+            $machineResult = Invoke-AdmxChangeToEntry -Entries $initial -PendingChanges $pendingAdmx -Scope 'Machine' -PoliciesById $policiesById
             $machineResult.Count | Should -Be 2
         }
 
         It 'applies only User-scoped policies for scope User' {
-            $userResult = Apply-AdmxChangesToEntries -Entries (New-Object System.Collections.Generic.List[object]) -PendingChanges $pendingAdmx -Scope 'User' -PoliciesById $policiesById
+            $userResult = Invoke-AdmxChangeToEntry -Entries (New-Object System.Collections.Generic.List[object]) -PendingChanges $pendingAdmx -Scope 'User' -PoliciesById $policiesById
             $userResult.Count | Should -Be 1
         }
     }
@@ -704,18 +708,18 @@ Describe 'AppSettings' -Tag 'Unit' {
         . (Join-Path $SrcRoot 'Core\AppSettings.ps1')
 
         $script:FakeScriptRoot = Join-Path $TestDrive 'src'
-        $script:FakeDefaultData = Join-Path $FakeScriptRoot 'DefaultData'
+        $script:FakeDefaultData = Join-Path $FakeScriptRoot 'DefaultData\Audit'
         New-Item -ItemType Directory -Path $FakeDefaultData -Force | Out-Null
         1..3 | ForEach-Object { Set-Content -LiteralPath (Join-Path $FakeDefaultData "Fake_$_.audit") -Value "fake $_" }
 
-        $script:defaults = Get-DefaultAppPaths
+        $script:defaults = Get-DefaultAppPath
     }
 
     AfterAll {
         $env:LOCALAPPDATA = $SavedLocalAppData
     }
 
-    Context 'Get-DefaultAppPaths' {
+    Context 'Get-DefaultAppPath' {
 
         It 'contains all 6 configurable paths' {
             foreach ($key in @('logDir', 'tempDir', 'backupRoot', 'importExportDir', 'auditFilesDir', 'indexDir')) {
@@ -733,24 +737,24 @@ Describe 'AppSettings' -Tag 'Unit' {
         }
     }
 
-    Context 'Get-AppSettings without an existing file' {
+    Context 'Get-AppSetting without an existing file' {
 
         It 'falls back to defaults' {
-            $settings = Get-AppSettings
+            $settings = Get-AppSetting
             $settings.paths.logDir | Should -Be $defaults.logDir
             $settings.editorMode | Should -BeTrue
         }
     }
 
-    Context 'Save-AppSettings / Get-AppSettings round-trip' -Tag 'RoundTrip' {
+    Context 'Save-AppSetting / Get-AppSetting round-trip' -Tag 'RoundTrip' {
 
         It 'persists modified values and preserves untouched keys' {
-            $settings = Get-AppSettings
+            $settings = Get-AppSetting
             $settings.paths.logDir = Join-Path $TestDrive 'CustomLogs\'
             $settings.editorMode = $false
-            Save-AppSettings -Settings $settings
+            Save-AppSetting -Settings $settings
 
-            $reloaded = Get-AppSettings
+            $reloaded = Get-AppSetting
             $reloaded.paths.logDir | Should -Be $settings.paths.logDir
             $reloaded.editorMode | Should -BeFalse
             $reloaded.paths.backupRoot | Should -Be $defaults.backupRoot
@@ -763,7 +767,7 @@ Describe 'AppSettings' -Tag 'Unit' {
             $settingsPath = Get-AppSettingsPath
             New-Item -ItemType Directory -Path (Split-Path -Parent $settingsPath) -Force | Out-Null
             '{ "paths": { "logDir": "D:\\PartialOnly\\" } }' | Set-Content -LiteralPath $settingsPath -Encoding UTF8
-            $partial = Get-AppSettings
+            $partial = Get-AppSetting
             $partial.paths.logDir | Should -Be 'D:\PartialOnly\'
             $partial.paths.backupRoot | Should -Be $defaults.backupRoot
             $partial.editorMode | Should -BeTrue
@@ -773,9 +777,9 @@ Describe 'AppSettings' -Tag 'Unit' {
     Context 'Set-AppSettingPath' {
 
         It 'persists a single path immediately' {
-            $settings = Get-AppSettings
+            $settings = Get-AppSetting
             Set-AppSettingPath -Settings $settings -Key 'auditFilesDir' -Value (Join-Path $TestDrive 'CustomAudit\')
-            $afterSet = Get-AppSettings
+            $afterSet = Get-AppSetting
             $afterSet.paths.auditFilesDir | Should -Be (Join-Path $TestDrive 'CustomAudit\')
         }
     }
@@ -784,11 +788,11 @@ Describe 'AppSettings' -Tag 'Unit' {
 
         BeforeAll {
             if (Test-Path -LiteralPath (Get-AppSettingsPath)) { Remove-Item -LiteralPath (Get-AppSettingsPath) -Force }
-            $script:firstRunSettings = Get-AppSettings
+            $script:firstRunSettings = Get-AppSetting
             foreach ($key in @($firstRunSettings.paths.PSObject.Properties.Name)) {
                 $firstRunSettings.paths.$key = Join-Path $TestDrive "FirstRun\$key\"
             }
-            Initialize-AppSettingsFirstRun -Settings $firstRunSettings -ScriptRoot $FakeScriptRoot
+            Initialize-AppSettingsFirstRun -Settings $firstRunSettings
         }
 
         It 'creates settings.json on first run' {
@@ -800,16 +804,24 @@ Describe 'AppSettings' -Tag 'Unit' {
                 Test-Path -LiteralPath $prop.Value | Should -BeTrue
             }
         }
+    }
 
-        It 'seeds auditFilesDir with the 3 bundled .audit files' {
-            @(Get-ChildItem -LiteralPath $firstRunSettings.paths.auditFilesDir -Filter '*.audit').Count | Should -Be 3
+    Context 'Initialize-AuditFilesFolder' -Tag 'Integration' {
+
+        BeforeAll {
+            $script:auditSettings = Get-AppSetting
+            $auditSettings.paths.auditFilesDir = Join-Path $TestDrive 'AuditSeed\'
+            Initialize-AuditFilesFolder -Settings $auditSettings -ScriptRoot $FakeScriptRoot
         }
 
-        It 'never re-seeds once settings.json already exists' {
-            Remove-Item -LiteralPath (Join-Path $firstRunSettings.paths.auditFilesDir 'Fake_1.audit') -Force
-            $secondRunSettings = Get-AppSettings
-            Initialize-AppSettingsFirstRun -Settings $secondRunSettings -ScriptRoot $FakeScriptRoot
-            @(Get-ChildItem -LiteralPath $secondRunSettings.paths.auditFilesDir -Filter '*.audit').Count | Should -Be 2
+        It 'seeds auditFilesDir with the 3 bundled .audit files' {
+            @(Get-ChildItem -LiteralPath $auditSettings.paths.auditFilesDir -Filter '*.audit').Count | Should -Be 3
+        }
+
+        It 'never re-seeds once the folder already exists' {
+            Remove-Item -LiteralPath (Join-Path $auditSettings.paths.auditFilesDir 'Fake_1.audit') -Force
+            Initialize-AuditFilesFolder -Settings $auditSettings -ScriptRoot $FakeScriptRoot
+            @(Get-ChildItem -LiteralPath $auditSettings.paths.auditFilesDir -Filter '*.audit').Count | Should -Be 2
         }
     }
 }
@@ -1018,10 +1030,10 @@ Describe 'CisCatalog' -Tag 'Integration' {
             $noLmHash | Should -Not -BeNullOrEmpty
 
             # $allProfiles must be assigned to a variable before piping:
-            # Get-CisDistinctProfiles uses "return , $list" to guard against
+            # Get-CisDistinctProfile uses "return , $list" to guard against
             # empty-list-becomes-$null, which means piping directly off the
             # function call would pass the whole list as one pipeline object.
-            $allProfiles = Get-CisDistinctProfiles -CisIndex $cisIndex
+            $allProfiles = Get-CisDistinctProfile -CisIndex $cisIndex
             $win11StandAlone = $allProfiles | Where-Object { $_.Benchmark -match 'Windows\s*11' -and $_.Benchmark -match 'Stand-alone' -and $_.Level -eq 'L1' } | Select-Object -First 1
             $win11StandAlone | Should -Not -BeNullOrEmpty
             Get-CisRecommendationValueForProfile -CisEntry $noLmHash -ActiveProfile $win11StandAlone -Ui $ui | Should -BeNullOrEmpty
@@ -1100,7 +1112,7 @@ Describe 'CisCatalog' -Tag 'Integration' {
             $fixtureOutputPath = Join-Path $TestDrive 'catalog-gaps-fixture-index.json'
             & (Join-Path $SrcRoot 'Indexers\Build-Index.ps1') -Kind Cis -AuditFilesPath $fixtureAuditDir -OutputPath $fixtureOutputPath | Out-Null
             $script:fixtureCisIndex = Import-CisIndex -Path $fixtureOutputPath
-            $script:fixtureProfile = (Get-CisDistinctProfiles -CisIndex $fixtureCisIndex) | Select-Object -First 1
+            $script:fixtureProfile = (Get-CisDistinctProfile -CisIndex $fixtureCisIndex) | Select-Object -First 1
 
             # Only what fixture item #1 (real ADMX passthrough) needs to resolve as "reached".
             $script:fixtureAdmxIndex = [pscustomobject]@{
@@ -1125,7 +1137,7 @@ Describe 'CisCatalog' -Tag 'Integration' {
             # Windows Services/Firewall, out of scope - plan §2/§4) PLUS the
             # ANONYMOUS_SID_SETTING item below, which also counts towards
             # Skipped once its title-fallback resolution fails (see
-            # Resolve-CisTitleFallbackCandidates: NeedsManualReview items are
+            # Resolve-CisTitleFallbackCandidate: NeedsManualReview items are
             # folded into Skipped too, not a separate disjoint count).
             $fixtureCisIndex.meta.skippedItemCount | Should -Be 2
             $fixtureCisIndex.meta.needsManualReviewCount | Should -Be 1
@@ -1199,7 +1211,7 @@ Describe 'CisCatalog' -Tag 'Integration' {
         It 'returns empty lists (not $null, does not throw) when no CIS profile is active' {
             # NOT wrapped in @() at the call site: Get-CisMissingAdmxReport/
             # Get-CisCatalogGapsReport already "return , $list" (see
-            # Get-CisAllEntries's comment on this idiom) precisely so the
+            # Get-CisAllEntry's comment on this idiom) precisely so the
             # caller gets the List[object] itself - wrapping the call in an
             # extra @() would instead produce a 1-element array containing
             # that (empty) list, making .Count report 1 instead of 0.

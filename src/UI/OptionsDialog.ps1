@@ -87,7 +87,7 @@ function Show-OptionsDialog {
         @{ Key = 'auditFilesDir';   TextBox = $window.FindName('AuditPathTextBox');        Browse = $window.FindName('AuditPathBrowseButton');        Open = $window.FindName('AuditPathOpenButton');        Reset = $window.FindName('AuditPathResetButton') }
         @{ Key = 'projectsDir';     TextBox = $window.FindName('ProjectsPathTextBox');     Browse = $window.FindName('ProjectsPathBrowseButton');     Open = $window.FindName('ProjectsPathOpenButton');     Reset = $window.FindName('ProjectsPathResetButton') }
     )
-    $defaultPaths = Get-DefaultAppPaths
+    $defaultPaths = Get-DefaultAppPath
     $pendingPaths = @{}
 
     foreach ($row in $pathRows) {
@@ -118,7 +118,7 @@ function Show-OptionsDialog {
 
     $window.FindName('SavePathsButton').Add_Click({
         foreach ($key in $pendingPaths.Keys) { $script:AppSettings.paths.$key = $pendingPaths[$key] }
-        Save-AppSettings -Settings $script:AppSettings
+        Save-AppSetting -Settings $script:AppSettings
         [System.Windows.MessageBox]::Show($Ui.SettingsSavedMessage, $Ui.InfoTitle, 'OK', 'Information') | Out-Null
 
         # Restart ourselves (same exe + script, re-elevated via -Verb RunAs,
@@ -185,7 +185,7 @@ function Show-OptionsDialog {
     $editorModeCheckBox.Add_Click({
         $script:CatalogEditingEnabled = [bool]$editorModeCheckBox.IsChecked
         $script:AppSettings.editorMode = [bool]$editorModeCheckBox.IsChecked
-        Save-AppSettings -Settings $script:AppSettings
+        Save-AppSetting -Settings $script:AppSettings
     })
 
     $defaultImportModeComboBox = $window.FindName('DefaultImportModeComboBox')
@@ -195,7 +195,7 @@ function Show-OptionsDialog {
         $selected = $defaultImportModeComboBox.SelectedItem
         if (-not $selected) { return }
         $script:AppSettings.defaultImportMode = $selected.Tag
-        Save-AppSettings -Settings $script:AppSettings
+        Save-AppSetting -Settings $script:AppSettings
     })
 
     # --- Others tab: Clear Data - wipes %LocalAppData%\Gpeditor_plus\ (settings.json,
@@ -234,11 +234,15 @@ function Show-OptionsDialog {
 }
 
 function Update-OptionsAuditFilesList {
+        [CmdletBinding(SupportsShouldProcess)]
     param([Parameter(Mandatory)]$ListBox, [Parameter(Mandatory)][string]$AuditFilesDir)
+    if ($PSCmdlet.ShouldProcess('Update-OptionsAuditFilesList', 'Invoke')) {
     $ListBox.Items.Clear()
     if (-not (Test-Path -LiteralPath $AuditFilesDir)) { return }
     Get-ChildItem -LiteralPath $AuditFilesDir -Filter '*.audit' | Sort-Object Name | ForEach-Object {
         [void]$ListBox.Items.Add($_.Name)
+    }
+
     }
 }
 
@@ -271,9 +275,9 @@ function Invoke-CisIndexRebuild {
         & (Join-Path $ScriptRoot 'Indexers\Build-Index.ps1') -Kind Cis -AuditFilesPath $AuditFilesPath -OutputPath $outputPath -SourceFingerprint $fingerprint
         $script:CisIndex = Import-CisIndex -Path $outputPath
         # $script:CisIndex just changed - every cached CIS resolution
-        # (Build-CisRecommendationCache, GpEdit.ps1) is now stale and must be
+        # (New-CisRecommendationCache, GpEdit.ps1) is now stale and must be
         # recomputed against the new index.
-        Build-CisRecommendationCache
+        New-CisRecommendationCache
     }
     catch {
         [System.Windows.MessageBox]::Show(($Ui.CisIndexRebuildErrorFormat -f $_.Exception.Message), $Ui.ErrorTitle, 'OK', 'Warning') | Out-Null

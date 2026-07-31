@@ -1,7 +1,7 @@
 ﻿<#
     Single entry point for every JSON index the app caches under indexDir.
-    Replaces the four former Build-AdmxIndex/Build-SecurityIndex/
-    Build-AdvancedAuditIndex/Build-CisIndex scripts; -Kind selects which one
+    Replaces the four former New-AdmxIndex/New-SecurityIndex/
+    New-AdvancedAuditIndex/New-CisIndex scripts; -Kind selects which one
     to build:
 
       Admx          .admx/.adml under PolicyDefinitions      -> admx-index.json
@@ -80,7 +80,10 @@ function Write-IndexFile {
 # ADMX / ADML indexer
 # ###########################################################################
 
-function New-AdmxIndexState {
+function New-AdmxIndexState {    [CmdletBinding(SupportsShouldProcess)]
+    param()
+
+    if ($PSCmdlet.ShouldProcess('New-AdmxIndexState', 'Invoke')) {
     # All state for one ADMX indexing run, passed explicitly instead of
     # living in $script: globals (see the header note on scope collisions).
     return @{
@@ -91,6 +94,8 @@ function New-AdmxIndexState {
         # requested language AND the fallback - see
         # plan-gpedit-ui-enhancements.md §1.
         SkippedAdmxFiles = New-Object System.Collections.Generic.List[string]
+    }
+
     }
 }
 
@@ -157,6 +162,7 @@ function Expand-AdmlText {
     # Replaces every "$(string.xxx)" reference by its localized text.
     # "$(presentation.xxx)" references are left as-is on purpose: they are
     # resolved separately by Get-AdmlPresentationLabelMap.
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSReviewUnusedParameter', 'StringMap', Justification = 'Used inside the $evaluator scriptblock passed as a MatchEvaluator delegate, invisible to this analyzer rule.')]
     param([string]$Value, [hashtable]$StringMap)
 
     if ([string]::IsNullOrEmpty($Value)) { return $Value }
@@ -191,7 +197,9 @@ function Get-AdmxPolicyValue {
 function New-AdmxPrefixMap {
     # Maps every namespace prefix this .admx can reference (its own target
     # prefix plus each <using>) to the full namespace.
+        [CmdletBinding(SupportsShouldProcess)]
     param($PolicyNamespaces, [string]$OwnPrefix, [string]$OwnNamespace)
+    if ($PSCmdlet.ShouldProcess('New-AdmxPrefixMap', 'Invoke')) {
 
     $map = @{}
     if ($OwnPrefix) { $map[$OwnPrefix] = $OwnNamespace }
@@ -201,6 +209,8 @@ function New-AdmxPrefixMap {
         }
     }
     return $map
+
+    }
 }
 
 function Resolve-AdmxRef {
@@ -396,7 +406,8 @@ function Get-AdmxCategoryPath {
     return $names
 }
 
-function Build-AdmxIndex {
+function New-AdmxIndex {
+        [CmdletBinding(SupportsShouldProcess)]
     param(
         [string]$PolicyDefinitionsPath,
         [string]$Language,
@@ -404,6 +415,7 @@ function Build-AdmxIndex {
         [string]$OutputPath,
         [string]$SourceFingerprint
     )
+    if ($PSCmdlet.ShouldProcess('New-AdmxIndex', 'Invoke')) {
 
     if (-not (Test-Path -LiteralPath $PolicyDefinitionsPath)) {
         throw "PolicyDefinitions folder not found: $PolicyDefinitionsPath"
@@ -481,17 +493,19 @@ function Build-AdmxIndex {
 
     Write-IndexFile -Index $index -Path $OutputPath -Depth 12 -Compress
 
-    Write-Host "Index generated: $OutputPath"
-    Write-Host "  ADMX files     : $($admxFiles.Count)"
-    Write-Host "  Categories     : $($categoriesOut.Count)"
-    Write-Host "  Policies       : $($policiesOut.Count)"
+    Write-Output "Index generated: $OutputPath"
+    Write-Output "  ADMX files     : $($admxFiles.Count)"
+    Write-Output "  Categories     : $($categoriesOut.Count)"
+    Write-Output "  Policies       : $($policiesOut.Count)"
+
+    }
 }
 
 # ###########################################################################
 # Security settings indexer
 # ###########################################################################
 
-function Build-SecurityIndex {
+function New-SecurityIndex {
     <#
         Merges the static catalog (SecurityCatalog.ps1) with the current
         state read from secedit.inf.
@@ -502,14 +516,16 @@ function Build-SecurityIndex {
         reflecting the EFFECTIVE system state rather than a hand-managed
         GptTmpl.inf - see plan-gpedit-security-secedit-cycle.md.
     #>
+        [CmdletBinding(SupportsShouldProcess)]
     param([string]$SecEditInfPath, [string]$OutputPath)
+    if ($PSCmdlet.ShouldProcess('New-SecurityIndex', 'Invoke')) {
 
     $gpt = Read-GptTmplInf -Path $SecEditInfPath
     $fileExists = Test-Path -LiteralPath $SecEditInfPath
 
     # Enumerated once and reused below for the out-of-catalog pass: walking
     # the catalog is the expensive part of this build.
-    $catalogEntries = @(Get-SecurityCatalogEntries)
+    $catalogEntries = @(Get-SecurityCatalogEntry)
 
     $settings = New-Object System.Collections.Generic.List[object]
     $catalogKeys = @{}
@@ -584,27 +600,31 @@ function Build-SecurityIndex {
 
     Write-IndexFile -Index $index -Path $OutputPath -Depth 10 -Compress
 
-    Write-Host "Security index generated: $OutputPath"
-    Write-Host "  secedit.inf found: $fileExists ($SecEditInfPath)"
-    Write-Host "  Cataloged settings: $($settings.Count)"
-    Write-Host "  Out-of-catalog settings kept: $($otherSettings.Count)"
+    Write-Output "Security index generated: $OutputPath"
+    Write-Output "  secedit.inf found: $fileExists ($SecEditInfPath)"
+    Write-Output "  Cataloged settings: $($settings.Count)"
+    Write-Output "  Out-of-catalog settings kept: $($otherSettings.Count)"
+
+    }
 }
 
 # ###########################################################################
 # Advanced Audit Policy indexer
 # ###########################################################################
 
-function Build-AdvancedAuditIndex {
+function New-AdvancedAuditIndex {
     # Merges the static catalog (AdvancedAuditCatalog.ps1) with the current
-    # state from audit.csv, if present. Same spirit as Build-SecurityIndex,
+    # state from audit.csv, if present. Same spirit as New-SecurityIndex,
     # matched on the stable Microsoft subcategory GUID.
+        [CmdletBinding(SupportsShouldProcess)]
     param([string]$AuditCsvPath, [string]$OutputPath)
+    if ($PSCmdlet.ShouldProcess('New-AdvancedAuditIndex', 'Invoke')) {
 
     $rows = Read-AuditCsv -Path $AuditCsvPath
     $fileExists = Test-Path -LiteralPath $AuditCsvPath
 
     $settings = New-Object System.Collections.Generic.List[object]
-    foreach ($entry in (Get-AdvancedAuditCatalogEntries)) {
+    foreach ($entry in (Get-AdvancedAuditCatalogEntry)) {
         $row = Get-AuditCsvValue -Rows $rows -Guid $entry.guid
         $isConfigured = $null -ne $row
 
@@ -636,9 +656,11 @@ function Build-AdvancedAuditIndex {
 
     Write-IndexFile -Index $index -Path $OutputPath -Depth 10 -Compress
 
-    Write-Host "Advanced audit index generated: $OutputPath"
-    Write-Host "  audit.csv found: $fileExists ($AuditCsvPath)"
-    Write-Host "  Subcategories cataloged: $($settings.Count)"
+    Write-Output "Advanced audit index generated: $OutputPath"
+    Write-Output "  audit.csv found: $fileExists ($AuditCsvPath)"
+    Write-Output "  Subcategories cataloged: $($settings.Count)"
+
+    }
 }
 
 # ###########################################################################
@@ -681,7 +703,7 @@ function Get-CisSpec {
     }
 }
 
-function Get-CisVariables {
+function Get-CisVariable {
     # File header <variables> block: name -> <default>, used to resolve the
     # "@NAME@" placeholders found in value_data.
     param([string]$Text)
@@ -703,6 +725,7 @@ function Resolve-CisValueData {
     # "A" || "B" value by stripping the quotes around each segment while
     # keeping the "||" separator: turning that into readable text ("A or B")
     # is the UI's job, so no language gets baked into the index.
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSReviewUnusedParameter', 'Variables', Justification = 'Used inside the nested MatchEvaluator scriptblock, invisible to this analyzer rule.')]
     param([string]$Raw, [hashtable]$Variables)
 
     if ([string]::IsNullOrEmpty($Raw)) { return $Raw }
@@ -823,6 +846,26 @@ function Get-CisAdmxRequirementNote {
     return $null
 }
 
+function Test-CisNotGpoConfigurable {
+    <#
+        18.3.1 "Ensure LAPS AdmPwd GPO Extension / CSE is installed" checks
+        HKLM\...\Winlogon\GPExtensions\{D76B9641-...} DllName - the CSE's own
+        self-registration entry, written by the LAPS installer, not a value
+        any Administrative Template ever exposes. Get-CisAdmxRequirementNote
+        correctly returns $null for it (its solution text has no ADMX note -
+        there's genuinely no template to install), which otherwise dumps it
+        into "CIS - Catalog gaps" alongside real, fixable gaps (missing
+        catalog entry / code mapping) even though this one is not fixable at
+        all: no ADMX policy will ever back a CSE registration check. Flagged
+        here by registry path so both gap reports can exclude it instead of
+        mislabeling it as an actionable gap.
+    #>
+    param([string]$RegKey)
+
+    if ([string]::IsNullOrEmpty($RegKey)) { return $false }
+    return $RegKey -match '\\Winlogon\\GPExtensions\\'
+}
+
 function Get-CisMatchKey {
     # Maps one .audit control to the (bucket, key) pair the app looks it up
     # by - see plan-gpedit-cis.md §4. $null means "no primary key": the
@@ -832,7 +875,7 @@ function Get-CisMatchKey {
         [string]$Type,
         [string]$RegKey,
         [string]$RegItem,
-        [string]$PasswordPolicy,
+        [string]$AccountPolicyName,
         [string]$LockoutPolicy,
         [string]$RightType,
         [string]$AuditSubcategory,
@@ -860,8 +903,8 @@ function Get-CisMatchKey {
             return [ordered]@{ bucket = 'byRegistry'; key = "$normKey|$($RegItem.ToLowerInvariant())" }
         }
         'PASSWORD_POLICY' {
-            if (-not $PasswordPolicy) { return $null }
-            return [ordered]@{ bucket = 'byPasswordPolicy'; key = $PasswordPolicy }
+            if (-not $AccountPolicyName) { return $null }
+            return [ordered]@{ bucket = 'byPasswordPolicy'; key = $AccountPolicyName }
         }
         'LOCKOUT_POLICY' {
             if (-not $LockoutPolicy) { return $null }
@@ -961,7 +1004,7 @@ function Read-CisAuditFile {
         Write-Warning "<spec> block not found, file skipped: $Path"
         return
     }
-    $variables = Get-CisVariables -Text $text
+    $variables = Get-CisVariable -Text $text
 
     foreach ($blockMatch in [regex]::Matches($text, '(?s)<custom_item>(.*?)</custom_item>')) {
         $body = $blockMatch.Groups[1].Value
@@ -986,7 +1029,7 @@ function Read-CisAuditFile {
         $accountType = Get-CisField -BlockText $body -FieldName 'account_type'
 
         $matchKey = Get-CisMatchKey -Type $type -RegKey $regKey -RegItem $regItem `
-            -PasswordPolicy $passwordPolicy -LockoutPolicy $lockoutPolicy -RightType $rightType `
+            -AccountPolicyName $passwordPolicy -LockoutPolicy $lockoutPolicy -RightType $rightType `
             -AuditSubcategory $auditSubcategory -CheckType $checkType -AccountType $accountType
 
         $info = Get-CisField -BlockText $body -FieldName 'info'
@@ -1024,6 +1067,7 @@ function Read-CisAuditFile {
                 regKey               = $regKey
                 regItem              = $regItem
                 requiredAdmx         = if ($matchKey.bucket -eq 'byRegistry') { Get-CisAdmxRequirementNote -Solution (Get-CisField -BlockText $body -FieldName 'solution') } else { $null }
+                notGpoConfigurable   = Test-CisNotGpoConfigurable -RegKey $regKey
                 profiles             = New-Object System.Collections.Generic.List[object]
             }
             $Counters.Entries++
@@ -1051,7 +1095,7 @@ function Read-CisAuditFile {
     }
 }
 
-function Get-CisFallbackMatchSources {
+function Get-CisFallbackMatchSource {
     <#
         Flat list of every setting a CIS title could be auto-paired with:
         Data_SecurityCatalog.json (SecurityOptionsRegistryCatalog - the only
@@ -1104,7 +1148,7 @@ function Resolve-CisTitleAutomatically {
     return [ordered]@{ source = $c.source; regKey = $c.regKey; regItem = $c.regItem; valueType = $ValueType; valueMap = $null; needsManualReview = $false }
 }
 
-function Resolve-CisTitleFallbackCandidates {
+function Resolve-CisTitleFallbackCandidate {
     <#
         Second-chance matching for the candidates collected by
         Read-CisAuditFile: resolves each distinct title through
@@ -1137,7 +1181,7 @@ function Resolve-CisTitleFallbackCandidates {
         }
         else {
             if ($null -eq $matchSources) {
-                $matchSources = Get-CisFallbackMatchSources -SecurityCatalogPath $SecurityCatalogPath -AdmxIndexPath $AdmxIndexPath
+                $matchSources = Get-CisFallbackMatchSource -SecurityCatalogPath $SecurityCatalogPath -AdmxIndexPath $AdmxIndexPath
             }
             $resolved = Resolve-CisTitleAutomatically -NormalizedTitle $normTitle -MatchSources $matchSources -ValueType $first.ValueType
             if ($resolved) {
@@ -1171,6 +1215,7 @@ function Resolve-CisTitleFallbackCandidates {
             # the same shape under the app's Set-StrictMode -Version Latest,
             # where a missing property throws but a $null one does not.
             requiredAdmx         = $null
+            notGpoConfigurable   = Test-CisNotGpoConfigurable -RegKey $fbEntry.regKey
             profiles             = New-Object System.Collections.Generic.List[object]
         }
         $Counters.Entries++
@@ -1198,21 +1243,23 @@ function Resolve-CisTitleFallbackCandidates {
     return $fallbackMapDirty
 }
 
-function Build-CisIndex {
+function New-CisIndex {
     <#
         Parses every CIS .audit file (Tenable Nessus format) in
         $AuditFilesPath and produces one index grouping, per covered setting,
         the shared description/info plus the list of recommendations per
         profile (benchmark, version, L1/L2 level, MS/DC role).
     #>
+        [CmdletBinding(SupportsShouldProcess)]
     param([string]$AuditFilesPath, [string]$OutputPath, [string]$SourceFingerprint)
+    if ($PSCmdlet.ShouldProcess('New-CisIndex', 'Invoke')) {
 
     if (-not (Test-Path -LiteralPath $AuditFilesPath)) {
         throw "Audit files folder not found: $AuditFilesPath"
     }
-    $files = @(Get-ChildItem -LiteralPath $AuditFilesPath -Filter 'CIS_Microsoft_Windows_*.audit' | Sort-Object Name)
+    $files = @(Get-ChildItem -LiteralPath $AuditFilesPath -Filter '*.audit' | Sort-Object Name)
     if ($files.Count -eq 0) {
-        throw "No CIS_Microsoft_Windows_*.audit file found in $AuditFilesPath"
+        throw "No *.audit file found in $AuditFilesPath"
     }
 
     $index = [ordered]@{
@@ -1225,8 +1272,8 @@ function Build-CisIndex {
         # Organization-specific items (account rename / logon banner text)
         # with NO universal recommended value - see Get-CisMatchKey's
         # CHECK_ACCOUNT/BANNER_CHECK cases and CisCatalog.ps1's
-        # Get-CisOrgValueEntries. Deliberately NOT in $script:CisIndexBuckets
-        # (CisCatalog.ps1): these must stay out of Get-CisAllEntries and of
+        # Get-CisOrgValueEntry. Deliberately NOT in $script:CisIndexBuckets
+        # (CisCatalog.ps1): these must stay out of Get-CisAllEntry and of
         # the CIS Yes/No column and profile filter, which all assume a fixed
         # recommended value exists.
         byOrgValue         = [ordered]@{}
@@ -1246,7 +1293,7 @@ function Build-CisIndex {
     # entries (especially manual ones) are never touched.
     if ($titleFallbackCandidates.Count -gt 0) {
         $fallbackMap = Get-CisFallbackMap -DataPath $dataPath
-        $fallbackMapDirty = Resolve-CisTitleFallbackCandidates -Candidates $titleFallbackCandidates -Index $index -Counters $counters `
+        $fallbackMapDirty = Resolve-CisTitleFallbackCandidate -Candidates $titleFallbackCandidates -Index $index -Counters $counters `
             -FallbackMap $fallbackMap `
             -SecurityCatalogPath (Join-Path $PSScriptRoot '..\DefaultData\Data_SecurityCatalog.json') `
             -AdmxIndexPath (Join-Path $dataPath 'admx-index.json')
@@ -1267,8 +1314,8 @@ function Build-CisIndex {
     # applied here too, in addition to Import-CisIndex app-side, so UI edits
     # survive a full regeneration. Still plain hashtables at this point (not
     # yet PSCustomObjects from ConvertFrom-Json), hence direct key indexing
-    # rather than the .PSObject.Properties walk Merge-CisOverrides does.
-    $overrides = Get-CisOverrides -DataPath $dataPath
+    # rather than the .PSObject.Properties walk Merge-CisOverride does.
+    $overrides = Get-CisOverride -DataPath $dataPath
     foreach ($overrideKey in $overrides.Keys) {
         $parts = $overrideKey -split '::', 2
         if ($parts.Count -ne 2) { continue }
@@ -1295,12 +1342,14 @@ function Build-CisIndex {
 
     Write-IndexFile -Index $output -Path $OutputPath -Depth 10
 
-    Write-Host "CIS index generated: $OutputPath"
-    Write-Host "  .audit files processed: $($files.Count)"
-    Write-Host "  Entries (unique controls): $($counters.Entries)"
-    Write-Host "  Recommendations per profile: $($counters.Profiles)"
-    Write-Host "  Items skipped (out-of-scope type or missing fields): $($counters.Skipped)"
-    Write-Host "  Fallback-map entries needing manual review: $($counters.NeedsManualReview)"
+    Write-Output "CIS index generated: $OutputPath"
+    Write-Output "  .audit files processed: $($files.Count)"
+    Write-Output "  Entries (unique controls): $($counters.Entries)"
+    Write-Output "  Recommendations per profile: $($counters.Profiles)"
+    Write-Output "  Items skipped (out-of-scope type or missing fields): $($counters.Skipped)"
+    Write-Output "  Fallback-map entries needing manual review: $($counters.NeedsManualReview)"
+
+    }
 }
 
 # ###########################################################################
@@ -1330,7 +1379,7 @@ switch ($Kind) {
         . (Join-Path $PSScriptRoot '..\Catalogs\AdvancedAuditCatalog.ps1')
     }
     'Cis' {
-        # For Get-CisFallbackMap/Get-CisFallbackMapPath/Get-CisOverrides and
+        # For Get-CisFallbackMap/Get-CisFallbackMapPath/Get-CisOverride and
         # the title normalization helpers.
         . (Join-Path $PSScriptRoot '..\Catalogs\CisCatalog.ps1')
     }
@@ -1345,15 +1394,15 @@ switch ($Kind) {
 if ($Kind -eq 'Admx' -or $Kind -eq 'Cis') { Set-StrictMode -Off } else { Set-StrictMode -Version Latest }
 
 if ($Kind -eq 'Admx') {
-    Build-AdmxIndex -PolicyDefinitionsPath $PolicyDefinitionsPath -Language $Language `
+    New-AdmxIndex -PolicyDefinitionsPath $PolicyDefinitionsPath -Language $Language `
         -FallbackLanguage $FallbackLanguage -OutputPath $OutputPath -SourceFingerprint $SourceFingerprint
 }
 elseif ($Kind -eq 'Security') {
-    Build-SecurityIndex -SecEditInfPath $SecEditInfPath -OutputPath $OutputPath
+    New-SecurityIndex -SecEditInfPath $SecEditInfPath -OutputPath $OutputPath
 }
 elseif ($Kind -eq 'AdvancedAudit') {
-    Build-AdvancedAuditIndex -AuditCsvPath $AuditCsvPath -OutputPath $OutputPath
+    New-AdvancedAuditIndex -AuditCsvPath $AuditCsvPath -OutputPath $OutputPath
 }
 else {
-    Build-CisIndex -AuditFilesPath $AuditFilesPath -OutputPath $OutputPath -SourceFingerprint $SourceFingerprint
+    New-CisIndex -AuditFilesPath $AuditFilesPath -OutputPath $OutputPath -SourceFingerprint $SourceFingerprint
 }

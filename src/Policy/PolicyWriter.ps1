@@ -178,7 +178,7 @@ function Merge-PolEntriesForPolicy {
     return , $kept
 }
 
-function Apply-AdmxChangesToEntries {
+function Invoke-AdmxChangeToEntry {
     # Applies all pending changes for a given scope (Machine or User) to a list of .pol entries, one by one.
     param(
         [Parameter(Mandatory)][AllowEmptyCollection()][System.Collections.Generic.List[object]]$Entries,
@@ -205,7 +205,7 @@ function Apply-AdmxChangesToEntries {
     return , $result
 }
 
-function Apply-SecurityChangesToGpt {
+function Invoke-SecurityChangeToGpt {
     # Applies pending security changes to the GptTmpl.inf structure
     # (see GptTmplFile.ps1 for Set-GptTmplValue/Remove-GptTmplValue).
     param(
@@ -233,10 +233,12 @@ function New-TimestampedBackup {
     # Step 3.5/6). $FilesToBackup: hashtable Tag -> source path (Tag is
     # used as the backup filename, to avoid collisions between Machine and
     # User registry.pol which share the same filename).
+        [CmdletBinding(SupportsShouldProcess)]
     param(
         [Parameter(Mandatory)][AllowEmptyCollection()][hashtable]$FilesToBackup,
         [Parameter(Mandatory)][string]$BackupRoot
     )
+    if ($PSCmdlet.ShouldProcess('New-TimestampedBackup', 'Invoke')) {
 
     $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
     $dest = Join-Path $BackupRoot $stamp
@@ -256,4 +258,6 @@ function New-TimestampedBackup {
     # output) - adding one would wrap the array in a single-element array,
     # breaking .Count.
     return [pscustomobject]@{ BackupDir = $dest; Files = @($copied) }
+
+    }
 }
